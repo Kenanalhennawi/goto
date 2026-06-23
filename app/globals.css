@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  /* Core palette — flydubai-inspired dark ops console */
+  --color-base: #0B1220;        /* deep navy background */
+  --color-panel: #141C2C;       /* raised surface (cards, sidebar) */
+  --color-panel-hover: #1A2436;
+  --color-border: #232E42;
+  --color-accent: #FF5A1F;      /* flydubai orange-red, signature accent */
+  --color-accent-dim: #C9461A;
+  --color-ink: #E8ECF1;         /* primary text */
+  --color-ink-muted: #8A97AB;   /* secondary text */
+  --color-ink-faint: #5B677C;
+  --color-good: #3FB97E;
+  --color-warn: #E0A93E;
+}
+
+@theme inline {
+  --color-base: var(--color-base);
+  --color-panel: var(--color-panel);
+  --color-panel-hover: var(--color-panel-hover);
+  --color-border: var(--color-border);
+  --color-accent: var(--color-accent);
+  --color-accent-dim: var(--color-accent-dim);
+  --color-ink: var(--color-ink);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-ink-faint: var(--color-ink-faint);
+  --color-good: var(--color-good);
+  --color-warn: var(--color-warn);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+}
+
+body {
+  background: var(--color-base);
+  color: var(--color-ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+/* Subtle scrollbar matching the console aesthetic */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-faint);
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Visible keyboard focus ring everywhere */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
