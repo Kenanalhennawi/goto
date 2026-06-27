@@ -27,6 +27,7 @@ export function ChapterEditor({ chapter, history }: Props) {
       : [{ type: "text", text: chapter.body_text }]
   );
   const [keywords, setKeywords] = useState(chapter.search_keywords.join(", "));
+  const [showRestoreChoices, setShowRestoreChoices] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -37,7 +38,7 @@ export function ChapterEditor({ chapter, history }: Props) {
     Array.isArray(chapter.content_blocks) && chapter.content_blocks.length > 0
       ? chapter.content_blocks
       : [{ type: "text", text: chapter.body_text }];
-  const previousSavedBlocks = restoreBlocksFromHistory(history, originalBlocks);
+  const restoreChoices = restoreChoicesFromHistory(history, originalBlocks);
   const hasChanges =
     bodyText !== chapter.body_text ||
     keywords !== chapter.search_keywords.join(", ") ||
@@ -76,16 +77,12 @@ export function ChapterEditor({ chapter, history }: Props) {
     setMessage({ type: "success", text: "Unsaved changes were discarded." });
   }
 
-  function restorePreviousVersion() {
-    if (!previousSavedBlocks) {
-      setMessage({ type: "error", text: "No previous saved version is available yet." });
-      return;
-    }
-
-    setBlocks(previousSavedBlocks);
+  function restoreVersion(choice: RestoreChoice) {
+    setBlocks(choice.blocks);
+    setShowRestoreChoices(false);
     setMessage({
       type: "success",
-      text: "Previous version loaded. Review it, then click Save changes to publish it.",
+      text: `Version from ${new Date(choice.created_at).toLocaleString()} loaded. Review it, then click Save changes to publish it.`,
     });
   }
 
@@ -106,11 +103,11 @@ export function ChapterEditor({ chapter, history }: Props) {
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <button
-            onClick={restorePreviousVersion}
-            disabled={!previousSavedBlocks || saving}
+            onClick={() => setShowRestoreChoices((value) => !value)}
+            disabled={restoreChoices.length === 0 || saving}
             className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-ink hover:border-accent disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Restore previous
+            Restore version
           </button>
           <button
             onClick={discardUnsavedChanges}
@@ -128,6 +125,31 @@ export function ChapterEditor({ chapter, history }: Props) {
           </button>
         </div>
       </div>
+
+      {showRestoreChoices && (
+        <div className="mb-6 rounded-lg border border-border bg-white p-3">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-faint">
+            Choose one of the last 3 saved versions
+          </p>
+          <div className="grid gap-2">
+            {restoreChoices.map((choice, index) => (
+              <button
+                key={choice.id}
+                type="button"
+                onClick={() => restoreVersion(choice)}
+                className="rounded-lg border border-border bg-panel px-3 py-2 text-left transition-colors hover:border-accent hover:bg-white"
+              >
+                <span className="block text-sm font-semibold text-ink">
+                  Version {index + 1} - {new Date(choice.created_at).toLocaleString()}
+                </span>
+                <span className="mt-1 block text-xs text-ink-muted">
+                  {choice.edited_by_email ?? "Unknown"} - {choice.change_type.replace("_", " ")} - {choice.preview}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {message && (
         <div
@@ -206,19 +228,49 @@ export function ChapterEditor({ chapter, history }: Props) {
   );
 }
 
-function restoreBlocksFromHistory(
-  history: Pick<EditHistoryEntry, "previous_body_text" | "previous_content_blocks">[],
+type RestoreChoice = {
+  id: string;
+  created_at: string;
+  edited_by_email: string | null;
+  change_type: string;
+  preview: string;
+  blocks: ContentBlock[];
+};
+
+function restoreChoicesFromHistory(
+  history: Pick<
+    EditHistoryEntry,
+    "id" | "created_at" | "edited_by_email" | "change_type" | "previous_body_text" | "previous_content_blocks"
+  >[],
   currentBlocks: ContentBlock[]
-): ContentBlock[] | null {
-  const latest = history.find((entry) => entry.previous_content_blocks?.length || entry.previous_body_text);
-  if (!latest) return null;
+): RestoreChoice[] {
+  return history
+    .filter((entry) => entry.previous_content_blocks?.length || entry.previous_body_text)
+    .slice(0, 3)
+    .map((entry) => {
+      const blocks = entry.previous_content_blocks?.length
+        ? entry.previous_content_blocks
+        : fallbackTextRestoreBlocks(entry.previous_body_text, currentBlocks);
 
-  if (latest.previous_content_blocks?.length) {
-    return latest.previous_content_blocks;
-  }
+      return {
+        id: entry.id,
+        created_at: entry.created_at,
+        edited_by_email: entry.edited_by_email,
+        change_type: entry.change_type,
+        preview: previewBlocks(blocks),
+        blocks,
+      };
+    });
+}
 
+function fallbackTextRestoreBlocks(text: string | null, currentBlocks: ContentBlock[]): ContentBlock[] {
   const attachments = currentBlocks.filter((block) => block.type !== "text");
-  return [{ type: "text", text: latest.previous_body_text ?? "" }, ...attachments];
+  return [{ type: "text", text: text ?? "" }, ...attachments];
+}
+
+function previewBlocks(blocks: ContentBlock[]) {
+  const text = blocks.find((block) => block.type === "text" && block.text)?.text ?? "";
+  return text.replace(/\s+/g, " ").slice(0, 120) || "No text preview";
 }
 
 function wordDelta(previous: string | null, next: string | null) {
