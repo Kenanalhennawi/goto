@@ -346,7 +346,7 @@ function FormattedText({ text }: { text: string }) {
   return (
     <div className="space-y-3 text-[15px] leading-7 text-ink">
       {lines.map((line, index) => (
-        <p key={`${line}-${index}`}>{line}</p>
+        <p key={`${line}-${index}`}>{cleanDisplayText(line)}</p>
       ))}
     </div>
   );
@@ -404,7 +404,7 @@ function normalizeText(text: string) {
     .map((line) => line.trim())
     .filter((line) => !isClickMeLine(line))
     .filter((line) => !isNumberOnly(line))
-    .map((line) => stripSectionNumber(line))
+    .map((line) => cleanDisplayText(line))
     .filter(Boolean)
     .join("\n")
     .replace(/[ \t]+/g, " ")
@@ -426,12 +426,12 @@ function isNumberOnly(text: string) {
 }
 
 function cleanHeading(text: string) {
-  return stripSectionNumber(text.replace(/\s+/g, " ")).trim();
+  return cleanDisplayText(text.replace(/\s+/g, " ")).trim();
 }
 
 function sectionTitleFromText(text: string, fallbackNumber: number) {
   const firstLine = text.split("\n").find(Boolean)?.trim() ?? "";
-  const compact = stripSectionNumber(firstLine.replace(/\s+/g, " "));
+  const compact = cleanDisplayText(firstLine.replace(/\s+/g, " "));
   const numbered = compact.match(/^(\d+(?:\.\d+)*)\.?\s+(.{4,60})/);
   if (numbered) return cleanHeading(numbered[0]);
   if (compact.length > 0 && compact.length <= 58) return compact;
@@ -453,8 +453,16 @@ function fileReferenceTitle(text: string) {
 
 function stripSectionNumber(text: string) {
   return text
-    .replace(/^\s*\d+(?:\.\d+)+\.?\s+/, "")
+    .replace(/^\s*\d+(?:\.\d+)+\.?\s*[-–—:]?\s+/, "")
     .replace(/^\s*\d+\.\s+(?=[A-Z][A-Za-z])/, "")
+    .replace(/^\s*\d+(?:\.\d+)+\.?\s*$/, "")
+    .trim();
+}
+
+function cleanDisplayText(text: string) {
+  return stripSectionNumber(text)
+    .replace(/\s+\n/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
     .trim();
 }
 
