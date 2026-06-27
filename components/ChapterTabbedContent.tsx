@@ -269,6 +269,7 @@ function buildGuideSections(blocks: ContentBlock[]): GuideSection[] {
     }
 
     if (block.type === "link" && block.url) {
+      if (!isSafeExternalUrl(block.url)) continue;
       ensureSection().pieces.push({
         kind: "link",
         title: block.title ?? block.text ?? "Open reference",
@@ -313,36 +314,6 @@ function buildGuideSections(blocks: ContentBlock[]): GuideSection[] {
       });
     }
   }
-
-  return rebalanceTrailingImages(sections.filter((section) => section.pieces.length > 0));
-}
-
-function rebalanceTrailingImages(sections: GuideSection[]) {
-  const imageSections = sections.filter((section) =>
-    section.pieces.some((piece) => piece.kind === "image")
-  );
-
-  if (imageSections.length !== 1) return sections;
-
-  const source = imageSections[0];
-  const images = source.pieces.filter((piece): piece is ImagePiece => piece.kind === "image");
-  if (images.length < 3) return sections;
-
-  source.pieces = source.pieces.filter((piece) => piece.kind !== "image");
-
-  const sourceIndex = sections.indexOf(source);
-  const candidateSections = sections
-    .slice(0, sourceIndex + 1)
-    .filter((section) => {
-      if (section.title === "Search keywords" || section.title === "File references") return false;
-      return section.pieces.some((piece) => piece.kind === "text");
-    });
-
-  const targets = candidateSections.slice(-images.length);
-  images.forEach((image, index) => {
-    const target = targets[index] ?? source;
-    target.pieces.push(image);
-  });
 
   return sections.filter((section) => section.pieces.length > 0);
 }
@@ -493,6 +464,10 @@ function isClickMeLine(text: string) {
 
 function isLinkedFilesHeading(text: string) {
   return /^Linked files from PDF page \d+$/i.test(text.trim());
+}
+
+function isSafeExternalUrl(url: string) {
+  return /^(https?:|mailto:|tel:)/i.test(url.trim());
 }
 
 function fileReferenceTitle(text: string) {
