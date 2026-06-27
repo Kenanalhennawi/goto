@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { SignOutButton } from "@/components/SignOutButton";
 import type { UserRole } from "@/lib/types";
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -68,6 +69,7 @@ export async function SiteHeader() {
                   {roleName ? ROLE_LABELS[roleName] : "Signed in"}
                 </span>
               </div>
+              <SignOutButton />
             </>
           ) : (
             <Link
