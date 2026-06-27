@@ -404,6 +404,7 @@ function normalizeText(text: string) {
     .map((line) => line.trim())
     .filter((line) => !isClickMeLine(line))
     .filter((line) => !isNumberOnly(line))
+    .map((line) => stripSectionNumber(line))
     .filter(Boolean)
     .join("\n")
     .replace(/[ \t]+/g, " ")
@@ -425,12 +426,12 @@ function isNumberOnly(text: string) {
 }
 
 function cleanHeading(text: string) {
-  return text.replace(/\s+/g, " ").replace(/^\d+(?:\.\d+)*\.?\s*/, "").trim();
+  return stripSectionNumber(text.replace(/\s+/g, " ")).trim();
 }
 
 function sectionTitleFromText(text: string, fallbackNumber: number) {
   const firstLine = text.split("\n").find(Boolean)?.trim() ?? "";
-  const compact = firstLine.replace(/\s+/g, " ");
+  const compact = stripSectionNumber(firstLine.replace(/\s+/g, " "));
   const numbered = compact.match(/^(\d+(?:\.\d+)*)\.?\s+(.{4,60})/);
   if (numbered) return cleanHeading(numbered[0]);
   if (compact.length > 0 && compact.length <= 58) return compact;
@@ -448,6 +449,13 @@ function fileReferenceTitle(text: string) {
     .trim();
   const match = compact.match(/([A-Za-z0-9][A-Za-z0-9 _.,&()'’+-]{2,}\.(?:pdf|pptx?|docx?|xlsx?))$/i);
   return match ? match[1].trim() : null;
+}
+
+function stripSectionNumber(text: string) {
+  return text
+    .replace(/^\s*\d+(?:\.\d+)+\.?\s+/, "")
+    .replace(/^\s*\d+\.\s+(?=[A-Z][A-Za-z])/, "")
+    .trim();
 }
 
 function isSkLine(text: string) {
