@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ChapterBadge } from "@/components/ChapterBadge";
 import { ChapterTabbedContent } from "@/components/ChapterTabbedContent";
+import { ReportIssueButton } from "@/components/ReportIssueButton";
 import type { Chapter } from "@/lib/types";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -92,6 +93,7 @@ export default async function ChapterPage({
                     Edit chapter
                   </Link>
                 )}
+                <ReportIssueButton chapterId={ch.id} chapterSlug={ch.slug} />
               </div>
             </div>
           </div>

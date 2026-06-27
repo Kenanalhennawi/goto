@@ -1,5 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
+import { normalizeExternalUrl } from "@/lib/links";
+import type { ContentBlock } from "@/lib/types";
 
 // Handles a direct, small edit to a single chapter made by quality team in the
 // admin UI. Writes the change to edit_history *before* updating the chapter,
@@ -33,6 +35,7 @@ export async function PATCH(
   const { body_text, search_keywords } = body as {
     body_text?: string;
     search_keywords?: string[];
+    content_blocks?: ContentBlock[];
   };
 
   if (typeof body_text !== "string" || body_text.trim().length === 0) {
@@ -52,13 +55,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Chapter not found." }, { status: 404 });
   }
 
-  // Manual edits happen in a plain text box, which has no way to say where
-  // screenshots or PDF-linked files should sit within the new text. Preserve
-  // all non-text blocks so links/images are not silently deleted on save.
-  const existingAttachments = Array.isArray(existing.content_blocks)
-    ? existing.content_blocks.filter((b: { type: string }) => b.type !== "text")
-    : [];
-  const newContentBlocks = [{ type: "text", text: body_text }, ...existingAttachments];
+  const newContentBlocks = Array.isArray(body.content_blocks)
+    ? sanitizeContentBlocks(body.content_blocks)
+    : preserveAttachments(body_text, existing.content_blocks);
 
   const { error: historyError } = await supabase.from("edit_history").insert({
     chapter_id: id,
@@ -98,4 +97,47 @@ export async function PATCH(
   }
 
   return NextResponse.json({ success: true });
+}
+
+function preserveAttachments(bodyText: string, existingBlocks: unknown) {
+  const existingAttachments = Array.isArray(existingBlocks)
+    ? existingBlocks.filter((block: { type?: string }) => block.type !== "text")
+    : [];
+  return [{ type: "text", text: bodyText }, ...existingAttachments];
+}
+
+function sanitizeContentBlocks(blocks: ContentBlock[]) {
+  const sanitized: ContentBlock[] = [];
+
+  for (const block of blocks) {
+    if (block.type === "text") {
+      const text = (block.text ?? "").trim();
+      if (text) sanitized.push({ type: "text", text });
+      continue;
+    }
+
+    if (block.type === "image") {
+      if (block.url) {
+        sanitized.push({
+          type: "image",
+          url: block.url,
+          filename: block.filename ?? "Reference screenshot",
+        });
+      }
+      continue;
+    }
+
+    if (block.type === "link") {
+      const url = normalizeExternalUrl(block.url ?? "");
+      if (url) {
+        sanitized.push({
+          type: "link",
+          title: (block.title ?? block.text ?? "Open reference").trim(),
+          url,
+        });
+      }
+    }
+  }
+
+  return sanitized;
 }

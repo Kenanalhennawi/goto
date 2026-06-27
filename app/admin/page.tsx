@@ -43,6 +43,11 @@ export default async function AdminDashboard() {
     .order("created_at", { ascending: false })
     .limit(5);
 
+  const { count: openIssueCount } = await supabase
+    .from("content_issues")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["open", "reviewing"]);
+
   return (
     <div className="flex flex-col flex-1">
       <SiteHeader />
@@ -57,6 +62,12 @@ export default async function AdminDashboard() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Link
+              href="/admin/issues"
+              className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-ink hover:border-accent"
+            >
+              Issues{openIssueCount ? ` (${openIssueCount})` : ""}
+            </Link>
             {(role.role === "admin" || role.role === "owner") && (
               <Link
                 href="/admin/users"

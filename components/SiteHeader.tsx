@@ -52,6 +52,12 @@ export async function SiteHeader() {
           >
             Manifest
           </Link>
+          <Link
+            href="/files"
+            className="rounded-lg px-3 py-2 font-medium text-ink-muted transition-colors hover:bg-sky-soft hover:text-sky"
+          >
+            Files
+          </Link>
 
           {user ? (
             <>

@@ -34,7 +34,7 @@ export default async function AdminChapterEditPage({
 
   const { data: history } = await supabase
     .from("edit_history")
-    .select("id, edited_by_email, change_type, created_at")
+    .select("id, edited_by_email, change_type, created_at, previous_body_text, new_body_text")
     .eq("chapter_id", chapter.id)
     .order("created_at", { ascending: false })
     .limit(10);

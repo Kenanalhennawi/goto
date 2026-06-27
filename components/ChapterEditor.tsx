@@ -2,22 +2,33 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Chapter, EditHistoryEntry } from "@/lib/types";
+import type { Chapter, ContentBlock, EditHistoryEntry } from "@/lib/types";
 import Link from "next/link";
 
 interface Props {
   chapter: Chapter;
-  history: Pick<EditHistoryEntry, "id" | "edited_by_email" | "change_type" | "created_at">[];
+  history: Pick<
+    EditHistoryEntry,
+    "id" | "edited_by_email" | "change_type" | "created_at" | "previous_body_text" | "new_body_text"
+  >[];
 }
 
 export function ChapterEditor({ chapter, history }: Props) {
-  const [bodyText, setBodyText] = useState(chapter.body_text);
+  const [blocks, setBlocks] = useState<ContentBlock[]>(
+    Array.isArray(chapter.content_blocks) && chapter.content_blocks.length > 0
+      ? chapter.content_blocks
+      : [{ type: "text", text: chapter.body_text }]
+  );
   const [keywords, setKeywords] = useState(chapter.search_keywords.join(", "));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const router = useRouter();
 
-  const hasChanges = bodyText !== chapter.body_text || keywords !== chapter.search_keywords.join(", ");
+  const bodyText = blocksToText(blocks);
+  const hasChanges =
+    bodyText !== chapter.body_text ||
+    keywords !== chapter.search_keywords.join(", ") ||
+    JSON.stringify(blocks) !== JSON.stringify(chapter.content_blocks ?? []);
 
   async function handleSave() {
     setSaving(true);
@@ -31,7 +42,7 @@ export function ChapterEditor({ chapter, history }: Props) {
     const res = await fetch(`/api/chapters/${chapter.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body_text: bodyText, search_keywords: parsedKeywords }),
+      body: JSON.stringify({ body_text: bodyText, search_keywords: parsedKeywords, content_blocks: blocks }),
     });
 
     const data = await res.json();
@@ -97,15 +108,21 @@ export function ChapterEditor({ chapter, history }: Props) {
       </div>
 
       <div className="mb-8">
-        <label className="block text-xs text-ink-muted mb-1.5">Chapter content</label>
-        <textarea
-          value={bodyText}
-          onChange={(e) => setBodyText(e.target.value)}
-          rows={24}
-          className="w-full bg-panel border border-border rounded-lg px-4 py-3 text-ink text-sm leading-relaxed focus:border-accent transition-colors font-body resize-y"
-        />
-        <p className="text-xs text-ink-faint mt-1">
-          Leave a blank line between paragraphs. Changes are logged and reversible by an admin.
+        <label className="block text-xs text-ink-muted mb-2">Chapter blocks</label>
+        <div className="space-y-3">
+          {blocks.map((block, index) => (
+            <BlockEditor
+              key={`${block.type}-${index}`}
+              block={block}
+              index={index}
+              onChange={(nextBlock) =>
+                setBlocks((prev) => prev.map((item, itemIndex) => (itemIndex === index ? nextBlock : item)))
+              }
+            />
+          ))}
+        </div>
+        <p className="text-xs text-ink-faint mt-2">
+          Edit text and links in place. Images are kept read-only so their placement is not accidentally broken.
         </p>
       </div>
 
@@ -121,6 +138,9 @@ export function ChapterEditor({ chapter, history }: Props) {
                 <span className="text-ink-faint font-mono">
                   {new Date(h.created_at).toLocaleString()}
                 </span>
+                <span className="text-ink-faint">
+                  {wordDelta(h.previous_body_text, h.new_body_text)}
+                </span>
               </div>
             ))}
           </div>
@@ -128,5 +148,72 @@ export function ChapterEditor({ chapter, history }: Props) {
       )}
     </div>
   );
+}
+
+function wordDelta(previous: string | null, next: string | null) {
+  const before = previous?.split(/\s+/).filter(Boolean).length ?? 0;
+  const after = next?.split(/\s+/).filter(Boolean).length ?? 0;
+  const delta = after - before;
+  if (delta === 0) return "No word change";
+  return `${delta > 0 ? "+" : ""}${delta} words`;
+}
+
+function BlockEditor({
+  block,
+  index,
+  onChange,
+}: {
+  block: ContentBlock;
+  index: number;
+  onChange: (block: ContentBlock) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-panel p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+          {String(index + 1).padStart(2, "0")} - {block.type}
+        </span>
+      </div>
+
+      {block.type === "text" ? (
+        <textarea
+          value={block.text ?? ""}
+          onChange={(event) => onChange({ ...block, text: event.target.value })}
+          rows={Math.min(12, Math.max(4, (block.text ?? "").split("\n").length + 1))}
+          className="w-full resize-y rounded-lg border border-border bg-white px-3 py-2 text-sm leading-relaxed text-ink focus:border-accent"
+        />
+      ) : block.type === "link" ? (
+        <div className="grid gap-2">
+          <input
+            value={block.title ?? block.text ?? ""}
+            onChange={(event) => onChange({ ...block, title: event.target.value })}
+            placeholder="Link title"
+            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-ink focus:border-accent"
+          />
+          <input
+            value={block.url ?? ""}
+            onChange={(event) => onChange({ ...block, url: event.target.value })}
+            placeholder="https://..."
+            className="w-full rounded-lg border border-border bg-white px-3 py-2 font-mono text-xs text-ink focus:border-accent"
+          />
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 text-sm text-ink-muted">
+          {block.url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={block.url} alt="" className="h-16 w-24 rounded border border-border object-contain bg-white" />
+          )}
+          <span>{block.filename ?? "Reference screenshot"}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function blocksToText(blocks: ContentBlock[]) {
+  return blocks
+    .filter((block) => block.type === "text" && block.text?.trim())
+    .map((block) => block.text?.trim())
+    .join("\n\n");
 }
 
