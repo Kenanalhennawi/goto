@@ -23,9 +23,6 @@ export function SearchBar({
   useEffect(() => {
     const trimmed = query.trim();
     if (trimmed.length < 2) {
-      setResults([]);
-      setOpen(false);
-      setLoading(false);
       return;
     }
 

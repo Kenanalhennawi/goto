@@ -374,7 +374,7 @@ const STEP_PATTERN =
   /\b(step|process|agent|customer|passenger|click|select|retrieve|create|update|book|cancel|refund|payment|pnr|advise|inform|verify|check)\b/i;
 const RULE_PATTERN =
   /\b(must|should|cannot|not allowed|only|if|eligible|valid|condition|restriction|note|important|exception|required|allowed|applicable)\b/i;
-const BULLET_PATTERN = /^([•▪\-*]|\d+[.)]|[a-z][.)])\s+/i;
+const BULLET_PATTERN = /^([\u2022\u25aa\-*]|\d+[.)]|[a-z][.)])\s+/i;
 const STEP_LINE_PATTERN = /^step\s*#?\s*\d+/i;
 
 function splitText(text: string) {
@@ -435,7 +435,7 @@ function isHeading(text: string) {
   if (fileReferenceTitle(compact)) return false;
   if (compact.length > 95) return false;
   if (isSkLine(compact)) return false;
-  if (/^(\d{1,2}\.)?\s*[A-Z][A-Za-z0-9 /&'’():-]{3,}$/.test(compact)) return true;
+  if (/^(\d{1,2}\.)?\s*[A-Z][A-Za-z0-9 /&'\u2019():-]{3,}$/.test(compact)) return true;
   return /^\d+(?:\.\d+)*\.?\s+[A-Z].{3,70}$/.test(compact);
 }
 
@@ -465,13 +465,13 @@ function fileReferenceTitle(text: string) {
     .replace(/\s+/g, " ")
     .replace(/\(click me to view file\)/gi, "")
     .trim();
-  const match = compact.match(/([A-Za-z0-9][A-Za-z0-9 _.,&()'’+-]{2,}\.(?:pdf|pptx?|docx?|xlsx?))$/i);
+  const match = compact.match(/([A-Za-z0-9][A-Za-z0-9 _.,&()'\u2019+-]{2,}\.(?:pdf|pptx?|docx?|xlsx?))$/i);
   return match ? match[1].trim() : null;
 }
 
 function stripSectionNumber(text: string) {
   return text
-    .replace(/^\s*\d+(?:\.\d+)+\.?\s*[-–—:]?\s+/, "")
+    .replace(/^\s*\d+(?:\.\d+)+\.?\s*[-\u2013\u2014:]?\s+/, "")
     .replace(/^\s*\d+\.\s+(?=[A-Z][A-Za-z])/, "")
     .replace(/^\s*\d+(?:\.\d+)+\.?\s*$/, "")
     .trim();
@@ -520,7 +520,7 @@ function sectionPreview(section: GuideSection) {
 
   return text
     .replace(/\s+/g, " ")
-    .replace(/^[-*•]\s*/, "")
+    .replace(/^[-*\u2022]\s*/, "")
     .slice(0, 180);
 }
 

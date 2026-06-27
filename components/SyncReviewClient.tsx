@@ -46,7 +46,11 @@ export function SyncReviewClient({
   function toggleApproved(id: string) {
     setApproved((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }
@@ -54,7 +58,11 @@ export function SyncReviewClient({
   function toggleExpanded(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }
@@ -99,12 +107,12 @@ export function SyncReviewClient({
   return (
     <div>
       <Link href="/admin" className="text-xs text-ink-muted hover:text-accent transition-colors inline-flex items-center gap-1 mb-6">
-        ← Back to dashboard
+        Back to dashboard
       </Link>
 
       <div className="flex items-center justify-between mb-2">
         <h1 className="font-display text-xl font-semibold text-ink">
-          Review sync — {syncRun.source_filename}
+          Review sync - {syncRun.source_filename}
         </h1>
         {alreadyPublished && (
           <span className="text-xs px-2 py-1 rounded bg-good/10 text-good border border-good/20">
@@ -113,7 +121,7 @@ export function SyncReviewClient({
         )}
       </div>
       <p className="text-sm text-ink-muted mb-8 font-mono">
-        Source version {syncRun.source_version} · {syncRun.chapters_changed} changed ·{" "}
+        Source version {syncRun.source_version} - {syncRun.chapters_changed} changed -{" "}
         {syncRun.chapters_added} new
       </p>
 
@@ -134,7 +142,7 @@ export function SyncReviewClient({
               disabled={publishing || approved.size === 0}
               className="bg-accent text-base font-medium rounded-lg px-4 py-2 text-sm hover:bg-accent-dim transition-colors disabled:opacity-40"
             >
-              {publishing ? "Publishing…" : `Publish ${approved.size} chapter${approved.size === 1 ? "" : "s"}`}
+              {publishing ? "Publishing..." : `Publish ${approved.size} chapter${approved.size === 1 ? "" : "s"}`}
             </button>
           </div>
         </div>
@@ -200,3 +208,4 @@ export function SyncReviewClient({
     </div>
   );
 }
+

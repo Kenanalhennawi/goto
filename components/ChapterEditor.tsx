@@ -49,13 +49,13 @@ export function ChapterEditor({ chapter, history }: Props) {
   return (
     <div>
       <Link href="/admin" className="text-xs text-ink-muted hover:text-accent transition-colors inline-flex items-center gap-1 mb-6">
-        ← Back to dashboard
+        Back to dashboard
       </Link>
 
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">
-            Ch. {String(chapter.chapter_number).padStart(2, "0")} — {chapter.title}
+            Ch. {String(chapter.chapter_number).padStart(2, "0")} - {chapter.title}
           </h1>
           <p className="text-xs text-ink-faint mt-1 font-mono">
             Last updated {new Date(chapter.updated_at).toLocaleString()}
@@ -66,7 +66,7 @@ export function ChapterEditor({ chapter, history }: Props) {
           disabled={!hasChanges || saving}
           className="bg-accent text-base font-medium rounded-lg px-4 py-2 text-sm hover:bg-accent-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {saving ? "Saving…" : "Save changes"}
+          {saving ? "Saving..." : "Save changes"}
         </button>
       </div>
 
@@ -92,7 +92,7 @@ export function ChapterEditor({ chapter, history }: Props) {
           className="w-full bg-panel border border-border rounded-lg px-4 py-2.5 text-ink font-mono text-sm focus:border-accent transition-colors"
         />
         <p className="text-xs text-ink-faint mt-1">
-          These power search matching — include SSR codes, abbreviations, and common agent phrasing.
+          These keywords improve search matching - include SSR codes, abbreviations, and common agent phrasing.
         </p>
       </div>
 
@@ -116,7 +116,7 @@ export function ChapterEditor({ chapter, history }: Props) {
             {history.map((h) => (
               <div key={h.id} className="px-4 py-2.5 flex items-center justify-between text-xs">
                 <span className="text-ink-muted">
-                  {h.edited_by_email ?? "Unknown"} · {h.change_type.replace("_", " ")}
+                  {h.edited_by_email ?? "Unknown"} - {h.change_type.replace("_", " ")}
                 </span>
                 <span className="text-ink-faint font-mono">
                   {new Date(h.created_at).toLocaleString()}
@@ -129,3 +129,4 @@ export function ChapterEditor({ chapter, history }: Props) {
     </div>
   );
 }
+
