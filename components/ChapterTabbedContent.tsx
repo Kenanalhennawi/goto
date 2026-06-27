@@ -54,8 +54,6 @@ export function ChapterTabbedContent({
 
   return (
     <div className="space-y-5">
-      <QuickAnswer sections={tabs[0].sections} />
-
       <div className="flex gap-2 overflow-x-auto rounded-xl border border-border bg-white p-2 soft-shadow">
         {tabs.map((tab) => (
           <Link
@@ -139,41 +137,6 @@ export function ChapterTabbedContent({
         </div>
       </section>
     </div>
-  );
-}
-
-function QuickAnswer({ sections }: { sections: GuideSection[] }) {
-  const firstTexts = sections
-    .flatMap((section) => section.pieces)
-    .filter((piece): piece is TextPiece => piece.kind === "text")
-    .map((piece) => piece.text)
-    .join("\n")
-    .split(/\n|\. /)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 24)
-    .slice(0, 3);
-
-  if (firstTexts.length === 0) return null;
-
-  return (
-    <section className="grid grid-cols-1 gap-3 md:grid-cols-[220px_1fr]">
-      <div className="rounded-lg border border-orange-200 bg-orange-50 p-4">
-        <p className="font-display text-sm font-semibold text-accent">Quick answer</p>
-        <p className="mt-1 text-xs leading-5 text-ink-muted">
-          Start here before opening the full details.
-        </p>
-      </div>
-      <div className="rounded-lg border border-border bg-white p-4">
-        <ul className="space-y-2">
-          {firstTexts.map((line, index) => (
-            <li key={`${line}-${index}`} className="flex gap-2 text-sm leading-6 text-ink">
-              <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent" />
-              <span>{line.replace(/\.$/, "")}.</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
   );
 }
 
@@ -279,23 +242,55 @@ function buildGuideSections(blocks: ContentBlock[]): GuideSection[] {
 function FormattedText({ text }: { text: string }) {
   const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
   const bulletLines = lines.filter((line) => BULLET_PATTERN.test(line) || STEP_LINE_PATTERN.test(line));
+  const shortKeywordList =
+    lines.length === 1 &&
+    text.length < 180 &&
+    text.includes(",") &&
+    !/[.!?]\s/.test(text);
 
-  if (lines.length >= 2 && bulletLines.length / lines.length > 0.45) {
+  if (shortKeywordList) {
     return (
-      <ol className="space-y-2">
-        {lines.map((line, index) => (
-          <li key={`${line}-${index}`} className="flex gap-3 text-[15px] leading-7 text-ink">
-            <span className="mt-1 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-mint-soft text-[11px] font-semibold text-good">
-              {index + 1}
+      <div className="flex flex-wrap gap-2">
+        {text
+          .split(",")
+          .map((keyword) => keyword.trim())
+          .filter(Boolean)
+          .slice(0, 12)
+          .map((keyword) => (
+            <span
+              key={keyword}
+              className="rounded-full border border-sky/20 bg-sky-soft px-3 py-1 text-xs font-medium text-sky"
+            >
+              {keyword}
             </span>
-            <span>{stripListMarker(line)}</span>
-          </li>
-        ))}
-      </ol>
+          ))}
+      </div>
     );
   }
 
-  return <p className="whitespace-pre-line text-[15px] leading-7 text-ink">{text}</p>;
+  if (lines.length >= 2 && bulletLines.length / lines.length > 0.45) {
+    return (
+      <ul className="grid gap-2">
+        {lines.map((line, index) => (
+          <li
+            key={`${line}-${index}`}
+            className="rounded-md border border-border/80 bg-sky-soft/45 px-3 py-2 text-[15px] leading-7 text-ink"
+          >
+            <span className="mr-2 font-semibold text-accent">{index + 1}.</span>
+            <span>{stripListMarker(line)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <div className="space-y-3 text-[15px] leading-7 text-ink">
+      {lines.map((line, index) => (
+        <p key={`${line}-${index}`}>{line}</p>
+      ))}
+    </div>
+  );
 }
 
 const STEP_PATTERN =
@@ -309,8 +304,39 @@ function splitText(text: string) {
   return text
     .replace(/\r/g, "")
     .split(/\n{2,}/)
+    .flatMap((paragraph) => splitDenseParagraph(paragraph))
     .map((paragraph) => normalizeText(paragraph))
     .filter(Boolean);
+}
+
+function splitDenseParagraph(text: string) {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 5) return [text];
+
+  const chunks: string[] = [];
+  let current: string[] = [];
+
+  for (const line of lines) {
+    const startsNewPoint =
+      BULLET_PATTERN.test(line) ||
+      STEP_LINE_PATTERN.test(line) ||
+      (current.length >= 3 && /^[A-Z][A-Za-z /&'():-]{4,85}\.?$/.test(line));
+
+    if (startsNewPoint && current.length > 0) {
+      chunks.push(current.join("\n"));
+      current = [];
+    }
+
+    current.push(line);
+  }
+
+  if (current.length > 0) chunks.push(current.join("\n"));
+
+  return chunks.length > 1 ? chunks : [text];
 }
 
 function normalizeText(text: string) {
