@@ -18,7 +18,12 @@ type LinkPiece = {
   url: string;
 };
 
-type Piece = TextPiece | ImagePiece | LinkPiece;
+type FilePiece = {
+  kind: "file";
+  title: string;
+};
+
+type Piece = TextPiece | ImagePiece | LinkPiece | FilePiece;
 
 type GuideSection = {
   title: string;
@@ -141,6 +146,21 @@ export function ChapterTabbedContent({
                       <span className="truncate">{piece.title}</span>
                       <span aria-hidden="true">Open</span>
                     </a>
+                  ) : piece.kind === "file" ? (
+                    <div
+                      key={`${piece.title}-${pieceIndex}`}
+                      className="inline-flex max-w-full items-center gap-3 rounded-lg border border-amber-200 bg-amber-soft px-4 py-3 text-sm text-ink"
+                    >
+                      <span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-warn">
+                        File
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold">{piece.title}</span>
+                        <span className="block text-xs text-ink-muted">
+                          This file is referenced in the PDF, but no link URL is available yet.
+                        </span>
+                      </span>
+                    </div>
                   ) : (
                     <FormattedText key={`${piece.text.slice(0, 24)}-${pieceIndex}`} text={piece.text} />
                   )
@@ -228,6 +248,13 @@ function buildGuideSections(blocks: ContentBlock[]): GuideSection[] {
     for (const paragraph of paragraphs) {
       if (paragraph === previousText) continue;
       previousText = paragraph;
+      if (isClickMeLine(paragraph)) continue;
+
+      const fileReference = fileReferenceTitle(paragraph);
+      if (fileReference) {
+        ensureSection("File references").pieces.push({ kind: "file", title: fileReference });
+        continue;
+      }
 
       if (isSkLine(paragraph)) {
         ensureSection("Search keywords").pieces.push({ kind: "text", text: cleanSkLine(paragraph) });
@@ -357,6 +384,7 @@ function normalizeText(text: string) {
   return text
     .split("\n")
     .map((line) => line.trim())
+    .filter((line) => !isClickMeLine(line))
     .filter(Boolean)
     .join("\n")
     .replace(/[ \t]+/g, " ")
@@ -365,6 +393,8 @@ function normalizeText(text: string) {
 
 function isHeading(text: string) {
   const compact = text.replace(/\s+/g, " ").trim();
+  if (/^\d+(?:\.\d+)*\.?$/.test(compact)) return false;
+  if (fileReferenceTitle(compact)) return false;
   if (compact.length > 95) return false;
   if (isSkLine(compact)) return false;
   if (/^(\d{1,2}\.)?\s*[A-Z][A-Za-z0-9 /&'’():-]{3,}$/.test(compact)) return true;
@@ -382,6 +412,19 @@ function sectionTitleFromText(text: string, fallbackNumber: number) {
   if (numbered) return cleanHeading(numbered[0]);
   if (compact.length > 0 && compact.length <= 58) return compact;
   return `Procedure part ${fallbackNumber}`;
+}
+
+function isClickMeLine(text: string) {
+  return /^\(?click me to view file\)?$/i.test(text.trim());
+}
+
+function fileReferenceTitle(text: string) {
+  const compact = text
+    .replace(/\s+/g, " ")
+    .replace(/\(click me to view file\)/gi, "")
+    .trim();
+  const match = compact.match(/([A-Za-z0-9][A-Za-z0-9 _.,&()'’+-]{2,}\.(?:pdf|pptx?|docx?|xlsx?))$/i);
+  return match ? match[1].trim() : null;
 }
 
 function isSkLine(text: string) {
