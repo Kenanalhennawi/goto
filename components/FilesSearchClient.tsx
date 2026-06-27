@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ChapterFileLink } from "@/lib/content-links";
-import { matchesFileLink } from "@/lib/content-links";
+import { groupChapterFileLinks, matchesGroupedFileLink } from "@/lib/content-links";
 
 export function FilesSearchClient({
   links,
@@ -18,14 +18,26 @@ export function FilesSearchClient({
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [selectedType, setSelectedType] = useState(initialType);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
 
+  const groupedLinks = useMemo(() => groupChapterFileLinks(links), [links]);
   const filteredLinks = useMemo(
     () =>
-      links
+      groupedLinks
         .filter((link) => selectedType === "ALL" || link.file_type === selectedType)
-        .filter((link) => matchesFileLink(link, query)),
-    [links, query, selectedType]
+        .filter((link) => matchesGroupedFileLink(link, query)),
+    [groupedLinks, query, selectedType]
   );
+
+  async function copyLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedUrl(url);
+      window.setTimeout(() => setCopiedUrl(null), 1600);
+    } catch {
+      setCopiedUrl(null);
+    }
+  }
 
   return (
     <>
@@ -66,7 +78,9 @@ export function FilesSearchClient({
       </section>
 
       <div className="mb-3 flex items-center justify-between text-xs uppercase tracking-wider text-ink-faint">
-        <span>{filteredLinks.length} references</span>
+        <span>
+          {filteredLinks.length} unique files · {links.length} total references
+        </span>
         <Link href="/" className="font-semibold text-sky hover:text-accent">
           Back to manifest
         </Link>
@@ -77,30 +91,51 @@ export function FilesSearchClient({
           <article key={`${link.url}-${index}`} className="content-card p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <div className="mb-2 flex items-center gap-2">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="rounded-md bg-sky-soft px-2 py-1 text-[11px] font-semibold text-sky">
                     {link.file_type}
                   </span>
-                  <Link
-                    href={`/chapter/${link.chapter_slug}`}
-                    className="text-xs font-medium text-ink-muted hover:text-accent"
-                  >
-                    Ch. {String(link.chapter_number).padStart(2, "0")} - {link.chapter_title}
-                  </Link>
+                  <span className="text-xs font-medium text-ink-muted">
+                    Used in {link.chapters.length} chapter{link.chapters.length === 1 ? "" : "s"}
+                  </span>
                 </div>
                 <h2 className="truncate font-display text-base font-semibold text-ink">
                   {link.title}
                 </h2>
-                <p className="mt-1 truncate text-xs text-ink-faint">{link.url}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {link.chapters.slice(0, 8).map((chapter) => (
+                    <Link
+                      key={chapter.chapter_slug}
+                      href={`/chapter/${chapter.chapter_slug}`}
+                      className="rounded-md border border-border bg-white px-2 py-1 text-[11px] font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+                    >
+                      {String(chapter.chapter_number).padStart(2, "0")}
+                    </Link>
+                  ))}
+                  {link.chapters.length > 8 && (
+                    <span className="rounded-md bg-panel px-2 py-1 text-[11px] text-ink-faint">
+                      +{link.chapters.length - 8}
+                    </span>
+                  )}
+                </div>
               </div>
-              <a
-                href={link.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-sky-soft px-4 py-2 text-sm font-semibold text-sky transition-colors hover:border-sky hover:bg-white"
-              >
-                Open
-              </a>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={() => copyLink(link.url)}
+                  className="inline-flex items-center justify-center rounded-lg border border-border bg-white px-4 py-2 text-sm font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+                >
+                  {copiedUrl === link.url ? "Copied" : "Copy"}
+                </button>
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-sky-soft px-4 py-2 text-sm font-semibold text-sky transition-colors hover:border-sky hover:bg-white"
+                >
+                  Open
+                </a>
+              </div>
             </div>
           </article>
         ))}
