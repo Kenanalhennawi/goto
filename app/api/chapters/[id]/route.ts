@@ -59,16 +59,27 @@ export async function PATCH(
     ? sanitizeContentBlocks(body.content_blocks)
     : preserveAttachments(body_text, existing.content_blocks);
 
-  const { error: historyError } = await supabase.from("edit_history").insert({
+  const historyEntry = {
     chapter_id: id,
     edited_by: user.id,
     edited_by_email: user.email,
     change_type: "manual_edit",
     previous_body_text: existing.body_text,
     new_body_text: body_text,
+    previous_content_blocks: existing.content_blocks,
+    new_content_blocks: newContentBlocks,
     previous_keywords: existing.search_keywords,
     new_keywords: search_keywords ?? existing.search_keywords,
-  });
+  };
+
+  let { error: historyError } = await supabase.from("edit_history").insert(historyEntry);
+  if (historyError?.message.includes("previous_content_blocks")) {
+    const { previous_content_blocks, new_content_blocks, ...fallbackHistoryEntry } = historyEntry;
+    void previous_content_blocks;
+    void new_content_blocks;
+    const fallback = await supabase.from("edit_history").insert(fallbackHistoryEntry);
+    historyError = fallback.error;
+  }
 
   if (historyError) {
     return NextResponse.json(

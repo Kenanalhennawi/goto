@@ -54,6 +54,8 @@ export interface EditHistoryEntry {
   change_type: "manual_edit" | "pdf_sync" | "rollback";
   previous_body_text: string | null;
   new_body_text: string | null;
+  previous_content_blocks?: ContentBlock[] | null;
+  new_content_blocks?: ContentBlock[] | null;
   previous_keywords: string[] | null;
   new_keywords: string[] | null;
   source_version: string | null;

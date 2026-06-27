@@ -9,7 +9,14 @@ interface Props {
   chapter: Chapter;
   history: Pick<
     EditHistoryEntry,
-    "id" | "edited_by_email" | "change_type" | "created_at" | "previous_body_text" | "new_body_text"
+    | "id"
+    | "edited_by_email"
+    | "change_type"
+    | "created_at"
+    | "previous_body_text"
+    | "new_body_text"
+    | "previous_content_blocks"
+    | "new_content_blocks"
   >[];
 }
 
@@ -20,11 +27,17 @@ export function ChapterEditor({ chapter, history }: Props) {
       : [{ type: "text", text: chapter.body_text }]
   );
   const [keywords, setKeywords] = useState(chapter.search_keywords.join(", "));
+  const [showHistory, setShowHistory] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const router = useRouter();
 
   const bodyText = blocksToText(blocks);
+  const originalBlocks: ContentBlock[] =
+    Array.isArray(chapter.content_blocks) && chapter.content_blocks.length > 0
+      ? chapter.content_blocks
+      : [{ type: "text", text: chapter.body_text }];
+  const previousSavedBlocks = restoreBlocksFromHistory(history, originalBlocks);
   const hasChanges =
     bodyText !== chapter.body_text ||
     keywords !== chapter.search_keywords.join(", ") ||
@@ -57,6 +70,25 @@ export function ChapterEditor({ chapter, history }: Props) {
     router.refresh();
   }
 
+  function discardUnsavedChanges() {
+    setBlocks(originalBlocks);
+    setKeywords(chapter.search_keywords.join(", "));
+    setMessage({ type: "success", text: "Unsaved changes were discarded." });
+  }
+
+  function restorePreviousVersion() {
+    if (!previousSavedBlocks) {
+      setMessage({ type: "error", text: "No previous saved version is available yet." });
+      return;
+    }
+
+    setBlocks(previousSavedBlocks);
+    setMessage({
+      type: "success",
+      text: "Previous version loaded. Review it, then click Save changes to publish it.",
+    });
+  }
+
   return (
     <div>
       <Link href="/admin" className="text-xs text-ink-muted hover:text-accent transition-colors inline-flex items-center gap-1 mb-6">
@@ -72,13 +104,29 @@ export function ChapterEditor({ chapter, history }: Props) {
             Last updated {new Date(chapter.updated_at).toLocaleString()}
           </p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={!hasChanges || saving}
-          className="bg-accent text-base font-medium rounded-lg px-4 py-2 text-sm hover:bg-accent-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {saving ? "Saving..." : "Save changes"}
-        </button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            onClick={restorePreviousVersion}
+            disabled={!previousSavedBlocks || saving}
+            className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-ink hover:border-accent disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Restore previous
+          </button>
+          <button
+            onClick={discardUnsavedChanges}
+            disabled={!hasChanges || saving}
+            className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-ink-muted hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Discard changes
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!hasChanges || saving}
+            className="bg-accent text-base font-medium rounded-lg px-4 py-2 text-sm hover:bg-accent-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saving ? "Saving..." : "Save changes"}
+          </button>
+        </div>
       </div>
 
       {message && (
@@ -128,26 +176,49 @@ export function ChapterEditor({ chapter, history }: Props) {
 
       {history.length > 0 && (
         <div>
-          <h2 className="text-xs uppercase tracking-wider text-ink-faint mb-3">Edit history</h2>
-          <div className="bg-panel border border-border rounded-lg divide-y divide-border">
-            {history.map((h) => (
-              <div key={h.id} className="px-4 py-2.5 flex items-center justify-between text-xs">
-                <span className="text-ink-muted">
-                  {h.edited_by_email ?? "Unknown"} - {h.change_type.replace("_", " ")}
-                </span>
-                <span className="text-ink-faint font-mono">
-                  {new Date(h.created_at).toLocaleString()}
-                </span>
-                <span className="text-ink-faint">
-                  {wordDelta(h.previous_body_text, h.new_body_text)}
-                </span>
-              </div>
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowHistory((value) => !value)}
+            className="text-xs font-semibold uppercase tracking-wider text-ink-faint transition-colors hover:text-accent"
+          >
+            {showHistory ? "Hide restore history" : "Show restore history"}
+          </button>
+          {showHistory && (
+            <div className="mt-3 bg-panel border border-border rounded-lg divide-y divide-border">
+              {history.map((h) => (
+                <div key={h.id} className="px-4 py-2.5 flex items-center justify-between text-xs">
+                  <span className="text-ink-muted">
+                    {h.edited_by_email ?? "Unknown"} - {h.change_type.replace("_", " ")}
+                  </span>
+                  <span className="text-ink-faint font-mono">
+                    {new Date(h.created_at).toLocaleString()}
+                  </span>
+                  <span className="text-ink-faint">
+                    {wordDelta(h.previous_body_text, h.new_body_text)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+function restoreBlocksFromHistory(
+  history: Pick<EditHistoryEntry, "previous_body_text" | "previous_content_blocks">[],
+  currentBlocks: ContentBlock[]
+): ContentBlock[] | null {
+  const latest = history.find((entry) => entry.previous_content_blocks?.length || entry.previous_body_text);
+  if (!latest) return null;
+
+  if (latest.previous_content_blocks?.length) {
+    return latest.previous_content_blocks;
+  }
+
+  const attachments = currentBlocks.filter((block) => block.type !== "text");
+  return [{ type: "text", text: latest.previous_body_text ?? "" }, ...attachments];
 }
 
 function wordDelta(previous: string | null, next: string | null) {
