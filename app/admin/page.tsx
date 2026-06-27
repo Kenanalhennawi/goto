@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
+import { DeleteButton } from "@/components/DeleteButton";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -98,6 +99,13 @@ export default async function AdminDashboard() {
                   <div className="flex items-center gap-3">
                     <span className="text-ink-muted text-xs">{s.chapters_changed} changed</span>
                     <StatusBadge status={s.status} />
+                    {(role.role === "admin" || role.role === "owner") && (
+                      <DeleteButton
+                        endpoint={`/api/sync-runs/${s.id}`}
+                        label="Delete"
+                        confirmText="Delete this sync run from the recent list?"
+                      />
+                    )}
                   </div>
                 </div>
               ))}

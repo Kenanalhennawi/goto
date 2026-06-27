@@ -48,3 +48,39 @@ export async function PATCH(
 
   return NextResponse.json({ success: true });
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
+  const { data: role } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!role || !["admin", "owner"].includes(role.role)) {
+    return NextResponse.json({ error: "Only admins can delete issues." }, { status: 403 });
+  }
+
+  const { error } = await supabase.from("content_issues").delete().eq("id", id);
+
+  if (error) {
+    return NextResponse.json(
+      { error: "Couldn't delete issue. Run the delete migration if this is the first time." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ success: true });
+}

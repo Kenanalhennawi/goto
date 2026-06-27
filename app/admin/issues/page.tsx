@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
 import { IssueStatusSelect } from "@/components/IssueStatusSelect";
+import { DeleteButton } from "@/components/DeleteButton";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 type IssueRow = {
@@ -82,7 +83,13 @@ export default async function AdminIssuesPage() {
                       Reported by {issue.reporter_email ?? "anonymous"}
                     </p>
                   </div>
-                  <IssueStatusSelect id={issue.id} status={issue.status} />
+                  <div className="flex shrink-0 items-center gap-2">
+                    <IssueStatusSelect id={issue.id} status={issue.status} />
+                    <DeleteButton
+                      endpoint={`/api/issues/${issue.id}`}
+                      confirmText="Delete this issue permanently?"
+                    />
+                  </div>
                 </div>
               </article>
             ))}
