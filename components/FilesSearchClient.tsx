@@ -2,8 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { ChapterFileLink } from "@/lib/content-links";
+import type { ChapterFileLink, ReferenceCategory } from "@/lib/content-links";
 import { groupChapterFileLinks, matchesGroupedFileLink } from "@/lib/content-links";
+
+type CategoryFilter = "All" | ReferenceCategory;
+
+const categoryOrder: CategoryFilter[] = ["All", "Files", "Emails", "Links", "Phones", "Other"];
 
 export function FilesSearchClient({
   links,
@@ -18,15 +22,26 @@ export function FilesSearchClient({
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [selectedType, setSelectedType] = useState(initialType);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("All");
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
 
   const groupedLinks = useMemo(() => groupChapterFileLinks(links), [links]);
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<CategoryFilter, number>([["All", groupedLinks.length]]);
+    for (const category of categoryOrder) counts.set(category, counts.get(category) ?? 0);
+    for (const link of groupedLinks) {
+      counts.set(link.reference_category, (counts.get(link.reference_category) ?? 0) + 1);
+    }
+    return counts;
+  }, [groupedLinks]);
+
   const filteredLinks = useMemo(
     () =>
       groupedLinks
+        .filter((link) => selectedCategory === "All" || link.reference_category === selectedCategory)
         .filter((link) => selectedType === "ALL" || link.file_type === selectedType)
         .filter((link) => matchesGroupedFileLink(link, query)),
-    [groupedLinks, query, selectedType]
+    [groupedLinks, query, selectedCategory, selectedType]
   );
 
   async function copyLink(url: string) {
@@ -75,11 +90,30 @@ export function FilesSearchClient({
             </select>
           </div>
         </div>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {categoryOrder.map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setSelectedCategory(category)}
+              className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+                selectedCategory === category
+                  ? "border-accent bg-accent text-white"
+                  : "border-border bg-white text-ink-muted hover:border-accent hover:text-accent"
+              }`}
+            >
+              {category}{" "}
+              <span className={selectedCategory === category ? "text-white/80" : "text-ink-faint"}>
+                {categoryCounts.get(category) ?? 0}
+              </span>
+            </button>
+          ))}
+        </div>
       </section>
 
       <div className="mb-3 flex items-center justify-between text-xs uppercase tracking-wider text-ink-faint">
         <span>
-          {filteredLinks.length} unique files · {links.length} total references
+          {filteredLinks.length} unique references · {links.length} total uses
         </span>
         <Link href="/" className="font-semibold text-sky hover:text-accent">
           Back to manifest
@@ -93,6 +127,9 @@ export function FilesSearchClient({
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="rounded-md bg-sky-soft px-2 py-1 text-[11px] font-semibold text-sky">
+                    {link.reference_category}
+                  </span>
+                  <span className="rounded-md bg-panel px-2 py-1 text-[11px] font-semibold text-ink-muted">
                     {link.file_type}
                   </span>
                   <span className="text-xs font-medium text-ink-muted">
@@ -103,18 +140,19 @@ export function FilesSearchClient({
                   {link.title}
                 </h2>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {link.chapters.slice(0, 8).map((chapter) => (
+                  {link.chapters.slice(0, 6).map((chapter) => (
                     <Link
                       key={chapter.chapter_slug}
                       href={`/chapter/${chapter.chapter_slug}`}
+                      title={chapter.chapter_title}
                       className="rounded-md border border-border bg-white px-2 py-1 text-[11px] font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
                     >
-                      {String(chapter.chapter_number).padStart(2, "0")}
+                      {String(chapter.chapter_number).padStart(2, "0")} {shortTitle(chapter.chapter_title)}
                     </Link>
                   ))}
-                  {link.chapters.length > 8 && (
+                  {link.chapters.length > 6 && (
                     <span className="rounded-md bg-panel px-2 py-1 text-[11px] text-ink-faint">
-                      +{link.chapters.length - 8}
+                      +{link.chapters.length - 6}
                     </span>
                   )}
                 </div>
@@ -142,4 +180,8 @@ export function FilesSearchClient({
       </div>
     </>
   );
+}
+
+function shortTitle(title: string) {
+  return title.length > 30 ? `${title.slice(0, 27)}...` : title;
 }

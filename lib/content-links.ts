@@ -1,6 +1,8 @@
 import type { Chapter, ContentBlock } from "@/lib/types";
 import { normalizeExternalUrl } from "@/lib/links";
 
+export type ReferenceCategory = "Files" | "Emails" | "Phones" | "Links" | "Other";
+
 export type ChapterFileLink = {
   chapter_number: number;
   chapter_title: string;
@@ -8,12 +10,14 @@ export type ChapterFileLink = {
   title: string;
   url: string;
   file_type: string;
+  reference_category: ReferenceCategory;
 };
 
 export type GroupedChapterFileLink = {
   title: string;
   url: string;
   file_type: string;
+  reference_category: ReferenceCategory;
   chapters: Array<{
     chapter_number: number;
     chapter_title: string;
@@ -39,6 +43,7 @@ export function extractChapterFileLinks(
       title: linkTitle(block.title ?? block.text, url),
       url,
       file_type: fileType(url),
+      reference_category: referenceCategory(url),
     });
   }
 
@@ -53,6 +58,7 @@ export function matchesFileLink(link: ChapterFileLink, query: string) {
     link.title,
     link.url,
     link.file_type,
+    link.reference_category,
     link.chapter_title,
     String(link.chapter_number),
   ].some((value) => value.toLowerCase().includes(needle));
@@ -68,6 +74,7 @@ export function groupChapterFileLinks(links: ChapterFileLink[]) {
         title: link.title,
         url: link.url,
         file_type: link.file_type,
+        reference_category: link.reference_category,
         chapters: [
           {
             chapter_number: link.chapter_number,
@@ -103,6 +110,7 @@ export function matchesGroupedFileLink(link: GroupedChapterFileLink, query: stri
     link.title,
     link.url,
     link.file_type,
+    link.reference_category,
     ...link.chapters.flatMap((chapter) => [
       chapter.chapter_title,
       String(chapter.chapter_number),
@@ -115,19 +123,77 @@ function isLinkBlock(block: ContentBlock): block is ContentBlock & { url: string
 }
 
 function linkTitle(title: string | undefined, url: string) {
-  if (title && !/^open (reference link|sharepoint reference)$/i.test(title.trim())) {
-    return title.trim();
+  const trimmedTitle = title?.trim();
+  const derivedTitle = titleFromUrl(url);
+
+  if (trimmedTitle && !isGenericTitle(trimmedTitle) && !looksOpaqueTitle(trimmedTitle)) {
+    return trimmedTitle;
   }
 
-  const lastPath = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "").trim();
-  return lastPath || title || "Open reference";
+  return derivedTitle || trimmedTitle || "Open reference";
 }
 
 function fileType(url: string) {
-  const pathname = new URL(url).pathname;
-  const ext = pathname.match(/\.([a-z0-9]+)$/i)?.[1]?.toUpperCase();
-  if (ext) return ext;
   if (url.startsWith("mailto:")) return "EMAIL";
   if (url.startsWith("tel:")) return "PHONE";
+
+  const pathname = safeUrl(url)?.pathname ?? "";
+  const ext = pathname.match(/\.([a-z0-9]+)$/i)?.[1]?.toUpperCase();
+  if (ext) return ext;
   return "LINK";
+}
+
+function referenceCategory(url: string): ReferenceCategory {
+  if (url.startsWith("mailto:")) return "Emails";
+  if (url.startsWith("tel:")) return "Phones";
+
+  const type = fileType(url);
+  if (type !== "LINK") return "Files";
+  return looksUsefulWebLink(url) ? "Links" : "Other";
+}
+
+function titleFromUrl(url: string) {
+  if (url.startsWith("mailto:")) {
+    return `Email: ${decodeURIComponent(url.replace(/^mailto:/i, "")).split("?")[0]}`;
+  }
+
+  if (url.startsWith("tel:")) {
+    return `Phone: ${decodeURIComponent(url.replace(/^tel:/i, ""))}`;
+  }
+
+  const parsed = safeUrl(url);
+  if (!parsed) return "";
+
+  const lastPath = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "").trim();
+  if (lastPath && !looksOpaqueTitle(lastPath)) return lastPath;
+
+  return `${parsed.hostname.replace(/^www\./, "")} reference`;
+}
+
+function safeUrl(url: string) {
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+}
+
+function isGenericTitle(title: string) {
+  return /^(open|copy|view|link|file|open reference link|open sharepoint reference)$/i.test(title);
+}
+
+function looksOpaqueTitle(title: string) {
+  const compact = title.replace(/[^a-z0-9]/gi, "");
+  return compact.length >= 12 && /^[a-f0-9]+$/i.test(compact);
+}
+
+function looksUsefulWebLink(url: string) {
+  const parsed = safeUrl(url);
+  if (!parsed) return false;
+
+  if (parsed.hostname.includes("sharepoint.com")) return true;
+  const lastPath = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "").trim();
+  if (lastPath && looksOpaqueTitle(lastPath)) return false;
+  if (parsed.pathname.length > 1) return true;
+  return false;
 }
