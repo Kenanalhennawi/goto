@@ -56,6 +56,7 @@ export async function POST(
         slug: slugify(change.title),
         search_keywords: change.new_keywords ?? [],
         body_text: change.new_body_text,
+        content_blocks: change.new_content_blocks ?? [],
         word_count: change.new_body_text.split(/\s+/).filter(Boolean).length,
         source_version: syncRun?.source_version ?? null,
         updated_by: user.id,
@@ -66,7 +67,7 @@ export async function POST(
 
     const { data: existingChapter } = await supabase
       .from("chapters")
-      .select("id, body_text, search_keywords")
+      .select("id, body_text, search_keywords, content_blocks")
       .eq("chapter_number", change.chapter_number)
       .single();
 
@@ -89,6 +90,7 @@ export async function POST(
       .from("chapters")
       .update({
         body_text: change.new_body_text,
+        content_blocks: change.new_content_blocks ?? existingChapter.content_blocks ?? [],
         search_keywords: change.new_keywords ?? existingChapter.search_keywords,
         word_count: change.new_body_text.split(/\s+/).filter(Boolean).length,
         source_version: syncRun?.source_version ?? null,
