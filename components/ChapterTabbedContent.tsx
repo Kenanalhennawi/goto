@@ -41,10 +41,12 @@ export function ChapterTabbedContent({
   blocks,
   activeSection = "guide",
   baseHref,
+  editHref,
 }: {
   blocks: ContentBlock[];
   activeSection?: string;
   baseHref: string;
+  editHref?: string;
 }) {
   const tabs = buildTabs(blocks);
   const activeTab = tabs.find((tab) => tab.id === activeSection) ?? tabs[0];
@@ -86,6 +88,14 @@ export function ChapterTabbedContent({
         <div className="border-b border-border bg-sky-soft px-5 py-4">
           <p className="font-display text-lg font-semibold text-ink">{activeTab.label}</p>
           <p className="mt-1 text-sm text-ink-muted">{activeTab.summary}</p>
+          {editHref && (
+            <Link
+              href={editHref}
+              className="mt-3 inline-flex rounded-md bg-ink px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
+            >
+              Edit chapter
+            </Link>
+          )}
         </div>
 
         {activeTab.sections.length > 1 && (
@@ -130,6 +140,14 @@ export function ChapterTabbedContent({
                 >
                   Link
                 </a>
+                {editHref && (
+                  <Link
+                    href={editHref}
+                    className="rounded-md bg-orange-50 px-2 py-1 text-xs font-semibold text-accent transition-colors hover:bg-white"
+                  >
+                    Edit
+                  </Link>
+                )}
               </div>
 
               <div className="space-y-3 border-t border-border pt-3">

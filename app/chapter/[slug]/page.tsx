@@ -18,6 +18,9 @@ export default async function ChapterPage({
   const { slug } = await params;
   const { section } = await searchParams;
   const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { data: chapter } = await supabase
     .from("chapters")
@@ -28,6 +31,15 @@ export default async function ChapterPage({
   if (!chapter) notFound();
 
   const ch = chapter as Chapter;
+
+  const { data: role } = user
+    ? await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single()
+    : { data: null };
+  const canEdit = !!role && ["quality", "admin", "owner"].includes(role.role);
 
   const { data: neighbors } = await supabase
     .from("chapters")
@@ -72,6 +84,14 @@ export default async function ChapterPage({
                     ))}
                   </div>
                 )}
+                {canEdit && (
+                  <Link
+                    href={`/admin/chapter/${ch.slug}`}
+                    className="mt-5 inline-flex rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-dim"
+                  >
+                    Edit chapter
+                  </Link>
+                )}
               </div>
             </div>
           </div>
@@ -92,6 +112,7 @@ export default async function ChapterPage({
           blocks={ch.content_blocks}
           activeSection={section}
           baseHref={`/chapter/${ch.slug}`}
+          editHref={canEdit ? `/admin/chapter/${ch.slug}` : undefined}
         />
 
         <nav className="mt-8 grid grid-cols-1 gap-3 border-t border-border pt-6 sm:grid-cols-2">
