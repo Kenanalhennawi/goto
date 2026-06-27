@@ -20,7 +20,7 @@ export default async function AdminChapterEditPage({
     .eq("user_id", user.id)
     .single();
 
-  if (!role || (role.role !== "quality" && role.role !== "admin")) {
+  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
     redirect("/admin");
   }
 

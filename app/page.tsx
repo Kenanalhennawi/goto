@@ -1,96 +1,106 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SearchBar } from "@/components/SearchBar";
-import { ChapterBadge } from "@/components/ChapterBadge";
+import { ChapterDirectory } from "@/components/ChapterDirectory";
 import type { Chapter } from "@/lib/types";
-import Link from "next/link";
 
 export const revalidate = 60;
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ group?: string }>;
+}) {
+  const { group } = await searchParams;
   const supabase = await createServerSupabaseClient();
   const { data: chapters } = await supabase
     .from("chapters")
-    .select("id, chapter_number, title, slug, search_keywords, body_text, word_count, updated_at")
+    .select("id, chapter_number, title, slug, search_keywords, word_count, updated_at")
     .order("chapter_number", { ascending: true });
 
   const list = (chapters ?? []) as Pick<
     Chapter,
-    "id" | "chapter_number" | "title" | "slug" | "search_keywords" | "body_text" | "word_count" | "updated_at"
+    "id" | "chapter_number" | "title" | "slug" | "search_keywords" | "word_count" | "updated_at"
   >[];
 
   return (
-    <div className="flex flex-col flex-1">
+    <div className="flex min-h-full flex-col">
       <SiteHeader />
 
-      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10">
-        {/* Hero */}
-        <div className="mb-10">
-          <div className="flex items-baseline gap-3 mb-2">
-            <h1 className="font-display text-3xl font-semibold text-ink tracking-tight">
-              The Manifest
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
+        <section className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-accent">
+              flydubai contact centre
+            </p>
+            <h1 className="max-w-3xl font-display text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
+              GO TO procedures, sorted for real desk work.
             </h1>
-            <span className="font-mono text-xs text-ink-faint">
-              {list.length || "—"} chapters · live
-            </span>
+            <p className="mt-4 max-w-2xl text-base leading-7 text-ink-muted">
+              Search the full manual, then browse by practical tabs so booking, airport,
+              support, and reference procedures are easy to scan.
+            </p>
           </div>
-          <p className="text-ink-muted text-sm max-w-2xl">
-            Every booking, baggage, payment, and disruption procedure — searchable in seconds.
-            No more flipping through 355 pages.
-          </p>
-        </div>
 
-        <div className="mb-10">
+          <div className="grid grid-cols-3 gap-3">
+            <Stat label="Chapters" value={String(list.length || "-")} tone="orange" />
+            <Stat label="Live search" value="On" tone="blue" />
+            <Stat label="Mode" value="Guide" tone="green" />
+          </div>
+        </section>
+
+        <section className="mb-7 content-card p-3 sm:p-4">
           <SearchBar autoFocus />
-        </div>
+        </section>
 
         {list.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {list.map((chapter) => (
-              <Link
-                key={chapter.id}
-                href={`/chapter/${chapter.slug}`}
-                className="group flex items-start gap-3 bg-panel border border-border rounded-lg p-4 hover:border-accent/40 hover:bg-panel-hover transition-all"
-              >
-                <ChapterBadge number={chapter.chapter_number} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-display font-medium text-sm text-ink leading-snug group-hover:text-accent transition-colors">
-                    {chapter.title}
-                  </h2>
-                  <p className="text-xs text-ink-muted mt-1 line-clamp-2">
-                    {chapter.body_text?.slice(0, 110).trim()}…
-                  </p>
-                  {chapter.search_keywords?.length > 0 && (
-                    <p className="text-[11px] text-ink-faint mt-1.5 line-clamp-1 font-mono">
-                      {chapter.search_keywords.slice(0, 3).join(" · ")}
-                    </p>
-                  )}
-                </div>
-              </Link>
-            ))}
-          </div>
+          <ChapterDirectory chapters={list} activeGroupId={group} />
         )}
       </main>
 
-      <footer className="border-t border-border py-6">
-        <div className="max-w-6xl mx-auto px-6 text-xs text-ink-faint flex items-center justify-between">
+      <footer className="border-t border-border bg-white/70 py-5">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 text-xs text-ink-faint sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>Internal flydubai contact centre reference. Not for external distribution.</span>
-          <span className="font-mono">v—</span>
+          <span className="font-mono">v80.8</span>
         </div>
       </footer>
     </div>
   );
 }
 
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "orange" | "blue" | "green";
+}) {
+  const tones = {
+    orange: "bg-orange-50 text-accent border-orange-200",
+    blue: "bg-sky-soft text-sky border-blue-200",
+    green: "bg-mint-soft text-good border-green-200",
+  };
+
+  return (
+    <div className={`rounded-lg border p-4 ${tones[tone]}`}>
+      <p className="font-display text-2xl font-semibold leading-none">{value}</p>
+      <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider opacity-75">
+        {label}
+      </p>
+    </div>
+  );
+}
+
 function EmptyState() {
   return (
-    <div className="border border-dashed border-border rounded-lg p-12 text-center">
-      <p className="font-display text-lg text-ink mb-2">No chapters loaded yet</p>
-      <p className="text-sm text-ink-muted max-w-md mx-auto">
-        Once the database is connected and a PDF sync has run, the 78 chapters of the
-        GO TO manual will appear here, fully searchable.
+    <div className="content-card p-12 text-center">
+      <p className="font-display text-lg font-semibold text-ink">No chapters loaded yet</p>
+      <p className="mx-auto mt-2 max-w-md text-sm text-ink-muted">
+        Once the database is connected and a PDF sync has run, the manual will appear here.
       </p>
     </div>
   );

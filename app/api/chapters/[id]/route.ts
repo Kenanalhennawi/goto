@@ -22,7 +22,7 @@ export async function PATCH(
     .eq("user_id", user.id)
     .single();
 
-  if (!role || (role.role !== "quality" && role.role !== "admin")) {
+  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
     return NextResponse.json(
       { error: "Your account doesn't have edit access." },
       { status: 403 }

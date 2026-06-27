@@ -1,8 +1,9 @@
 export interface ContentBlock {
-  type: "text" | "image";
+  type: "text" | "image" | "link";
   text?: string;
   url?: string | null;
   filename?: string;
+  title?: string;
 }
 
 export interface Chapter {
@@ -44,7 +45,7 @@ export interface SearchResult {
   rank: number;
 }
 
-export type UserRole = "agent" | "quality" | "admin";
+export type UserRole = "agent" | "supervisor" | "quality" | "admin" | "owner";
 
 export interface EditHistoryEntry {
   id: string;

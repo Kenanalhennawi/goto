@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ChapterBadge } from "@/components/ChapterBadge";
-import { ChapterContent } from "@/components/ChapterContent";
+import { ChapterTabbedContent } from "@/components/ChapterTabbedContent";
 import type { Chapter } from "@/lib/types";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -10,10 +10,13 @@ export const revalidate = 60;
 
 export default async function ChapterPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ section?: string }>;
 }) {
   const { slug } = await params;
+  const { section } = await searchParams;
   const supabase = await createServerSupabaseClient();
 
   const { data: chapter } = await supabase
@@ -26,7 +29,6 @@ export default async function ChapterPage({
 
   const ch = chapter as Chapter;
 
-  // Fetch prev/next for sequential navigation, since agents often work chapter-by-chapter
   const { data: neighbors } = await supabase
     .from("chapters")
     .select("chapter_number, title, slug")
@@ -36,61 +38,110 @@ export default async function ChapterPage({
   const next = neighbors?.find((n) => n.chapter_number === ch.chapter_number + 1);
 
   return (
-    <div className="flex flex-col flex-1">
+    <div className="flex min-h-full flex-col">
       <SiteHeader />
 
-      <main className="flex-1 max-w-3xl mx-auto w-full px-6 py-10">
-        <Link href="/" className="text-xs text-ink-muted hover:text-accent transition-colors inline-flex items-center gap-1 mb-6">
-          ← Back to manifest
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
+        <Link
+          href="/"
+          className="mb-6 inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink-muted shadow-sm ring-1 ring-border transition-colors hover:text-accent"
+        >
+          &larr; Back to chapters
         </Link>
 
-        <div className="flex items-start gap-4 mb-6">
-          <ChapterBadge number={ch.chapter_number} size="lg" />
-          <div className="flex-1">
-            <h1 className="font-display text-2xl font-semibold text-ink leading-tight">
-              {ch.title}
-            </h1>
-            {ch.search_keywords?.length > 0 && (
-              <p className="text-xs text-ink-faint mt-1.5 line-clamp-1">
-                {ch.search_keywords.slice(0, 6).join(" · ")}
-              </p>
-            )}
+        <section className="mb-6 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_280px]">
+          <div className="content-card p-6">
+            <div className="flex items-start gap-4">
+              <ChapterBadge number={ch.chapter_number} size="lg" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+                  Chapter {String(ch.chapter_number).padStart(2, "0")}
+                </p>
+                <h1 className="mt-2 font-display text-3xl font-semibold leading-tight tracking-tight text-ink">
+                  {ch.title}
+                </h1>
+                {ch.search_keywords?.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {ch.search_keywords.slice(0, 8).map((keyword) => (
+                      <span
+                        key={keyword}
+                        className="rounded-full border border-blue-200 bg-sky-soft px-3 py-1 text-xs font-medium text-sky"
+                      >
+                        {keyword}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
 
-        <article className="prose-content">
-          <ChapterContent blocks={ch.content_blocks} />
-        </article>
+          <aside className="content-card p-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+              Quick facts
+            </p>
+            <dl className="mt-4 space-y-3 text-sm">
+              <Fact label="Words" value={String(ch.word_count ?? "-")} />
+              <Fact label="Source" value={ch.source_version ?? "Manual"} />
+              <Fact label="Pages" value={pageRange(ch.page_start, ch.page_end)} />
+            </dl>
+          </aside>
+        </section>
 
-        <nav className="mt-12 pt-6 border-t border-border flex items-center justify-between gap-4">
+        <ChapterTabbedContent
+          blocks={ch.content_blocks}
+          activeSection={section}
+          baseHref={`/chapter/${ch.slug}`}
+        />
+
+        <nav className="mt-8 grid grid-cols-1 gap-3 border-t border-border pt-6 sm:grid-cols-2">
           {prev ? (
             <Link
               href={`/chapter/${prev.slug}`}
-              className="flex-1 text-left group"
+              className="content-card group p-4 text-left transition-colors hover:border-accent"
             >
-              <span className="text-xs text-ink-faint block">← Previous</span>
-              <span className="text-sm text-ink-muted group-hover:text-accent transition-colors line-clamp-1">
+              <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                Previous
+              </span>
+              <span className="mt-1 block text-sm font-semibold text-ink group-hover:text-accent">
                 {prev.title}
               </span>
             </Link>
           ) : (
-            <div className="flex-1" />
+            <div />
           )}
           {next ? (
             <Link
               href={`/chapter/${next.slug}`}
-              className="flex-1 text-right group"
+              className="content-card group p-4 text-left transition-colors hover:border-accent sm:text-right"
             >
-              <span className="text-xs text-ink-faint block">Next →</span>
-              <span className="text-sm text-ink-muted group-hover:text-accent transition-colors line-clamp-1">
+              <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                Next
+              </span>
+              <span className="mt-1 block text-sm font-semibold text-ink group-hover:text-accent">
                 {next.title}
               </span>
             </Link>
           ) : (
-            <div className="flex-1" />
+            <div />
           )}
         </nav>
       </main>
     </div>
   );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
+      <dt className="text-ink-muted">{label}</dt>
+      <dd className="text-right font-semibold text-ink">{value}</dd>
+    </div>
+  );
+}
+
+function pageRange(start: number | null, end: number | null) {
+  if (!start && !end) return "-";
+  if (start === end || !end) return String(start);
+  return `${start}-${end}`;
 }

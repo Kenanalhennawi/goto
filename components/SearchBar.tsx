@@ -1,133 +1,129 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import type { SearchResult } from "@/lib/types";
 
-export function SearchBar({ autoFocus = false }: { autoFocus?: boolean }) {
-  const [query, setQuery] = useState("");
+export function SearchBar({
+  autoFocus = false,
+  defaultValue = "",
+}: {
+  autoFocus?: boolean;
+  defaultValue?: string;
+}) {
+  const [query, setQuery] = useState(defaultValue);
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
-  const supabase = createClient();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (query.trim().length < 2) {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
       setResults([]);
-      setIsOpen(false);
+      setOpen(false);
+      setLoading(false);
       return;
     }
 
-    const timeout = setTimeout(async () => {
-      // Sanitize query for to_tsquery — wrap terms with prefix matching
-      const terms = query
-        .trim()
-        .split(/\s+/)
-        .map((t) => t.replace(/[^\w]/g, ""))
-        .filter(Boolean)
-        .map((t) => `${t}:*`)
-        .join(" & ");
-
-      if (!terms) return;
-
-      const { data, error } = await supabase.rpc("search_chapters", {
-        query: terms,
-      });
-
-      if (!error && data) {
-        setResults(data as SearchResult[]);
-        setIsOpen(true);
-        setActiveIndex(-1);
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
+          signal: controller.signal,
+        });
+        const json = (await res.json()) as { results?: SearchResult[] };
+        setResults(json.results ?? []);
+        setOpen(true);
+      } catch {
+        if (!controller.signal.aborted) {
+          setResults([]);
+          setOpen(true);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
       }
-    }, 200);
+    }, 160);
 
-    return () => clearTimeout(timeout);
-  }, [query, supabase]);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+    function onPointerDown(event: PointerEvent) {
+      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (!isOpen || results.length === 0) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, results.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActiveIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter" && activeIndex >= 0) {
-      e.preventDefault();
-      router.push(`/chapter/${results[activeIndex].slug}`);
-      setIsOpen(false);
-    } else if (e.key === "Escape") {
-      setIsOpen(false);
-    }
-  }
-
   return (
-    <div ref={containerRef} className="relative w-full">
-      <div className="relative">
+    <div ref={wrapRef} className="relative">
+      <form className="relative" action="/search">
         <svg
-          className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-faint"
+          className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-faint"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0z" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0z"
+          />
         </svg>
         <input
+          name="q"
           type="text"
           autoFocus={autoFocus}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Search procedures — e.g. baggage, wheelchair, EXST, Tabby..."
-          className="w-full bg-panel border border-border rounded-lg pl-12 pr-4 py-3.5 text-ink placeholder:text-ink-faint focus:border-accent transition-colors font-body text-[15px]"
+          onChange={(event) => setQuery(event.target.value)}
+          onFocus={() => query.trim().length >= 2 && setOpen(true)}
+          placeholder="Search by issue, SSR, process, keyword..."
+          className="w-full rounded-lg border border-border bg-white py-3.5 pl-12 pr-28 font-body text-[15px] text-ink transition-colors placeholder:text-ink-faint focus:border-accent"
         />
-      </div>
+        <button
+          type="submit"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-ink px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
+        >
+          Search
+        </button>
+      </form>
 
-      {isOpen && results.length > 0 && (
-        <div className="absolute z-50 mt-2 w-full bg-panel border border-border rounded-lg shadow-2xl shadow-black/40 overflow-hidden max-h-96 overflow-y-auto">
-          {results.map((r, i) => (
-            <button
-              key={r.id}
-              onClick={() => {
-                router.push(`/chapter/${r.slug}`);
-                setIsOpen(false);
-              }}
-              onMouseEnter={() => setActiveIndex(i)}
-              className={`w-full text-left px-4 py-3 border-b border-border last:border-0 transition-colors ${
-                i === activeIndex ? "bg-panel-hover" : "hover:bg-panel-hover"
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-mono text-xs text-accent tabular-nums">
-                  {String(r.chapter_number).padStart(2, "0")}
-                </span>
-                <span className="font-display font-medium text-sm text-ink">{r.title}</span>
-              </div>
-              <p
-                className="text-xs text-ink-muted line-clamp-1"
-                dangerouslySetInnerHTML={{ __html: r.snippet }}
-              />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {isOpen && query.trim().length >= 2 && results.length === 0 && (
-        <div className="absolute z-50 mt-2 w-full bg-panel border border-border rounded-lg p-4 text-sm text-ink-muted">
-          No matches for &ldquo;{query}&rdquo;. Try a different term or SSR code.
+      {open && query.trim().length >= 2 && (
+        <div className="absolute z-50 mt-2 max-h-96 w-full overflow-y-auto rounded-lg border border-border bg-white shadow-2xl shadow-slate-900/15">
+          {loading && <p className="px-4 py-3 text-sm text-ink-muted">Searching...</p>}
+          {!loading && results.length === 0 && (
+            <p className="px-4 py-3 text-sm text-ink-muted">
+              No matches. Try a shorter word, SSR code, or passenger issue.
+            </p>
+          )}
+          {!loading &&
+            results.map((result) => (
+              <Link
+                key={result.id}
+                href={`/chapter/${result.slug}`}
+                onClick={() => setOpen(false)}
+                className="block border-b border-border px-4 py-3 last:border-0 hover:bg-panel-hover"
+              >
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="rounded-md bg-orange-50 px-2 py-1 font-mono text-xs font-semibold text-accent">
+                    {String(result.chapter_number).padStart(2, "0")}
+                  </span>
+                  <span className="font-display text-sm font-semibold text-ink">
+                    {result.title}
+                  </span>
+                </div>
+                <p
+                  className="line-clamp-2 text-xs leading-relaxed text-ink-muted"
+                  dangerouslySetInnerHTML={{ __html: result.snippet }}
+                />
+              </Link>
+            ))}
         </div>
       )}
     </div>

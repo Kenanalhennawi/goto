@@ -1,18 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  /* Core palette — flydubai-inspired dark ops console */
-  --color-base: #0B1220;        /* deep navy background */
-  --color-panel: #141C2C;       /* raised surface (cards, sidebar) */
-  --color-panel-hover: #1A2436;
-  --color-border: #232E42;
-  --color-accent: #FF5A1F;      /* flydubai orange-red, signature accent */
-  --color-accent-dim: #C9461A;
-  --color-ink: #E8ECF1;         /* primary text */
-  --color-ink-muted: #8A97AB;   /* secondary text */
-  --color-ink-faint: #5B677C;
-  --color-good: #3FB97E;
-  --color-warn: #E0A93E;
+  --color-base: #f3f6fb;
+  --color-panel: #ffffff;
+  --color-panel-hover: #fff6ef;
+  --color-border: #d8e0eb;
+  --color-accent: #e85a2a;
+  --color-accent-dim: #be421d;
+  --color-ink: #172032;
+  --color-ink-muted: #5d6b7d;
+  --color-ink-faint: #8d9aac;
+  --color-good: #167a55;
+  --color-warn: #a66d10;
+  --color-sky: #126fb6;
+  --color-sky-soft: #eaf4ff;
+  --color-mint-soft: #edf9f3;
+  --color-amber-soft: #fff4d8;
 }
 
 @theme inline {
@@ -27,44 +30,73 @@
   --color-ink-faint: var(--color-ink-faint);
   --color-good: var(--color-good);
   --color-warn: var(--color-warn);
+  --color-sky: var(--color-sky);
+  --color-sky-soft: var(--color-sky-soft);
+  --color-mint-soft: var(--color-mint-soft);
+  --color-amber-soft: var(--color-amber-soft);
   --font-display: var(--font-display);
   --font-body: var(--font-body);
   --font-mono: var(--font-mono);
 }
 
-body {
+* {
+  box-sizing: border-box;
+}
+
+html {
   background: var(--color-base);
+}
+
+body {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(243, 246, 251, 0.98)),
+    radial-gradient(circle at 8% 0%, rgba(232, 90, 42, 0.12), transparent 26%),
+    radial-gradient(circle at 88% 4%, rgba(18, 111, 182, 0.11), transparent 24%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0 25%, transparent 25% 100%);
   color: var(--color-ink);
   font-family: var(--font-body), system-ui, sans-serif;
 }
 
-/* Subtle scrollbar matching the console aesthetic */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
+
 ::-webkit-scrollbar-track {
-  background: var(--color-base);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 6px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-ink-faint);
+  background: #edf1f7;
 }
 
-/* Respect reduced motion preference */
+::-webkit-scrollbar-thumb {
+  background: #c8d2df;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #aebacc;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
 
-/* Visible keyboard focus ring everywhere */
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+.soft-shadow {
+  box-shadow: 0 14px 34px rgba(23, 32, 50, 0.08);
+}
+
+.content-card {
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(23, 32, 50, 0.055);
 }

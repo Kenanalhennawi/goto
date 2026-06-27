@@ -15,7 +15,7 @@ export default async function AdminDashboard() {
     .eq("user_id", user.id)
     .single();
 
-  if (!role || (role.role !== "quality" && role.role !== "admin")) {
+  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
     return (
       <div className="flex flex-col flex-1">
         <SiteHeader />
@@ -56,12 +56,22 @@ export default async function AdminDashboard() {
               Signed in as {role.full_name ?? user.email} · {role.role}
             </p>
           </div>
-          <Link
-            href="/admin/sync"
-            className="bg-accent text-base font-medium rounded-lg px-4 py-2 text-sm hover:bg-accent-dim transition-colors"
-          >
-            Run new PDF sync
-          </Link>
+          <div className="flex gap-2">
+            {(role.role === "admin" || role.role === "owner") && (
+              <Link
+                href="/admin/users"
+                className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-ink hover:border-accent"
+              >
+                Users
+              </Link>
+            )}
+            <Link
+              href="/admin/sync"
+              className="bg-accent text-base font-medium rounded-lg px-4 py-2 text-sm hover:bg-accent-dim transition-colors"
+            >
+              Run new PDF sync
+            </Link>
+          </div>
         </div>
 
         {recentSyncs && recentSyncs.length > 0 && (
