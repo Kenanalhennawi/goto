@@ -1,3 +1,10 @@
+export interface ContentBlock {
+  type: "text" | "image";
+  text?: string;
+  url?: string | null;
+  filename?: string;
+}
+
 export interface Chapter {
   id: string;
   chapter_number: number;
@@ -5,6 +12,7 @@ export interface Chapter {
   slug: string;
   search_keywords: string[];
   body_text: string;
+  content_blocks: ContentBlock[];
   page_start: number | null;
   page_end: number | null;
   word_count: number;

@@ -44,13 +44,23 @@ export async function PATCH(
 
   const { data: existing, error: fetchError } = await supabase
     .from("chapters")
-    .select("body_text, search_keywords")
+    .select("body_text, search_keywords, content_blocks")
     .eq("id", id)
     .single();
 
   if (fetchError || !existing) {
     return NextResponse.json({ error: "Chapter not found." }, { status: 404 });
   }
+
+  // Manual edits happen in a plain text box, which has no way to say where
+  // an image should sit within the new text. To avoid silently deleting the
+  // chapter's screenshots on every edit, we keep them and place them after
+  // the edited text rather than losing them. Re-running a PDF sync later
+  // will restore full original inline positioning.
+  const existingImages = Array.isArray(existing.content_blocks)
+    ? existing.content_blocks.filter((b: { type: string }) => b.type === "image")
+    : [];
+  const newContentBlocks = [{ type: "text", text: body_text }, ...existingImages];
 
   const { error: historyError } = await supabase.from("edit_history").insert({
     chapter_id: id,
@@ -74,6 +84,7 @@ export async function PATCH(
     .from("chapters")
     .update({
       body_text,
+      content_blocks: newContentBlocks,
       search_keywords: search_keywords ?? existing.search_keywords,
       word_count: body_text.split(/\s+/).filter(Boolean).length,
       updated_at: new Date().toISOString(),

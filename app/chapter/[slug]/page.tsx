@@ -1,8 +1,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ChapterBadge } from "@/components/ChapterBadge";
-import { ChapterImageGallery } from "@/components/ChapterImageGallery";
-import type { ChapterWithImages } from "@/lib/types";
+import { ChapterContent } from "@/components/ChapterContent";
+import type { Chapter } from "@/lib/types";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -18,14 +18,13 @@ export default async function ChapterPage({
 
   const { data: chapter } = await supabase
     .from("chapters")
-    .select("*, chapter_images(*)")
+    .select("*")
     .eq("slug", slug)
     .single();
 
   if (!chapter) notFound();
 
-  const ch = chapter as ChapterWithImages;
-  const paragraphs = ch.body_text.split(/\n{2,}/).filter((p) => p.trim().length > 0);
+  const ch = chapter as Chapter;
 
   // Fetch prev/next for sequential navigation, since agents often work chapter-by-chapter
   const { data: neighbors } = await supabase
@@ -45,41 +44,23 @@ export default async function ChapterPage({
           ← Back to manifest
         </Link>
 
-        <div className="flex items-start gap-4 mb-2">
+        <div className="flex items-start gap-4 mb-6">
           <ChapterBadge number={ch.chapter_number} size="lg" />
-          <div>
+          <div className="flex-1">
             <h1 className="font-display text-2xl font-semibold text-ink leading-tight">
               {ch.title}
             </h1>
-            <p className="text-xs text-ink-faint mt-1 font-mono">
-              {ch.page_start && ch.page_end ? `GO TO pages ${ch.page_start}–${ch.page_end}` : ""}
-              {ch.source_version ? ` · v${ch.source_version}` : ""}
-            </p>
+            {ch.search_keywords?.length > 0 && (
+              <p className="text-xs text-ink-faint mt-1.5 line-clamp-1">
+                {ch.search_keywords.slice(0, 6).join(" · ")}
+              </p>
+            )}
           </div>
         </div>
 
-        {ch.search_keywords?.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-4 mb-8">
-            {ch.search_keywords.map((kw) => (
-              <span
-                key={kw}
-                className="text-[11px] font-mono px-2 py-0.5 rounded bg-panel border border-border text-ink-faint"
-              >
-                {kw}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <article className="prose-content space-y-4">
-          {paragraphs.map((p, i) => (
-            <p key={i} className="text-[15px] leading-relaxed text-ink whitespace-pre-line">
-              {p.trim()}
-            </p>
-          ))}
+        <article className="prose-content">
+          <ChapterContent blocks={ch.content_blocks} />
         </article>
-
-        <ChapterImageGallery images={ch.chapter_images} />
 
         <nav className="mt-12 pt-6 border-t border-border flex items-center justify-between gap-4">
           {prev ? (

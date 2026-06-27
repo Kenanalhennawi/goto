@@ -11,12 +11,12 @@ export default async function Home() {
   const supabase = await createServerSupabaseClient();
   const { data: chapters } = await supabase
     .from("chapters")
-    .select("id, chapter_number, title, slug, search_keywords, word_count, updated_at")
+    .select("id, chapter_number, title, slug, search_keywords, body_text, word_count, updated_at")
     .order("chapter_number", { ascending: true });
 
   const list = (chapters ?? []) as Pick<
     Chapter,
-    "id" | "chapter_number" | "title" | "slug" | "search_keywords" | "word_count" | "updated_at"
+    "id" | "chapter_number" | "title" | "slug" | "search_keywords" | "body_text" | "word_count" | "updated_at"
   >[];
 
   return (
@@ -59,9 +59,12 @@ export default async function Home() {
                   <h2 className="font-display font-medium text-sm text-ink leading-snug group-hover:text-accent transition-colors">
                     {chapter.title}
                   </h2>
+                  <p className="text-xs text-ink-muted mt-1 line-clamp-2">
+                    {chapter.body_text?.slice(0, 110).trim()}…
+                  </p>
                   {chapter.search_keywords?.length > 0 && (
-                    <p className="text-xs text-ink-faint mt-1 line-clamp-1 font-mono">
-                      {chapter.search_keywords.slice(0, 4).join(", ")}
+                    <p className="text-[11px] text-ink-faint mt-1.5 line-clamp-1 font-mono">
+                      {chapter.search_keywords.slice(0, 3).join(" · ")}
                     </p>
                   )}
                 </div>
