@@ -53,14 +53,12 @@ export async function PATCH(
   }
 
   // Manual edits happen in a plain text box, which has no way to say where
-  // an image should sit within the new text. To avoid silently deleting the
-  // chapter's screenshots on every edit, we keep them and place them after
-  // the edited text rather than losing them. Re-running a PDF sync later
-  // will restore full original inline positioning.
-  const existingImages = Array.isArray(existing.content_blocks)
-    ? existing.content_blocks.filter((b: { type: string }) => b.type === "image")
+  // screenshots or PDF-linked files should sit within the new text. Preserve
+  // all non-text blocks so links/images are not silently deleted on save.
+  const existingAttachments = Array.isArray(existing.content_blocks)
+    ? existing.content_blocks.filter((b: { type: string }) => b.type !== "text")
     : [];
-  const newContentBlocks = [{ type: "text", text: body_text }, ...existingImages];
+  const newContentBlocks = [{ type: "text", text: body_text }, ...existingAttachments];
 
   const { error: historyError } = await supabase.from("edit_history").insert({
     chapter_id: id,
