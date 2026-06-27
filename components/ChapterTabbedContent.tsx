@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ContentBlock } from "@/lib/types";
+import { normalizeExternalUrl } from "@/lib/links";
 
 type TextPiece = {
   kind: "text";
@@ -269,11 +270,12 @@ function buildGuideSections(blocks: ContentBlock[]): GuideSection[] {
     }
 
     if (block.type === "link" && block.url) {
-      if (!isSafeExternalUrl(block.url)) continue;
+      const normalizedUrl = normalizeExternalUrl(block.url);
+      if (!normalizedUrl) continue;
       ensureSection().pieces.push({
         kind: "link",
         title: block.title ?? block.text ?? "Open reference",
-        url: block.url,
+        url: normalizedUrl,
       });
       continue;
     }
@@ -464,10 +466,6 @@ function isClickMeLine(text: string) {
 
 function isLinkedFilesHeading(text: string) {
   return /^Linked files from PDF page \d+$/i.test(text.trim());
-}
-
-function isSafeExternalUrl(url: string) {
-  return /^(https?:|mailto:|tel:)/i.test(url.trim());
 }
 
 function fileReferenceTitle(text: string) {
