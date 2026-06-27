@@ -283,6 +283,7 @@ function buildGuideSections(blocks: ContentBlock[]): GuideSection[] {
     for (const paragraph of paragraphs) {
       if (paragraph === previousText) continue;
       previousText = paragraph;
+      if (isLinkedFilesHeading(paragraph)) continue;
       if (isClickMeLine(paragraph)) continue;
       if (isNumberOnly(paragraph)) continue;
 
@@ -458,6 +459,10 @@ function sectionTitleFromText(text: string, fallbackNumber: number) {
 
 function isClickMeLine(text: string) {
   return /^\(?click me to view file\)?$/i.test(text.trim());
+}
+
+function isLinkedFilesHeading(text: string) {
+  return /^Linked files from PDF page \d+$/i.test(text.trim());
 }
 
 function fileReferenceTitle(text: string) {
