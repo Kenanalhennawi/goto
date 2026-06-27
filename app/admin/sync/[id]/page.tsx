@@ -26,7 +26,7 @@ export default async function SyncReviewPage({
 
   const { data: syncRun } = await supabase
     .from("sync_runs")
-    .select("*")
+    .select("id, source_filename, source_version, status, chapters_changed, chapters_added")
     .eq("id", id)
     .single();
 
@@ -34,7 +34,7 @@ export default async function SyncReviewPage({
 
   const { data: changes } = await supabase
     .from("sync_staged_changes")
-    .select("*")
+    .select("id, chapter_number, title, is_new_chapter, old_body_text, new_body_text, old_keywords, new_keywords, approved")
     .eq("sync_run_id", id)
     .order("chapter_number", { ascending: true });
 

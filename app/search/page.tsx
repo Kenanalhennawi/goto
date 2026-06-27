@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SearchBar } from "@/components/SearchBar";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { buildSearchTerms, MIN_SEARCH_QUERY_LENGTH, plainSnippet } from "@/lib/search";
 import type { SearchResult } from "@/lib/types";
 
 export default async function SearchPage({
@@ -11,7 +12,7 @@ export default async function SearchPage({
 }) {
   const { q } = await searchParams;
   const query = (q ?? "").trim();
-  const results = query.length >= 2 ? await search(query) : [];
+  const results = query.length >= MIN_SEARCH_QUERY_LENGTH ? await search(query) : [];
 
   return (
     <div className="flex min-h-full flex-col">
@@ -35,7 +36,7 @@ export default async function SearchPage({
           <SearchBar defaultValue={query} />
         </section>
 
-        {query.length < 2 ? (
+        {query.length < MIN_SEARCH_QUERY_LENGTH ? (
           <Empty message="Type at least two characters to search by issue, SSR, process, or keyword." />
         ) : results.length === 0 ? (
           <Empty message="No matching chapters found. Try a shorter keyword or an SSR code." />
@@ -55,10 +56,9 @@ export default async function SearchPage({
                     {result.title}
                   </h2>
                 </div>
-                <p
-                  className="text-sm leading-6 text-ink-muted"
-                  dangerouslySetInnerHTML={{ __html: result.snippet }}
-                />
+                <p className="text-sm leading-6 text-ink-muted">
+                  {plainSnippet(result.snippet)}
+                </p>
               </Link>
             ))}
           </div>
@@ -70,12 +70,7 @@ export default async function SearchPage({
 
 async function search(query: string) {
   const supabase = await createServerSupabaseClient();
-  const terms = query
-    .split(/\s+/)
-    .map((term) => term.replace(/[^\w-]/g, ""))
-    .filter(Boolean)
-    .map((term) => `${term}:*`)
-    .join(" & ");
+  const terms = buildSearchTerms(query);
 
   if (!terms) return [];
 

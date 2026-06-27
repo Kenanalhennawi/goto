@@ -34,7 +34,7 @@ export async function POST(
 
   const { data: approvedChanges, error: fetchError } = await supabase
     .from("sync_staged_changes")
-    .select("*")
+    .select("chapter_number, title, is_new_chapter, new_body_text, new_content_blocks, new_keywords")
     .eq("sync_run_id", id)
     .eq("approved", true);
 

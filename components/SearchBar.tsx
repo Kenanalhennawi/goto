@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { MAX_SEARCH_QUERY_LENGTH, MIN_SEARCH_QUERY_LENGTH, plainSnippet } from "@/lib/search";
 import type { SearchResult } from "@/lib/types";
 
 type ResultKind = "All" | "Procedures" | "Rules" | "Images";
@@ -22,7 +23,7 @@ export function SearchBar({
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (trimmed.length < 2) {
+    if (trimmed.length < MIN_SEARCH_QUERY_LENGTH) {
       return;
     }
 
@@ -87,7 +88,8 @@ export function SearchBar({
           autoFocus={autoFocus}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          onFocus={() => query.trim().length >= 2 && setOpen(true)}
+          maxLength={MAX_SEARCH_QUERY_LENGTH}
+          onFocus={() => query.trim().length >= MIN_SEARCH_QUERY_LENGTH && setOpen(true)}
           placeholder="Search by issue, SSR, process, keyword..."
           className="w-full rounded-lg border border-border bg-white py-3.5 pl-12 pr-24 font-body text-[15px] text-ink transition-colors placeholder:text-ink-faint focus:border-accent"
         />
@@ -99,7 +101,7 @@ export function SearchBar({
         </button>
       </form>
 
-      {open && query.trim().length >= 2 && (
+      {open && query.trim().length >= MIN_SEARCH_QUERY_LENGTH && (
         <div className="absolute z-50 mt-2 max-h-[32rem] w-full overflow-y-auto rounded-lg border border-border bg-white shadow-2xl shadow-slate-900/15">
           <div className="sticky top-0 z-10 border-b border-border bg-white px-3 py-2">
             <div className="flex gap-1 overflow-x-auto">
@@ -144,10 +146,9 @@ export function SearchBar({
                     {result.title}
                   </span>
                 </div>
-                <p
-                  className="line-clamp-2 text-xs leading-relaxed text-ink-muted"
-                  dangerouslySetInnerHTML={{ __html: result.snippet }}
-                />
+                <p className="line-clamp-2 text-xs leading-relaxed text-ink-muted">
+                  {plainSnippet(result.snippet)}
+                </p>
               </Link>
             ))}
         </div>

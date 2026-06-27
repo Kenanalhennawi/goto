@@ -24,7 +24,7 @@ export default async function ChapterPage({
 
   const { data: chapter } = await supabase
     .from("chapters")
-    .select("*")
+    .select("id, chapter_number, title, slug, search_keywords, body_text, content_blocks, page_start, page_end, word_count, source_version, updated_at")
     .eq("slug", slug)
     .single();
 

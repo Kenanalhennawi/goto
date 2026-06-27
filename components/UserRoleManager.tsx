@@ -29,22 +29,40 @@ export function UserRoleManager({
 }) {
   const [rows, setRows] = useState(users);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function updateRole(userId: string, role: UserRole) {
     setSavingId(userId);
-    const res = await fetch(`/api/admin/users/${userId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role }),
-    });
-    setSavingId(null);
+    setError(null);
 
-    if (!res.ok) return;
-    setRows((prev) => prev.map((row) => (row.user_id === userId ? { ...row, role } : row)));
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "Could not update user role.");
+        return;
+      }
+
+      setRows((prev) => prev.map((row) => (row.user_id === userId ? { ...row, role } : row)));
+    } catch {
+      setError("Could not update user role. Check your connection and try again.");
+    } finally {
+      setSavingId(null);
+    }
   }
 
   return (
     <div className="content-card overflow-hidden">
+      {error && (
+        <p className="border-b border-accent/20 bg-accent/10 px-4 py-3 text-sm text-accent">
+          {error}
+        </p>
+      )}
       <div className="grid grid-cols-[1fr_150px_230px] gap-3 border-b border-border bg-sky-soft px-4 py-3 text-xs font-semibold uppercase tracking-wider text-ink-muted">
         <span>User</span>
         <span>Current role</span>

@@ -80,26 +80,36 @@ export function SyncReviewClient({
     setPublishing(true);
     setMessage(null);
 
-    // Mark approval state in the DB first
-    await supabase
+    // Mark approval state in the DB first.
+    const { error: approvalError } = await supabase
       .from("sync_staged_changes")
       .update({ approved: true })
       .in("id", Array.from(approved));
 
-    const res = await fetch(`/api/sync/${syncRun.id}/publish`, {
-      method: "POST",
-    });
-
-    const data = await res.json();
-    setPublishing(false);
-
-    if (!res.ok) {
-      setMessage(data.error ?? "Publish failed. Try again.");
+    if (approvalError) {
+      setPublishing(false);
+      setMessage("Couldn't save approvals. Publish was not started.");
       return;
     }
 
-    setMessage(`Published ${data.published} chapters. The live site is updated.`);
-    router.refresh();
+    try {
+      const res = await fetch(`/api/sync/${syncRun.id}/publish`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      setPublishing(false);
+
+      if (!res.ok) {
+        setMessage(data.error ?? "Publish failed. Try again.");
+        return;
+      }
+
+      setMessage(`Published ${data.published} chapters. The live site is updated.`);
+      router.refresh();
+    } catch {
+      setPublishing(false);
+      setMessage("Publish request failed. Check your connection and try again.");
+    }
   }
 
   const alreadyPublished = syncRun.status === "published";
