@@ -88,14 +88,30 @@ export function ChapterTabbedContent({
           <p className="mt-1 text-sm text-ink-muted">{activeTab.summary}</p>
         </div>
 
+        {activeTab.sections.length > 1 && (
+          <nav className="border-b border-border bg-white px-5 py-3">
+            <div className="flex gap-2 overflow-x-auto">
+              {activeTab.sections.slice(0, 16).map((section, index) => (
+                <a
+                  key={`${section.title}-nav-${index}`}
+                  href={`#${sectionId(section, index)}`}
+                  className="min-w-max rounded-md border border-border bg-sky-soft px-3 py-1.5 text-xs font-semibold text-sky transition-colors hover:border-sky hover:bg-white"
+                >
+                  {section.title}
+                </a>
+              ))}
+            </div>
+          </nav>
+        )}
+
         <div className="space-y-4 p-4 sm:p-5">
           {activeTab.sections.map((section, index) => (
-            <details
+            <article
               key={`${section.title}-${index}`}
-              className="group rounded-lg border border-border bg-white"
-              open={index < 2}
+              id={sectionId(section, index)}
+              className="scroll-mt-24 rounded-lg border border-border bg-white p-4"
             >
-              <summary className="flex cursor-pointer list-none items-start gap-3 p-4 marker:hidden">
+              <div className="mb-3 flex items-start gap-3">
                 <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-orange-50 font-mono text-xs font-semibold text-accent">
                   {String(index + 1).padStart(2, "0")}
                 </span>
@@ -107,15 +123,16 @@ export function ChapterTabbedContent({
                     {sectionPreview(section)}
                   </span>
                 </span>
-                <span className="rounded-md bg-sky-soft px-2 py-1 text-xs font-semibold text-sky group-open:hidden">
-                  Open
-                </span>
-                <span className="hidden rounded-md bg-sky-soft px-2 py-1 text-xs font-semibold text-sky group-open:inline">
-                  Close
-                </span>
-              </summary>
+                <a
+                  href={`#${sectionId(section, index)}`}
+                  className="rounded-md bg-sky-soft px-2 py-1 text-xs font-semibold text-sky transition-colors hover:bg-white"
+                  aria-label={`Copy link to ${section.title}`}
+                >
+                  Link
+                </a>
+              </div>
 
-              <div className="space-y-3 border-t border-border px-4 pb-4 pt-3">
+              <div className="space-y-3 border-t border-border pt-3">
                 {section.pieces.map((piece, pieceIndex) =>
                   piece.kind === "image" ? (
                     <figure
@@ -166,7 +183,7 @@ export function ChapterTabbedContent({
                   )
                 )}
               </div>
-            </details>
+            </article>
           ))}
         </div>
       </section>
@@ -249,6 +266,7 @@ function buildGuideSections(blocks: ContentBlock[]): GuideSection[] {
       if (paragraph === previousText) continue;
       previousText = paragraph;
       if (isClickMeLine(paragraph)) continue;
+      if (isNumberOnly(paragraph)) continue;
 
       const fileReference = fileReferenceTitle(paragraph);
       if (fileReference) {
@@ -385,6 +403,7 @@ function normalizeText(text: string) {
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => !isClickMeLine(line))
+    .filter((line) => !isNumberOnly(line))
     .filter(Boolean)
     .join("\n")
     .replace(/[ \t]+/g, " ")
@@ -393,12 +412,16 @@ function normalizeText(text: string) {
 
 function isHeading(text: string) {
   const compact = text.replace(/\s+/g, " ").trim();
-  if (/^\d+(?:\.\d+)*\.?$/.test(compact)) return false;
+  if (isNumberOnly(compact)) return false;
   if (fileReferenceTitle(compact)) return false;
   if (compact.length > 95) return false;
   if (isSkLine(compact)) return false;
   if (/^(\d{1,2}\.)?\s*[A-Z][A-Za-z0-9 /&'’():-]{3,}$/.test(compact)) return true;
   return /^\d+(?:\.\d+)*\.?\s+[A-Z].{3,70}$/.test(compact);
+}
+
+function isNumberOnly(text: string) {
+  return /^\d+(?:\.\d+)*\.?$/.test(text.trim());
 }
 
 function cleanHeading(text: string) {
@@ -442,6 +465,16 @@ function sectionMatches(section: GuideSection, pattern: RegExp) {
       .map((piece) => piece.text)
       .join("\n")}`
   );
+}
+
+function sectionId(section: GuideSection, index: number) {
+  const slug = section.title
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return `section-${index + 1}-${slug || "item"}`;
 }
 
 function sectionPreview(section: GuideSection) {
