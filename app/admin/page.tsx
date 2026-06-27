@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { DeleteButton } from "@/components/DeleteButton";
+import { AdminActionButton } from "@/components/AdminActionButton";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -49,6 +50,16 @@ export default async function AdminDashboard() {
     .select("id", { count: "exact", head: true })
     .in("status", ["open", "reviewing"]);
 
+  const { count: syncRunCount } = await supabase
+    .from("sync_runs")
+    .select("id", { count: "exact", head: true });
+
+  const { data: recentEdits } = await supabase
+    .from("edit_history")
+    .select("id, edited_by_email, change_type, created_at")
+    .order("created_at", { ascending: false })
+    .limit(3);
+
   return (
     <div className="flex flex-col flex-1">
       <SiteHeader />
@@ -86,9 +97,26 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
+        <section className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <SummaryCard label="Open issues" value={String(openIssueCount ?? 0)} href="/admin/issues" />
+          <SummaryCard label="Chapters" value={String(chapters?.length ?? 0)} />
+          <SummaryCard label="Sync runs" value={String(syncRunCount ?? 0)} />
+        </section>
+
         {recentSyncs && recentSyncs.length > 0 && (
           <div className="mb-10">
-            <h2 className="text-xs uppercase tracking-wider text-ink-faint mb-3">Recent syncs</h2>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-xs uppercase tracking-wider text-ink-faint">Recent syncs</h2>
+              {(role.role === "admin" || role.role === "owner") && (
+                <AdminActionButton
+                  endpoint="/api/sync-runs/cleanup"
+                  method="DELETE"
+                  label="Keep latest 3"
+                  runningLabel="Cleaning..."
+                  confirmText="Delete all sync runs except the latest 3?"
+                />
+              )}
+            </div>
             <div className="bg-panel border border-border rounded-lg divide-y divide-border">
               {recentSyncs.map((s) => (
                 <div key={s.id} className="px-4 py-3 flex items-center justify-between text-sm">
@@ -107,6 +135,24 @@ export default async function AdminDashboard() {
                       />
                     )}
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {recentEdits && recentEdits.length > 0 && (
+          <div className="mb-10">
+            <h2 className="text-xs uppercase tracking-wider text-ink-faint mb-3">Recent edits</h2>
+            <div className="bg-panel border border-border rounded-lg divide-y divide-border">
+              {recentEdits.map((edit) => (
+                <div key={edit.id} className="px-4 py-3 flex items-center justify-between text-xs">
+                  <span className="text-ink-muted">
+                    {edit.edited_by_email ?? "Unknown"} - {edit.change_type.replace("_", " ")}
+                  </span>
+                  <span className="font-mono text-ink-faint">
+                    {new Date(edit.created_at).toLocaleString()}
+                  </span>
                 </div>
               ))}
             </div>
@@ -136,6 +182,25 @@ export default async function AdminDashboard() {
       </main>
     </div>
   );
+}
+
+function SummaryCard({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string;
+  href?: string;
+}) {
+  const content = (
+    <div className="content-card p-4 transition-colors hover:border-accent">
+      <p className="text-xs uppercase tracking-wider text-ink-faint">{label}</p>
+      <p className="mt-2 font-display text-2xl font-semibold text-ink">{value}</p>
+    </div>
+  );
+
+  return href ? <Link href={href}>{content}</Link> : content;
 }
 
 function StatusBadge({ status }: { status: string }) {

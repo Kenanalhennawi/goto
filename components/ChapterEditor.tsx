@@ -86,6 +86,29 @@ export function ChapterEditor({ chapter, history }: Props) {
     });
   }
 
+  function addBlock(type: "text" | "link") {
+    const nextBlock: ContentBlock =
+      type === "text"
+        ? { type: "text", text: "" }
+        : { type: "link", title: "Open reference", url: "" };
+    setBlocks((prev) => [...prev, nextBlock]);
+  }
+
+  function removeBlock(index: number) {
+    if (!window.confirm("Delete this block from the chapter?")) return;
+    setBlocks((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function moveBlock(index: number, direction: -1 | 1) {
+    setBlocks((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
   return (
     <div>
       <Link href="/admin" className="text-xs text-ink-muted hover:text-accent transition-colors inline-flex items-center gap-1 mb-6">
@@ -178,16 +201,38 @@ export function ChapterEditor({ chapter, history }: Props) {
       </div>
 
       <div className="mb-8">
-        <label className="block text-xs text-ink-muted mb-2">Chapter blocks</label>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <label className="block text-xs text-ink-muted">Chapter blocks</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => addBlock("text")}
+              className="rounded-md border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+            >
+              Add text
+            </button>
+            <button
+              type="button"
+              onClick={() => addBlock("link")}
+              className="rounded-md border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+            >
+              Add link
+            </button>
+          </div>
+        </div>
         <div className="space-y-3">
           {blocks.map((block, index) => (
             <BlockEditor
               key={`${block.type}-${index}`}
               block={block}
               index={index}
+              isFirst={index === 0}
+              isLast={index === blocks.length - 1}
               onChange={(nextBlock) =>
                 setBlocks((prev) => prev.map((item, itemIndex) => (itemIndex === index ? nextBlock : item)))
               }
+              onMove={(direction) => moveBlock(index, direction)}
+              onRemove={() => removeBlock(index)}
             />
           ))}
         </div>
@@ -284,17 +329,50 @@ function wordDelta(previous: string | null, next: string | null) {
 function BlockEditor({
   block,
   index,
+  isFirst,
+  isLast,
   onChange,
+  onMove,
+  onRemove,
 }: {
   block: ContentBlock;
   index: number;
+  isFirst: boolean;
+  isLast: boolean;
   onChange: (block: ContentBlock) => void;
+  onMove: (direction: -1 | 1) => void;
+  onRemove: () => void;
 }) {
   return (
     <div className="rounded-lg border border-border bg-panel p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
           {String(index + 1).padStart(2, "0")} - {block.type}
+        </span>
+        <span className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onMove(-1)}
+            disabled={isFirst}
+            className="rounded-md border border-border bg-white px-2 py-1 text-[11px] font-semibold text-ink-muted hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Up
+          </button>
+          <button
+            type="button"
+            onClick={() => onMove(1)}
+            disabled={isLast}
+            className="rounded-md border border-border bg-white px-2 py-1 text-[11px] font-semibold text-ink-muted hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Down
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="rounded-md border border-accent/20 bg-accent/10 px-2 py-1 text-[11px] font-semibold text-accent hover:bg-accent hover:text-white"
+          >
+            Delete
+          </button>
         </span>
       </div>
 
