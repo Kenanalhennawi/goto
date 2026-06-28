@@ -34,12 +34,28 @@ export function extractChapterFileLinks(
 ) {
   const links: ChapterFileLink[] = [];
   const linkedFileNames = new Set<string>();
+  const linkedContacts = new Set<string>();
   const mentionedFiles: ChapterFileLink[] = [];
+  const mentionedContacts: ChapterFileLink[] = [];
   let recentText = "";
 
   for (const block of chapter.content_blocks ?? []) {
     if (block.type === "text") {
       recentText = block.text ?? recentText;
+      for (const contact of contactMentions(block.text ?? "")) {
+        const isEmail = contact.includes("@");
+        const url = isEmail ? `mailto:${contact}` : `tel:${contact.replace(/[^\d+]/g, "")}`;
+        mentionedContacts.push({
+          chapter_number: chapter.chapter_number,
+          chapter_title: chapter.title,
+          chapter_slug: chapter.slug,
+          title: `${isEmail ? "Email" : "Phone"}: ${contact}`,
+          url,
+          file_type: isEmail ? "EMAIL" : "PHONE",
+          reference_category: isEmail ? "Emails" : "Phones",
+          context: contactContext(url, block.text ?? "", chapter.title),
+        });
+      }
       for (const fileName of fileMentions(block.text ?? "")) {
         const title = prettifyReferenceTitle(fileName, chapter.title);
         mentionedFiles.push({
@@ -63,6 +79,9 @@ export function extractChapterFileLinks(
     if (!url) continue;
 
     const title = linkTitle(block.title ?? block.text, url, chapter.title);
+    if (url.startsWith("mailto:") || url.startsWith("tel:")) {
+      linkedContacts.add(contactKey(url));
+    }
     linkedFileNames.add(normalizedFileName(title));
     const urlFileName = fileNameFromUrl(url);
     if (urlFileName) linkedFileNames.add(normalizedFileName(urlFileName));
@@ -82,6 +101,13 @@ export function extractChapterFileLinks(
   for (const mention of mentionedFiles) {
     if (!linkedFileNames.has(normalizedFileName(mention.title))) {
       links.push(mention);
+    }
+  }
+
+  for (const mention of mentionedContacts) {
+    if (mention.url && !linkedContacts.has(contactKey(mention.url))) {
+      links.push(mention);
+      linkedContacts.add(contactKey(mention.url));
     }
   }
 
@@ -289,6 +315,34 @@ function fileMentions(text: string) {
     text.matchAll(/([A-Za-z0-9][A-Za-z0-9 _.,&()'’+-]{2,}\.(?:pdf|pptx?|docx?|xlsx?))/gi),
     (match) => match[1].replace(/\s+/g, " ").trim()
   );
+}
+
+function contactMentions(text: string) {
+  const emails = Array.from(
+    text.matchAll(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi),
+    (match) => match[0]
+  );
+  const phones = Array.from(
+    text.matchAll(/(?:\+\d[\d\s().-]{7,}\d|\b0\d[\d\s().-]{6,}\d\b)/g),
+    (match) => match[0].replace(/\s+/g, " ").trim()
+  ).filter(isLikelyPhone);
+
+  return [...emails, ...phones];
+}
+
+function isLikelyPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 8 || digits.length > 15) return false;
+  if (/^(19|20)\d{2}$/.test(digits)) return false;
+  return value.trim().startsWith("+") || value.trim().startsWith("0");
+}
+
+function contactKey(url: string) {
+  return decodeURIComponent(url)
+    .replace(/^(mailto:|tel:)/i, "")
+    .split("?")[0]
+    .replace(/[^\d+a-z@._-]/gi, "")
+    .toLowerCase();
 }
 
 function fileNameFromUrl(url: string) {
