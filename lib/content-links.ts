@@ -52,6 +52,7 @@ export function extractChapterFileLinks(
       recentText = block.text ?? recentText;
       const shouldExtractContacts = !isSuppressedContactList(block.text ?? "");
       for (const contact of shouldExtractContacts ? contactMentions(block.text ?? "", chapter.title) : []) {
+        if (isSuppressedContactValue(contact.value)) continue;
         mentionedContacts.push({
           chapter_number: chapter.chapter_number,
           chapter_title: chapter.title,
@@ -85,6 +86,9 @@ export function extractChapterFileLinks(
     const url = normalizeExternalUrl(block.url);
     if (!url) continue;
     if ((url.startsWith("mailto:") || url.startsWith("tel:")) && isSuppressedContactList(recentText)) {
+      continue;
+    }
+    if ((url.startsWith("mailto:") || url.startsWith("tel:")) && isSuppressedContactValue(url)) {
       continue;
     }
 
@@ -421,6 +425,35 @@ function isSuppressedContactList(text: string) {
   ];
   const hits = travelAgentNames.filter((name) => normalized.includes(name)).length;
   return hits >= 5 && normalized.includes("visa change flights");
+}
+
+function isSuppressedContactValue(value: string) {
+  const key = contactKey(value.includes(":") ? value : value.includes("@") ? `mailto:${value}` : `tel:${value}`);
+  const suppressed = new Set([
+    "visachange@smarttravels.ae",
+    "mishal@dahrtours.com",
+    "malik@travellerschoice.ae",
+    "shj@aroohatours.com",
+    "a2a@kite.travel",
+    "flights@princesstourism.com",
+    "naresh@smarttrip.ae",
+    "gm@nawisaadi.com",
+    "neeta@khybertour.com",
+    "ticketing@alhadaftourism.com",
+    "aegroupdesk@akbargulf.com",
+    "97165313533",
+    "97142955262",
+    "97165279272",
+    "97142399903",
+    "+97142386066",
+    "+97143257744",
+    "97143214584",
+    "97142695033",
+    "+97165544553",
+    "+97142522486",
+    "+97143561133",
+  ]);
+  return suppressed.has(key);
 }
 
 function isLikelyPhone(value: string) {
