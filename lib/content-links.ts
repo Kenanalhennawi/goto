@@ -1,7 +1,7 @@
 import type { Chapter, ContentBlock } from "@/lib/types";
 import { normalizeExternalUrl } from "@/lib/links";
 
-export type ReferenceCategory = "Files" | "Emails" | "Phones" | "Links" | "Other";
+export type ReferenceCategory = "Files" | "Emails" | "Phones" | "Links" | "Needs review" | "Other";
 
 export type ChapterFileLink = {
   chapter_number: number;
@@ -40,7 +40,7 @@ export function extractChapterFileLinks(
       chapter_number: chapter.chapter_number,
       chapter_title: chapter.title,
       chapter_slug: chapter.slug,
-      title: linkTitle(block.title ?? block.text, url),
+      title: linkTitle(block.title ?? block.text, url, chapter.title),
       url,
       file_type: fileType(url),
       reference_category: referenceCategory(url),
@@ -122,12 +122,12 @@ function isLinkBlock(block: ContentBlock): block is ContentBlock & { url: string
   return block.type === "link" && typeof block.url === "string" && block.url.length > 0;
 }
 
-function linkTitle(title: string | undefined, url: string) {
+function linkTitle(title: string | undefined, url: string, chapterTitle: string) {
   const trimmedTitle = title?.trim();
-  const derivedTitle = titleFromUrl(url);
+  const derivedTitle = titleFromUrl(url, chapterTitle);
 
   if (trimmedTitle && !isGenericTitle(trimmedTitle) && !looksOpaqueTitle(trimmedTitle)) {
-    return trimmedTitle;
+    return prettifyReferenceTitle(trimmedTitle, chapterTitle);
   }
 
   return derivedTitle || trimmedTitle || "Open reference";
@@ -148,11 +148,12 @@ function referenceCategory(url: string): ReferenceCategory {
   if (url.startsWith("tel:")) return "Phones";
 
   const type = fileType(url);
+  if (needsReview(url)) return "Needs review";
   if (type !== "LINK") return "Files";
   return looksUsefulWebLink(url) ? "Links" : "Other";
 }
 
-function titleFromUrl(url: string) {
+function titleFromUrl(url: string, chapterTitle: string) {
   if (url.startsWith("mailto:")) {
     return `Email: ${decodeURIComponent(url.replace(/^mailto:/i, "")).split("?")[0]}`;
   }
@@ -165,9 +166,27 @@ function titleFromUrl(url: string) {
   if (!parsed) return "";
 
   const lastPath = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "").trim();
-  if (lastPath && !looksOpaqueTitle(lastPath)) return lastPath;
+  if (lastPath && !looksOpaqueTitle(lastPath)) {
+    return prettifyReferenceTitle(lastPath, chapterTitle);
+  }
 
   return `${parsed.hostname.replace(/^www\./, "")} reference`;
+}
+
+function prettifyReferenceTitle(title: string, chapterTitle: string) {
+  const withoutQuery = title.split("?")[0];
+  const withoutExtension = withoutQuery.replace(/\.(pdf|pptx?|docx?|xlsx?)$/i, "");
+  const words = withoutExtension
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const normalized = words.replace(/^(\d{4})\s+FZ\s+Newsletter$/i, "FZ Newsletter $1");
+
+  if (/newsletter/i.test(normalized) && chapterTitle) {
+    return `${normalized} - ${chapterTitle}`;
+  }
+
+  return normalized || title;
 }
 
 function safeUrl(url: string) {
@@ -185,6 +204,17 @@ function isGenericTitle(title: string) {
 function looksOpaqueTitle(title: string) {
   const compact = title.replace(/[^a-z0-9]/gi, "");
   return compact.length >= 12 && /^[a-f0-9]+$/i.test(compact);
+}
+
+function needsReview(url: string) {
+  const parsed = safeUrl(url);
+  if (!parsed) return true;
+
+  const lastPath = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "").trim();
+  if (!lastPath) return fileType(url) === "LINK";
+  if (looksOpaqueTitle(lastPath)) return true;
+  if (/^open reference/i.test(lastPath)) return true;
+  return false;
 }
 
 function looksUsefulWebLink(url: string) {
