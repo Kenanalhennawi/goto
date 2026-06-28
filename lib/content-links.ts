@@ -1,5 +1,5 @@
-import type { Chapter, ContentBlock } from "@/lib/types";
-import { normalizeExternalUrl } from "@/lib/links";
+import type { Chapter, ContentBlock } from "./types";
+import { normalizeExternalUrl } from "./links";
 
 export type ReferenceCategory = "Files" | "Emails" | "Phones" | "Links" | "Needs review" | "Other";
 
@@ -401,10 +401,16 @@ function contactMentions(text: string, fallback: string): ContactMention[] {
 }
 
 function isLikelyPhone(value: string) {
+  if (isTimeRange(value)) return false;
   const digits = value.replace(/\D/g, "");
   if (digits.length < 7 || digits.length > 15) return false;
   if (/^(19|20)\d{2}$/.test(digits)) return false;
   return /^(?:\+|0|971|800)/.test(value.trim());
+}
+
+function isTimeRange(value: string) {
+  const match = value.trim().match(/^([01]\d|2[0-3])[:.]?([0-5]\d)\s*[-–]\s*([01]\d|2[0-3])[:.]?([0-5]\d)$/);
+  return Boolean(match);
 }
 
 function contactKey(url: string) {
