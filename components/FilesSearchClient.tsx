@@ -5,9 +5,18 @@ import { useMemo, useState } from "react";
 import type { ChapterFileLink, ReferenceCategory } from "@/lib/content-links";
 import { groupChapterFileLinks, matchesGroupedFileLink } from "@/lib/content-links";
 
-type CategoryFilter = "All" | ReferenceCategory;
+type CategoryFilter = "All" | "Contacts" | ReferenceCategory;
 
-const categoryOrder: CategoryFilter[] = ["All", "Files", "Emails", "Links", "Phones", "Needs review", "Other"];
+const categoryOrder: CategoryFilter[] = [
+  "All",
+  "Files",
+  "Contacts",
+  "Emails",
+  "Phones",
+  "Links",
+  "Needs review",
+  "Other",
+];
 
 export function FilesSearchClient({
   links,
@@ -31,6 +40,9 @@ export function FilesSearchClient({
     for (const category of categoryOrder) counts.set(category, counts.get(category) ?? 0);
     for (const link of groupedLinks) {
       counts.set(link.reference_category, (counts.get(link.reference_category) ?? 0) + 1);
+      if (isContact(link.reference_category)) {
+        counts.set("Contacts", (counts.get("Contacts") ?? 0) + 1);
+      }
     }
     return counts;
   }, [groupedLinks]);
@@ -38,7 +50,11 @@ export function FilesSearchClient({
   const filteredLinks = useMemo(
     () =>
       groupedLinks
-        .filter((link) => selectedCategory === "All" || link.reference_category === selectedCategory)
+        .filter((link) => {
+          if (selectedCategory === "All") return true;
+          if (selectedCategory === "Contacts") return isContact(link.reference_category);
+          return link.reference_category === selectedCategory;
+        })
         .filter((link) => selectedType === "ALL" || link.file_type === selectedType)
         .filter((link) => matchesGroupedFileLink(link, query)),
     [groupedLinks, query, selectedCategory, selectedType]
@@ -140,7 +156,8 @@ export function FilesSearchClient({
                     {link.file_type}
                   </span>
                   <span className="text-xs font-medium text-ink-muted">
-                    Used in {link.chapters.length} chapter{link.chapters.length === 1 ? "" : "s"}
+                    {isContact(link.reference_category) ? "Related to" : "Used in"} {link.chapters.length} chapter
+                    {link.chapters.length === 1 ? "" : "s"}
                   </span>
                 </div>
                 <h2 className="truncate font-display text-base font-semibold text-ink">
@@ -171,6 +188,10 @@ export function FilesSearchClient({
       </div>
     </>
   );
+}
+
+function isContact(category: ReferenceCategory) {
+  return category === "Emails" || category === "Phones";
 }
 
 function shortTitle(title: string) {
