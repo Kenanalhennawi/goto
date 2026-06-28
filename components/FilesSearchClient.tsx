@@ -145,7 +145,7 @@ export function FilesSearchClient({
 
       <div className="grid gap-3">
         {filteredLinks.map((link, index) => (
-          <article key={`${link.url}-${index}`} className="content-card p-4">
+          <article key={`${link.url ?? link.title}-${index}`} className="content-card p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -163,24 +163,39 @@ export function FilesSearchClient({
                 <h2 className="truncate font-display text-base font-semibold text-ink">
                   {link.title}
                 </h2>
+                <p className="mt-1 text-sm font-medium text-ink-muted">
+                  {isContact(link.reference_category) ? "Belongs to" : "Context"}: {link.context}
+                </p>
+                {link.note && (
+                  <p className="mt-1 text-xs text-accent">
+                    {link.note}
+                  </p>
+                )}
                 <ChapterUsage chapters={link.chapters} />
               </div>
               <div className="flex shrink-0 gap-2">
                 <button
                   type="button"
-                  onClick={() => copyLink(link.url)}
-                  className="inline-flex items-center justify-center rounded-lg border border-border bg-white px-4 py-2 text-sm font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+                  onClick={() => link.url && copyLink(link.url)}
+                  disabled={!link.url}
+                  className="inline-flex items-center justify-center rounded-lg border border-border bg-white px-4 py-2 text-sm font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {copiedUrl === link.url ? "Copied" : "Copy"}
                 </button>
-                <a
-                  href={link.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-sky-soft px-4 py-2 text-sm font-semibold text-sky transition-colors hover:border-sky hover:bg-white"
-                >
-                  Open
-                </a>
+                {link.url ? (
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-sky-soft px-4 py-2 text-sm font-semibold text-sky transition-colors hover:border-sky hover:bg-white"
+                  >
+                    Open
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
+                    No link
+                  </span>
+                )}
               </div>
             </div>
           </article>

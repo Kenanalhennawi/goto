@@ -8,16 +8,20 @@ export type ChapterFileLink = {
   chapter_title: string;
   chapter_slug: string;
   title: string;
-  url: string;
+  url: string | null;
   file_type: string;
   reference_category: ReferenceCategory;
+  context: string;
+  note?: string;
 };
 
 export type GroupedChapterFileLink = {
   title: string;
-  url: string;
+  url: string | null;
   file_type: string;
   reference_category: ReferenceCategory;
+  context: string;
+  note?: string;
   chapters: Array<{
     chapter_number: number;
     chapter_title: string;
@@ -29,22 +33,56 @@ export function extractChapterFileLinks(
   chapter: Pick<Chapter, "chapter_number" | "title" | "slug" | "content_blocks">
 ) {
   const links: ChapterFileLink[] = [];
+  const linkedFileNames = new Set<string>();
+  const mentionedFiles: ChapterFileLink[] = [];
+  let recentText = "";
 
   for (const block of chapter.content_blocks ?? []) {
+    if (block.type === "text") {
+      recentText = block.text ?? recentText;
+      for (const fileName of fileMentions(block.text ?? "")) {
+        const title = prettifyReferenceTitle(fileName, chapter.title);
+        mentionedFiles.push({
+          chapter_number: chapter.chapter_number,
+          chapter_title: chapter.title,
+          chapter_slug: chapter.slug,
+          title,
+          url: null,
+          file_type: fileTypeFromFilename(fileName),
+          reference_category: "Needs review",
+          context: contextFromText(block.text ?? "", fileName, chapter.title),
+          note: "Mentioned in the guide, but no clickable link was found in the PDF.",
+        });
+      }
+      continue;
+    }
+
     if (!isLinkBlock(block)) continue;
 
     const url = normalizeExternalUrl(block.url);
     if (!url) continue;
 
+    const title = linkTitle(block.title ?? block.text, url, chapter.title);
+    linkedFileNames.add(normalizedFileName(title));
+    const urlFileName = fileNameFromUrl(url);
+    if (urlFileName) linkedFileNames.add(normalizedFileName(urlFileName));
+
     links.push({
       chapter_number: chapter.chapter_number,
       chapter_title: chapter.title,
       chapter_slug: chapter.slug,
-      title: linkTitle(block.title ?? block.text, url, chapter.title),
+      title,
       url,
       file_type: fileType(url),
       reference_category: referenceCategory(url),
+      context: contactContext(url, recentText, chapter.title),
     });
+  }
+
+  for (const mention of mentionedFiles) {
+    if (!linkedFileNames.has(normalizedFileName(mention.title))) {
+      links.push(mention);
+    }
   }
 
   return links;
@@ -59,22 +97,26 @@ export function matchesFileLink(link: ChapterFileLink, query: string) {
     link.url,
     link.file_type,
     link.reference_category,
+    link.context,
     link.chapter_title,
     String(link.chapter_number),
-  ].some((value) => value.toLowerCase().includes(needle));
+  ].some((value) => String(value ?? "").toLowerCase().includes(needle));
 }
 
 export function groupChapterFileLinks(links: ChapterFileLink[]) {
   const byUrl = new Map<string, GroupedChapterFileLink>();
 
   for (const link of links) {
-    const existing = byUrl.get(link.url);
+    const groupKey = link.url ?? `${link.chapter_slug}:${link.title}`;
+    const existing = byUrl.get(groupKey);
     if (!existing) {
-      byUrl.set(link.url, {
+      byUrl.set(groupKey, {
         title: link.title,
         url: link.url,
         file_type: link.file_type,
         reference_category: link.reference_category,
+        context: link.context,
+        note: link.note,
         chapters: [
           {
             chapter_number: link.chapter_number,
@@ -88,6 +130,14 @@ export function groupChapterFileLinks(links: ChapterFileLink[]) {
 
     if (link.title.length > existing.title.length) {
       existing.title = link.title;
+    }
+
+    if (link.context.length > existing.context.length) {
+      existing.context = link.context;
+    }
+
+    if (!existing.note && link.note) {
+      existing.note = link.note;
     }
 
     if (!existing.chapters.some((chapter) => chapter.chapter_slug === link.chapter_slug)) {
@@ -111,11 +161,13 @@ export function matchesGroupedFileLink(link: GroupedChapterFileLink, query: stri
     link.url,
     link.file_type,
     link.reference_category,
+    link.context,
+    link.note ?? "",
     ...link.chapters.flatMap((chapter) => [
       chapter.chapter_title,
       String(chapter.chapter_number),
     ]),
-  ].some((value) => value.toLowerCase().includes(needle));
+  ].some((value) => String(value ?? "").toLowerCase().includes(needle));
 }
 
 function isLinkBlock(block: ContentBlock): block is ContentBlock & { url: string } {
@@ -143,6 +195,10 @@ function fileType(url: string) {
   return "LINK";
 }
 
+function fileTypeFromFilename(filename: string) {
+  return filename.match(/\.([a-z0-9]+)$/i)?.[1]?.toUpperCase() ?? "FILE";
+}
+
 function referenceCategory(url: string): ReferenceCategory {
   if (url.startsWith("mailto:")) return "Emails";
   if (url.startsWith("tel:")) return "Phones";
@@ -165,12 +221,91 @@ function titleFromUrl(url: string, chapterTitle: string) {
   const parsed = safeUrl(url);
   if (!parsed) return "";
 
+  const fileParam = parsed.searchParams.get("file");
+  if (fileParam) {
+    return prettifyReferenceTitle(decodeURIComponent(fileParam), chapterTitle);
+  }
+
   const lastPath = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "").trim();
   if (lastPath && !looksOpaqueTitle(lastPath)) {
     return prettifyReferenceTitle(lastPath, chapterTitle);
   }
 
   return `${parsed.hostname.replace(/^www\./, "")} reference`;
+}
+
+function contactContext(url: string, nearbyText: string, chapterTitle: string) {
+  const value = decodeURIComponent(url.replace(/^(mailto:|tel:)/i, "")).split("?")[0];
+  if (!url.startsWith("mailto:") && !url.startsWith("tel:")) {
+    return chapterTitle;
+  }
+
+  return knownContactContext(value) || contextFromText(nearbyText, value, chapterTitle);
+}
+
+function knownContactContext(value: string) {
+  const normalized = value.toLowerCase().replace(/\s+/g, "");
+  const emailContexts: Record<string, string> = {
+    "ask@flydubai.com": "General customer support / Ask flydubai",
+    "cc.quality@flydubai.com": "Contact Centre Quality team",
+    "cargo@flydubai.com": "Cargo team",
+    "baggageservices@flydubai.com": "Baggage services",
+    "businessteam@flydubai.com": "Business team",
+    "groupreservations@flydubai.com": "Group reservations",
+    "agencysupportuae@flydubai.com": "UAE travel agency support",
+    "agencysupport@flydubai.com": "Travel agency support",
+    "stafftravel@flydubai.com": "Staff travel",
+    "fzgds@flydubai.com": "GDS support",
+    "reservationsupport@flydubai.com": "Reservation support",
+    "letstalk@flydubai.com": "Customer feedback / Let’s Talk",
+    "fcc@flydubai.com": "FCC online check-in escalation",
+    "itsd@flydubai.com": "IT service desk escalation",
+  };
+  if (emailContexts[normalized]) return emailContexts[normalized];
+
+  const phoneContexts: Record<string, string> = {
+    "046033556": "Contact details phone reference",
+    "+971523829090": "DUBZ home check-in third-party support",
+  };
+  return phoneContexts[normalized] ?? "";
+}
+
+function contextFromText(text: string, needle: string, fallback: string) {
+  const cleanLines = text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[•▪#]+/g, "").trim())
+    .filter(Boolean);
+  const needleIndex = cleanLines.findIndex((line) =>
+    line.toLowerCase().includes(needle.toLowerCase())
+  );
+  const candidates = (needleIndex >= 0 ? cleanLines.slice(Math.max(0, needleIndex - 4), needleIndex) : cleanLines)
+    .filter((line) => !/^(step|note|important note|sk:|\d+\.?\d*)/i.test(line))
+    .filter((line) => line.length >= 3 && line.length <= 90);
+  return candidates.at(-1) ?? fallback;
+}
+
+function fileMentions(text: string) {
+  return Array.from(
+    text.matchAll(/([A-Za-z0-9][A-Za-z0-9 _.,&()'’+-]{2,}\.(?:pdf|pptx?|docx?|xlsx?))/gi),
+    (match) => match[1].replace(/\s+/g, " ").trim()
+  );
+}
+
+function fileNameFromUrl(url: string) {
+  const parsed = safeUrl(url);
+  if (!parsed) return "";
+  const fileParam = parsed.searchParams.get("file");
+  if (fileParam) return decodeURIComponent(fileParam);
+  return decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "");
+}
+
+function normalizedFileName(value: string) {
+  return value
+    .replace(/\.(pdf|pptx?|docx?|xlsx?)$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function prettifyReferenceTitle(title: string, chapterTitle: string) {
