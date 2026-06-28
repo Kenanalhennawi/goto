@@ -29,6 +29,14 @@ export type GroupedChapterFileLink = {
   }>;
 };
 
+type ContactMention = {
+  value: string;
+  url: string;
+  fileType: "EMAIL" | "PHONE";
+  category: "Emails" | "Phones";
+  context: string;
+};
+
 export function extractChapterFileLinks(
   chapter: Pick<Chapter, "chapter_number" | "title" | "slug" | "content_blocks">
 ) {
@@ -42,18 +50,16 @@ export function extractChapterFileLinks(
   for (const block of chapter.content_blocks ?? []) {
     if (block.type === "text") {
       recentText = block.text ?? recentText;
-      for (const contact of contactMentions(block.text ?? "")) {
-        const isEmail = contact.includes("@");
-        const url = isEmail ? `mailto:${contact}` : `tel:${contact.replace(/[^\d+]/g, "")}`;
+      for (const contact of contactMentions(block.text ?? "", chapter.title)) {
         mentionedContacts.push({
           chapter_number: chapter.chapter_number,
           chapter_title: chapter.title,
           chapter_slug: chapter.slug,
-          title: `${isEmail ? "Email" : "Phone"}: ${contact}`,
-          url,
-          file_type: isEmail ? "EMAIL" : "PHONE",
-          reference_category: isEmail ? "Emails" : "Phones",
-          context: contactContext(url, block.text ?? "", chapter.title),
+          title: `${contact.fileType === "EMAIL" ? "Email" : "Phone"}: ${contact.value}`,
+          url: contact.url,
+          file_type: contact.fileType,
+          reference_category: contact.category,
+          context: knownContactContext(contact.value) || contact.context,
         });
       }
       for (const fileName of fileMentions(block.text ?? "")) {
@@ -287,7 +293,7 @@ function contactContext(url: string, nearbyText: string, chapterTitle: string) {
 }
 
 function knownContactContext(value: string) {
-  const normalized = value.toLowerCase().replace(/\s+/g, "");
+  const normalized = value.includes("@") ? normalizeEmail(value) : phoneDialValue(value);
   const emailContexts: Record<string, string> = {
     "ask@flydubai.com": "General customer support / Ask flydubai",
     "cc.quality@flydubai.com": "Contact Centre Quality team",
@@ -307,8 +313,21 @@ function knownContactContext(value: string) {
   if (emailContexts[normalized]) return emailContexts[normalized];
 
   const phoneContexts: Record<string, string> = {
-    "046033556": "Contact details phone reference",
+    "+971600544445": "flydubai contact centre",
+    "+74952151630": "Russia call center",
+    "+9221111225539": "Pakistan call center",
+    "+97146033556": "flydubai Cargo / UAE contact number",
+    "046033556": "flydubai Cargo / UAE contact number",
+    "+97142111111": "dnata Cargo",
+    "+971503040810": "Business team SMS",
+    "+97143139999": "UAE Visa Amir service",
+    "8005111": "UAE Visa Amir service",
+    "+97316199399": "Car rental",
+    "+97146033555": "Car rental",
+    "+97146033090": "Agency support team for outstation travel agents",
+    "+9718006274222": "Marhaba airport service",
     "+971523829090": "DUBZ home check-in third-party support",
+    "046033635": "NCC customer care, available 24 hours",
   };
   return phoneContexts[normalized] ?? "";
 }
@@ -334,32 +353,97 @@ function fileMentions(text: string) {
   );
 }
 
-function contactMentions(text: string) {
-  const emails = Array.from(
-    text.matchAll(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi),
-    (match) => match[0]
-  );
-  const phones = Array.from(
-    text.matchAll(/(?:\+\d[\d\s().-]{7,}\d|\b0\d[\d\s().-]{6,}\d\b)/g),
-    (match) => match[0].replace(/\s+/g, " ").trim()
-  ).filter(isLikelyPhone);
+function contactMentions(text: string, fallback: string): ContactMention[] {
+  const mentions: ContactMention[] = [];
 
-  return [...emails, ...phones];
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.replace(/\s+/g, " ").trim();
+    if (!line) continue;
+
+    const matches = [
+      ...Array.from(line.matchAll(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi), (match) => ({
+        raw: match[0],
+        index: match.index ?? 0,
+        kind: "EMAIL" as const,
+      })),
+      ...Array.from(line.matchAll(/(?:\+\d[\d ().-]{6,}\d|\b(?:971|800|0)\d[\d ().-]{5,}\d\b)/g), (match) => ({
+        raw: match[0],
+        index: match.index ?? 0,
+        kind: "PHONE" as const,
+      })),
+    ]
+      .filter((match) => match.kind === "EMAIL" || isLikelyPhone(match.raw))
+      .sort((a, b) => a.index - b.index);
+
+    let cursor = 0;
+    let lastLabel = "";
+    for (const match of matches) {
+      const label = contactLabelFromSegment(line.slice(cursor, match.index), lastLabel, fallback);
+      const value =
+        match.kind === "EMAIL" ? normalizeEmail(match.raw) : normalizePhoneDisplay(match.raw);
+      const url =
+        match.kind === "EMAIL" ? `mailto:${value}` : `tel:${phoneDialValue(value)}`;
+
+      mentions.push({
+        value,
+        url,
+        fileType: match.kind,
+        category: match.kind === "EMAIL" ? "Emails" : "Phones",
+        context: label,
+      });
+
+      lastLabel = label;
+      cursor = match.index + match.raw.length;
+    }
+  }
+
+  return mentions;
 }
 
 function isLikelyPhone(value: string) {
   const digits = value.replace(/\D/g, "");
-  if (digits.length < 8 || digits.length > 15) return false;
+  if (digits.length < 7 || digits.length > 15) return false;
   if (/^(19|20)\d{2}$/.test(digits)) return false;
-  return value.trim().startsWith("+") || value.trim().startsWith("0");
+  return /^(?:\+|0|971|800)/.test(value.trim());
 }
 
 function contactKey(url: string) {
-  return decodeURIComponent(url)
+  const raw = decodeURIComponent(url)
     .replace(/^(mailto:|tel:)/i, "")
     .split("?")[0]
-    .replace(/[^\d+a-z@._-]/gi, "")
     .toLowerCase();
+  return raw.includes("@") ? normalizeEmail(raw) : phoneDialValue(raw);
+}
+
+function normalizeEmail(value: string) {
+  return value.trim().replace(/[),.;:]+$/g, "").toLowerCase();
+}
+
+function normalizePhoneDisplay(value: string) {
+  return value
+    .replace(/[()]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\s+-\s+/g, "-")
+    .trim();
+}
+
+function phoneDialValue(value: string) {
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  if (trimmed.startsWith("+")) return `+${digits}`;
+  if (/^0[2-9]\d{7,8}$/.test(digits)) return `+971${digits.slice(1)}`;
+  return digits;
+}
+
+function contactLabelFromSegment(segment: string, previousLabel: string, fallback: string) {
+  const cleaned = segment
+    .replace(/\b(?:email|mailbox|telephone|mobile|sms|call|team|number|contact|for|id)\b/gi, " ")
+    .replace(/[:;,.()[\]{}#]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (cleaned.length >= 3 && cleaned.length <= 70) return cleaned;
+  return previousLabel || fallback;
 }
 
 function fileNameFromUrl(url: string) {
