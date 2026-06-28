@@ -50,7 +50,8 @@ export function extractChapterFileLinks(
   for (const block of chapter.content_blocks ?? []) {
     if (block.type === "text") {
       recentText = block.text ?? recentText;
-      for (const contact of contactMentions(block.text ?? "", chapter.title)) {
+      const shouldExtractContacts = !isSuppressedContactList(block.text ?? "");
+      for (const contact of shouldExtractContacts ? contactMentions(block.text ?? "", chapter.title) : []) {
         mentionedContacts.push({
           chapter_number: chapter.chapter_number,
           chapter_title: chapter.title,
@@ -398,6 +399,25 @@ function contactMentions(text: string, fallback: string): ContactMention[] {
   }
 
   return mentions;
+}
+
+function isSuppressedContactList(text: string) {
+  const normalized = text.toLowerCase();
+  const travelAgentNames = [
+    "smart travel",
+    "clear tour",
+    "travelers choice",
+    "arooha",
+    "go kite",
+    "princess travel",
+    "smart trip",
+    "nawi saadi",
+    "khyber",
+    "hadaf",
+    "akbar",
+  ];
+  const hits = travelAgentNames.filter((name) => normalized.includes(name)).length;
+  return hits >= 5 && normalized.includes("visa change flights");
 }
 
 function isLikelyPhone(value: string) {
