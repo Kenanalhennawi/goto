@@ -31,7 +31,9 @@ export function FilesSearchClient({
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [selectedType, setSelectedType] = useState(initialType);
-  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("Files");
+  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>(
+    initialQuery.trim() ? "All" : "Files"
+  );
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
 
   const groupedLinks = useMemo(() => groupChapterFileLinks(links), [links]);
