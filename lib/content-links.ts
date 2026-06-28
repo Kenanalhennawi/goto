@@ -122,6 +122,7 @@ export function matchesFileLink(link: ChapterFileLink, query: string) {
     link.title,
     link.url,
     link.file_type,
+    fileTypeLabel(link.file_type),
     link.reference_category,
     link.context,
     link.chapter_title,
@@ -186,6 +187,7 @@ export function matchesGroupedFileLink(link: GroupedChapterFileLink, query: stri
     link.title,
     link.url,
     link.file_type,
+    fileTypeLabel(link.file_type),
     link.reference_category,
     link.context,
     link.note ?? "",
@@ -215,14 +217,29 @@ function fileType(url: string) {
   if (url.startsWith("mailto:")) return "EMAIL";
   if (url.startsWith("tel:")) return "PHONE";
 
-  const pathname = safeUrl(url)?.pathname ?? "";
-  const ext = pathname.match(/\.([a-z0-9]+)$/i)?.[1]?.toUpperCase();
+  const parsed = safeUrl(url);
+  const fileParam = parsed?.searchParams.get("file");
+  const filename = fileParam ? decodeURIComponent(fileParam) : parsed?.pathname ?? "";
+  const ext = filename.match(/\.([a-z0-9]+)$/i)?.[1]?.toUpperCase();
   if (ext) return ext;
   return "LINK";
 }
 
 function fileTypeFromFilename(filename: string) {
   return filename.match(/\.([a-z0-9]+)$/i)?.[1]?.toUpperCase() ?? "FILE";
+}
+
+function fileTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    XLS: "Excel spreadsheet",
+    XLSX: "Excel spreadsheet",
+    PPT: "PowerPoint presentation",
+    PPTX: "PowerPoint presentation",
+    DOC: "Word document",
+    DOCX: "Word document",
+    PDF: "PDF document",
+  };
+  return labels[type] ?? type;
 }
 
 function referenceCategory(url: string): ReferenceCategory {
@@ -398,6 +415,7 @@ function looksOpaqueTitle(title: string) {
 function needsReview(url: string) {
   const parsed = safeUrl(url);
   if (!parsed) return true;
+  if (parsed.searchParams.get("file")?.match(/\.(pdf|pptx?|docx?|xlsx?)$/i)) return false;
 
   const lastPath = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "").trim();
   if (!lastPath) return fileType(url) === "LINK";
