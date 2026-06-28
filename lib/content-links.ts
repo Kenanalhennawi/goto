@@ -84,6 +84,9 @@ export function extractChapterFileLinks(
 
     const url = normalizeExternalUrl(block.url);
     if (!url) continue;
+    if ((url.startsWith("mailto:") || url.startsWith("tel:")) && isSuppressedContactList(recentText)) {
+      continue;
+    }
 
     const title = linkTitle(block.title ?? block.text, url, chapter.title);
     if (url.startsWith("mailto:") || url.startsWith("tel:")) {
