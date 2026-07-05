@@ -31,12 +31,24 @@ export async function PATCH(
     );
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
   const { body_text, search_keywords } = body as {
     body_text?: string;
     search_keywords?: string[];
     content_blocks?: ContentBlock[];
   };
+
+  if (
+    search_keywords !== undefined &&
+    (!Array.isArray(search_keywords) ||
+      search_keywords.some((keyword) => typeof keyword !== "string" || keyword.length > 120))
+  ) {
+    return NextResponse.json({ error: "Invalid search keywords." }, { status: 400 });
+  }
 
   if (typeof body_text !== "string" || body_text.trim().length === 0) {
     return NextResponse.json(

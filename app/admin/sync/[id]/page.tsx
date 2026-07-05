@@ -42,7 +42,11 @@ export default async function SyncReviewPage({
     <div className="flex flex-col flex-1">
       <SiteHeader />
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-10">
-        <SyncReviewClient syncRun={syncRun} changes={changes ?? []} />
+        <SyncReviewClient
+          syncRun={syncRun}
+          changes={changes ?? []}
+          canPublish={role.role === "admin" || role.role === "owner"}
+        />
       </main>
     </div>
   );

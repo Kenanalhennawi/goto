@@ -30,9 +30,11 @@ interface SyncRun {
 export function SyncReviewClient({
   syncRun,
   changes,
+  canPublish,
 }: {
   syncRun: SyncRun;
   changes: StagedChange[];
+  canPublish: boolean;
 }) {
   const [approved, setApproved] = useState<Set<string>>(
     new Set(changes.filter((c) => c.approved).map((c) => c.id))
@@ -135,7 +137,7 @@ export function SyncReviewClient({
         {syncRun.chapters_added} new
       </p>
 
-      {!alreadyPublished && (
+      {!alreadyPublished && canPublish && (
         <div className="flex items-center justify-between mb-6 bg-panel border border-border rounded-lg px-4 py-3">
           <p className="text-sm text-ink-muted">
             {approved.size} of {changes.length} chapters approved
@@ -155,6 +157,12 @@ export function SyncReviewClient({
               {publishing ? "Publishing..." : `Publish ${approved.size} chapter${approved.size === 1 ? "" : "s"}`}
             </button>
           </div>
+        </div>
+      )}
+
+      {!alreadyPublished && !canPublish && (
+        <div className="mb-6 rounded-lg border border-border bg-panel px-4 py-3 text-sm text-ink-muted">
+          You can review this sync, but only admins can publish live content.
         </div>
       )}
 
@@ -187,7 +195,7 @@ export function SyncReviewClient({
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  {!alreadyPublished && (
+                  {!alreadyPublished && canPublish && (
                     <label className="flex items-center gap-2 text-xs text-ink-muted">
                       <input
                         type="checkbox"

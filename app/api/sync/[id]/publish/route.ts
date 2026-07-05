@@ -19,9 +19,9 @@ export async function POST(
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
+  if (!role || !["admin", "owner"].includes(role.role)) {
     return NextResponse.json(
-      { error: "Your account doesn't have publish access." },
+      { error: "Only admins can publish live content." },
       { status: 403 }
     );
   }
@@ -47,6 +47,7 @@ export async function POST(
   }
 
   let publishedCount = 0;
+  const failures: string[] = [];
 
   for (const change of approvedChanges) {
     if (change.is_new_chapter) {
@@ -61,20 +62,27 @@ export async function POST(
         source_version: syncRun?.source_version ?? null,
         updated_by: user.id,
       });
-      if (!insertError) publishedCount++;
+      if (insertError) {
+        failures.push(`Ch. ${change.chapter_number}: ${insertError.message}`);
+      } else {
+        publishedCount++;
+      }
       continue;
     }
 
-    const { data: existingChapter } = await supabase
+    const { data: existingChapter, error: existingError } = await supabase
       .from("chapters")
       .select("id, body_text, search_keywords, content_blocks")
       .eq("chapter_number", change.chapter_number)
       .single();
 
-    if (!existingChapter) continue;
+    if (existingError || !existingChapter) {
+      failures.push(`Ch. ${change.chapter_number}: existing chapter not found`);
+      continue;
+    }
 
     // Log to edit_history before applying, same as manual edits
-    await supabase.from("edit_history").insert({
+    const { error: historyError } = await supabase.from("edit_history").insert({
       chapter_id: existingChapter.id,
       edited_by: user.id,
       edited_by_email: user.email,
@@ -85,6 +93,11 @@ export async function POST(
       new_keywords: change.new_keywords,
       source_version: syncRun?.source_version ?? null,
     });
+
+    if (historyError) {
+      failures.push(`Ch. ${change.chapter_number}: edit history was not saved`);
+      continue;
+    }
 
     const { error: updateError } = await supabase
       .from("chapters")
@@ -99,13 +112,35 @@ export async function POST(
       })
       .eq("id", existingChapter.id);
 
-    if (!updateError) publishedCount++;
+    if (updateError) {
+      failures.push(`Ch. ${change.chapter_number}: ${updateError.message}`);
+    } else {
+      publishedCount++;
+    }
   }
 
-  await supabase
+  if (failures.length > 0) {
+    return NextResponse.json(
+      {
+        error: "Publish stopped because one or more approved changes failed.",
+        published: publishedCount,
+        failures,
+      },
+      { status: 500 }
+    );
+  }
+
+  const { error: runUpdateError } = await supabase
     .from("sync_runs")
     .update({ status: "published", published_at: new Date().toISOString() })
     .eq("id", id);
+
+  if (runUpdateError) {
+    return NextResponse.json(
+      { error: "Changes were published, but the sync run status could not be updated." },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({ success: true, published: publishedCount });
 }
