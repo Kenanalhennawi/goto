@@ -103,6 +103,23 @@ export default async function AdminDashboard() {
           <SummaryCard label="Sync runs" value={String(syncRunCount ?? 0)} />
         </section>
 
+        <section className="mb-8">
+          <Link
+            href="/admin/procedures"
+            className="content-card block p-5 transition-colors hover:border-accent"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+              Procedure Review
+            </p>
+            <h2 className="mt-2 font-display text-xl font-semibold text-ink">
+              Review procedure cards
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-ink-muted">
+              Review, edit, approve, and publish procedure cards.
+            </p>
+          </Link>
+        </section>
+
         {recentSyncs && recentSyncs.length > 0 && (
           <div className="mb-10">
             <div className="mb-3 flex items-center justify-between gap-3">

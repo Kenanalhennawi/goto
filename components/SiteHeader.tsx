@@ -27,6 +27,9 @@ export async function SiteHeader() {
 
   const roleName = role?.role as UserRole | undefined;
   const displayName = role?.full_name ?? user?.email ?? null;
+  const canReviewProcedures = roleName
+    ? ["quality", "admin", "owner"].includes(roleName)
+    : false;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-white/88 backdrop-blur-xl">
@@ -61,6 +64,14 @@ export async function SiteHeader() {
 
           {user ? (
             <>
+              {canReviewProcedures && (
+                <Link
+                  href="/admin/procedures"
+                  className="hidden rounded-lg px-3 py-2 font-medium text-ink-muted transition-colors hover:bg-sky-soft hover:text-sky sm:inline-flex"
+                >
+                  Procedures
+                </Link>
+              )}
               <Link
                 href="/admin"
                 className="rounded-lg border border-border bg-white px-3 py-2 font-medium text-ink transition-colors hover:border-accent hover:text-accent"
