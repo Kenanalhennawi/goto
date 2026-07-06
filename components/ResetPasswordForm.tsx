@@ -17,11 +17,46 @@ export function ResetPasswordForm() {
     async function recoverSession() {
       const url = new URL(window.location.href);
       const code = url.searchParams.get("code");
+      const tokenHash = url.searchParams.get("token_hash");
+      const type = url.searchParams.get("type");
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+      const hashType = hashParams.get("type");
 
-      if (code) {
+      if (accessToken && refreshToken && hashType === "recovery") {
+        const { error: setSessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (setSessionError) {
+          console.error("Password reset setSession failed", setSessionError);
+          setError(resetLinkErrorMessage);
+          setReady(false);
+          return;
+        }
+
+        window.history.replaceState({}, "", "/reset-password");
+      } else if (tokenHash && type === "recovery") {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: "recovery",
+        });
+
+        if (verifyError) {
+          console.error("Password reset token_hash verification failed", verifyError);
+          setError(resetLinkErrorMessage);
+          setReady(false);
+          return;
+        }
+
+        window.history.replaceState({}, "", "/reset-password");
+      } else if (code) {
         const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
         if (exchangeError) {
-          setError(exchangeError.message);
+          console.error("Password reset PKCE exchange failed", exchangeError);
+          setError(isPkceVerifierError(exchangeError.message) ? pkceErrorMessage : resetLinkErrorMessage);
           setReady(false);
           return;
         }
@@ -34,7 +69,8 @@ export function ResetPasswordForm() {
       } = await supabase.auth.getSession();
 
       if (sessionError) {
-        setError(sessionError.message);
+        console.error("Password reset session lookup failed", sessionError);
+        setError(resetLinkErrorMessage);
         setReady(false);
         return;
       }
@@ -134,6 +170,16 @@ export function ResetPasswordForm() {
       </p>
     </section>
   );
+}
+
+const pkceErrorMessage =
+  "This reset link could not be opened in this browser session. Please request a new reset email and open the link in the same browser, or contact admin.";
+
+const resetLinkErrorMessage =
+  "This reset link could not be verified. Please request a new reset email, or contact admin.";
+
+function isPkceVerifierError(message: string) {
+  return message.toLowerCase().includes("pkce") || message.toLowerCase().includes("code verifier");
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
