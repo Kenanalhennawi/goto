@@ -49,7 +49,15 @@ export async function updateProcedureContent(formData: FormData) {
   const sourcePages = numberListField(formData, "source_pages");
 
   if (!title || !category) {
-    throw new Error("Title and category are required.");
+    redirectWithStatus(slug, { error: "Title and category are required." });
+  }
+
+  if (priority.error) {
+    redirectWithStatus(slug, { error: priority.error });
+  }
+
+  if (sourcePages.error) {
+    redirectWithStatus(slug, { error: sourcePages.error });
   }
 
   const { data: previous, error: fetchError } = await supabase
@@ -59,7 +67,7 @@ export async function updateProcedureContent(formData: FormData) {
     .single();
 
   if (fetchError || !previous) {
-    redirect("/admin/procedures");
+    redirectWithStatus(slug, { error: fetchError?.message ?? "Procedure was not found." });
   }
 
   const updatePayload = {
@@ -74,10 +82,10 @@ export async function updateProcedureContent(formData: FormData) {
     customer_script: nullableStringField(formData, "customer_script"),
     sprint_comment_template: nullableStringField(formData, "sprint_comment_template"),
     salesforce_classification: nullableStringField(formData, "salesforce_classification"),
-    source_pages: sourcePages,
+    source_pages: sourcePages.value,
     keywords: splitListField(formData, "keywords"),
     aliases: splitListField(formData, "aliases"),
-    priority,
+    priority: priority.value,
     review_status: previous.review_status === "archived" ? "archived" : "needs_review",
     is_published: false,
   };
@@ -90,7 +98,9 @@ export async function updateProcedureContent(formData: FormData) {
     .single();
 
   if (updateError || !updated) {
-    throw new Error(updateError?.message ?? "Could not update procedure content.");
+    redirectWithStatus(slug, {
+      error: updateError?.message ?? "Could not update procedure content.",
+    });
   }
 
   const { error: historyError } = await supabase.from("procedure_edit_history").insert({
@@ -101,12 +111,13 @@ export async function updateProcedureContent(formData: FormData) {
   });
 
   if (historyError) {
-    throw new Error(historyError.message);
+    redirectWithStatus(slug, { error: historyError.message });
   }
 
   revalidatePath("/admin/procedures");
   revalidatePath(`/admin/procedures/${slug}`);
   revalidatePath(`/procedure/${slug}`);
+  redirectWithStatus(slug, { saved: "1" });
 }
 
 async function updateProcedureReviewState(formData: FormData, action: ProcedureAction) {
@@ -141,7 +152,7 @@ async function updateProcedureReviewState(formData: FormData, action: ProcedureA
     .single();
 
   if (fetchError || !previous) {
-    redirect("/admin/procedures");
+    redirectWithStatus(slug, { error: fetchError?.message ?? "Procedure was not found." });
   }
 
   const nextState = nextReviewState(action);
@@ -153,7 +164,9 @@ async function updateProcedureReviewState(formData: FormData, action: ProcedureA
     .single();
 
   if (updateError || !updated) {
-    throw new Error(updateError?.message ?? "Could not update procedure review state.");
+    redirectWithStatus(slug, {
+      error: updateError?.message ?? "Could not update procedure review state.",
+    });
   }
 
   const { error: historyError } = await supabase.from("procedure_edit_history").insert({
@@ -164,12 +177,13 @@ async function updateProcedureReviewState(formData: FormData, action: ProcedureA
   });
 
   if (historyError) {
-    throw new Error(historyError.message);
+    redirectWithStatus(slug, { error: historyError.message });
   }
 
   revalidatePath("/admin/procedures");
   revalidatePath(`/admin/procedures/${slug}`);
   revalidatePath(`/procedure/${slug}`);
+  redirectWithStatus(slug, { [successParam(action)]: "1" });
 }
 
 function stringField(formData: FormData, name: string) {
@@ -199,17 +213,17 @@ function numberListField(formData: FormData, name: string) {
   const rawItems = splitListField(formData, name);
   const numbers = rawItems.map((item) => Number(item));
   if (numbers.some((item) => !Number.isInteger(item) || item < 1)) {
-    throw new Error("Source pages must be valid page numbers.");
+    return { value: [] as number[], error: "Source pages must be valid page numbers." };
   }
-  return [...new Set(numbers)].sort((a, b) => a - b);
+  return { value: [...new Set(numbers)].sort((a, b) => a - b), error: "" };
 }
 
 function numberField(formData: FormData, name: string) {
   const value = Number(stringField(formData, name) || "0");
   if (!Number.isFinite(value)) {
-    throw new Error(`${name} must be a number.`);
+    return { value: 0, error: `${name} must be a number.` };
   }
-  return value;
+  return { value, error: "" };
 }
 
 function nextReviewState(action: ProcedureAction) {
@@ -222,5 +236,23 @@ function nextReviewState(action: ProcedureAction) {
       return { review_status: "needs_review", is_published: false };
     case "archive":
       return { review_status: "archived", is_published: false };
+  }
+}
+
+function redirectWithStatus(slug: string, params: Record<string, string>) {
+  const query = new URLSearchParams(params);
+  redirect(`/admin/procedures/${slug}?${query.toString()}`);
+}
+
+function successParam(action: ProcedureAction) {
+  switch (action) {
+    case "approve_publish":
+      return "approved";
+    case "unpublish":
+      return "unpublished";
+    case "needs_review":
+      return "needs_review";
+    case "archive":
+      return "archived";
   }
 }

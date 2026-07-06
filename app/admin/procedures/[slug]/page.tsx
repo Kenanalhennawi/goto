@@ -65,10 +65,13 @@ type SourceChapter = {
 
 export default async function AdminProcedureDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { slug } = await params;
+  const status = await searchParams;
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -142,6 +145,8 @@ export default async function AdminProcedureDetailPage({
             &larr; Back to procedures
           </Link>
         </div>
+
+        <ActionStatusMessage status={status} />
 
         <section className="hero-panel mb-6 overflow-hidden rounded-[22px]">
           <div className="grid gap-0 lg:grid-cols-[1fr_320px]">
@@ -247,6 +252,37 @@ export default async function AdminProcedureDetailPage({
           </aside>
         </div>
       </main>
+    </div>
+  );
+}
+
+function ActionStatusMessage({ status }: { status: Record<string, string | undefined> }) {
+  const message =
+    status.saved === "1"
+      ? "Procedure content saved. It is now unpublished and marked for review."
+      : status.approved === "1"
+        ? "Procedure approved and published."
+        : status.unpublished === "1"
+          ? "Procedure unpublished."
+          : status.needs_review === "1"
+            ? "Procedure marked as needs review and unpublished."
+            : status.archived === "1"
+              ? "Procedure archived and unpublished."
+              : "";
+
+  if (status.error) {
+    return (
+      <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+        {status.error}
+      </div>
+    );
+  }
+
+  if (!message) return null;
+
+  return (
+    <div className="mb-6 rounded-xl border border-good/20 bg-good/10 px-4 py-3 text-sm font-medium text-good">
+      {message}
     </div>
   );
 }
