@@ -17,7 +17,12 @@ export function ForgotPasswordForm() {
     setError(null);
     setLoading(true);
 
-    const redirectTo = `${window.location.origin}/reset-password`;
+    const redirectOrigin =
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+      (window.location.hostname === "localhost"
+        ? window.location.origin
+        : "https://goto-xi.vercel.app");
+    const redirectTo = `${redirectOrigin}/reset-password`;
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo,
     });

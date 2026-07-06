@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 
@@ -9,8 +9,47 @@ export function ResetPasswordForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+
+  useEffect(() => {
+    async function recoverSession() {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get("code");
+
+      if (code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) {
+          setError(exchangeError.message);
+          setReady(false);
+          return;
+        }
+        window.history.replaceState({}, "", "/reset-password");
+      }
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        setError(sessionError.message);
+        setReady(false);
+        return;
+      }
+
+      if (!session) {
+        setError("Open this page from the password reset email link, then choose a new password.");
+        setReady(false);
+        return;
+      }
+
+      setReady(true);
+    }
+
+    recoverSession();
+  }, [supabase.auth]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -80,10 +119,10 @@ export function ResetPasswordForm() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !ready}
           className="w-full rounded-lg bg-accent py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-dim disabled:opacity-50"
         >
-          {loading ? "Updating..." : "Update password"}
+          {loading ? "Updating..." : ready ? "Update password" : "Waiting for reset link"}
         </button>
       </form>
 
