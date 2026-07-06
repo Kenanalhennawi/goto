@@ -47,6 +47,47 @@ export interface SearchResult {
 
 export type UserRole = "agent" | "supervisor" | "quality" | "admin" | "owner";
 
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+
+export type ProcedureReviewStatus = "draft" | "needs_review" | "approved" | "archived";
+
+export interface ProcedureCard {
+  id: string;
+  chapter_id: string | null;
+  title: string;
+  slug: string;
+  category: string;
+  summary: string | null;
+  when_to_use: string | null;
+  agent_action: JsonValue[];
+  rules: JsonValue[];
+  exceptions: JsonValue[];
+  required_approval: string | null;
+  customer_script: string | null;
+  sprint_comment_template: string | null;
+  salesforce_classification: string | null;
+  source_pages: number[];
+  source_version: string | null;
+  source_updated_at: string | null;
+  keywords: string[];
+  aliases: string[];
+  priority: number;
+  review_status: ProcedureReviewStatus;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProcedureEditHistory {
+  id: string;
+  procedure_id: string | null;
+  edited_by: string | null;
+  previous_data: JsonValue | null;
+  new_data: JsonValue | null;
+  created_at: string;
+}
+
 export interface EditHistoryEntry {
   id: string;
   chapter_id: string;
