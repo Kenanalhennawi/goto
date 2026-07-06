@@ -27,12 +27,6 @@ const QUICK_ACCESS = [
     keywords: ["IRROPS", "Recovery", "Delay"],
   },
   {
-    title: "Payment",
-    description: "Payment handling, failed transactions, receipts, and charge-related checks.",
-    query: "payment failure CCHK",
-    keywords: ["Payment", "Receipt", "Charge"],
-  },
-  {
     title: "Baggage",
     description: "Baggage rules, claims, WorldTracer, excess baggage, and mishandled bags.",
     query: "baggage WorldTracer",
@@ -45,22 +39,28 @@ const QUICK_ACCESS = [
     keywords: ["Name", "Correction", "PNR"],
   },
   {
-    title: "OK to Board",
-    description: "OKTB checks, travel requirements, and country-specific handling.",
-    query: "OKTB ok to board",
-    keywords: ["OKTB", "Visa", "Travel"],
+    title: "Auto Split OD",
+    description: "FZ-FZ connection booking split and related booking handling.",
+    query: "Auto Split OD FZ-FZ connection booking",
+    keywords: ["Auto Split", "OD", "FZ-FZ"],
   },
   {
-    title: "Visa",
-    description: "Visa process references, UAE travel shops, requirements, and support paths.",
-    query: "visa change",
-    keywords: ["Visa", "UAE", "Requirement"],
+    title: "MCT Time",
+    description: "Minimum connection time rules for transfer and connection checks.",
+    query: "minimum connection time MCT connection transfer",
+    keywords: ["MCT", "connection", "transfer"],
   },
   {
     title: "Wheelchair",
     description: "Special assistance requests, SSR handling, and mobility support cases.",
     query: "WCHR WCHC wheelchair",
     keywords: ["WCHR", "SSR", "Assist"],
+  },
+  {
+    title: "Dubai Stopover",
+    description: "Dubai Stopover process, booking handling, and related customer guidance.",
+    query: "Dubai Stopover DSO stopover",
+    keywords: ["DSO", "stopover", "Dubai"],
   },
   {
     title: "Skywards",
@@ -87,22 +87,40 @@ const QUICK_ACCESS = [
     keywords: ["OLCI", "Check-in", "Seat"],
   },
   {
+    title: "Lounge Access during OLCI",
+    description: "Lounge purchase flow during online check-in and related handling.",
+    query: "lounge access purchase during OLCI online check-in",
+    keywords: ["lounge", "OLCI", "check-in"],
+  },
+  {
     title: "Contact Details",
     description: "Internal contacts, support mailboxes, escalation numbers, and team references.",
     query: "contact details",
     keywords: ["Contacts", "Email", "Phone"],
   },
   {
-    title: "Medical / MEDA",
-    description: "Medical cases, MEDA guidance, clearance, and special handling paths.",
-    query: "MEDA medical",
-    keywords: ["MEDA", "Medical", "Clearance"],
+    title: "Sporting Equipment",
+    description: "Sporting equipment handling, SSR checks, and exceptions.",
+    query: "sporting equipment SPEQ weapon",
+    keywords: ["SPEQ", "sports", "equipment"],
   },
   {
-    title: "Staff Tickets",
-    description: "Staff travel, staff tickets, eligibility, and booking support references.",
-    query: "staff tickets ID50 ID90",
-    keywords: ["Staff", "Tickets", "Travel"],
+    title: "Falcon Handling",
+    description: "Falcon and bird carriage handling and cabin-related checks.",
+    query: "falcon handling birds animal",
+    keywords: ["falcon", "birds", "cabin"],
+  },
+  {
+    title: "Extra Seat / CBBG",
+    description: "Extra seat and cabin baggage seat handling.",
+    query: "extra seat EXST CBBG",
+    keywords: ["EXST", "CBBG", "extra seat"],
+  },
+  {
+    title: "Government Deals",
+    description: "Government deal references, eligibility checks, and related booking support.",
+    query: "government deals booking",
+    keywords: ["Government", "Deals", "Booking"],
   },
 ];
 
@@ -223,7 +241,7 @@ export default async function Home({
                 title="Start with the passenger issue"
                 description="Operational shortcuts open targeted search results without inventing policy content."
               />
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 {QUICK_ACCESS.map((item) => (
                   <QuickAccessCard key={item.title} item={item} />
                 ))}
@@ -336,13 +354,13 @@ function QuickAccessCard({
   return (
     <Link
       href={`/search?q=${encodeURIComponent(item.query)}`}
-      className="content-card group flex min-h-40 flex-col justify-between p-4 transition-all hover:-translate-y-0.5 hover:border-accent hover:bg-panel-hover"
+      className="content-card group flex min-h-36 flex-col justify-between p-3.5 transition-all hover:-translate-y-0.5 hover:border-accent hover:bg-panel-hover"
     >
       <span>
-        <span className="font-display text-base font-semibold text-ink group-hover:text-accent">
+        <span className="font-display text-sm font-semibold text-ink group-hover:text-accent">
           {item.title}
         </span>
-        <span className="mt-2 block text-sm leading-6 text-ink-muted">
+        <span className="mt-2 block text-xs leading-5 text-ink-muted">
           {item.description}
         </span>
       </span>
