@@ -199,30 +199,30 @@ export default async function Home({
   const lastUpdated = recentlyUpdated[0]?.updated_at;
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="dashboard-shell flex min-h-full flex-col">
       <SiteHeader />
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
-        <section className="mb-8 overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-7 sm:px-6 lg:py-10">
+        <section className="hero-panel mb-10 overflow-hidden rounded-[22px]">
           <div className="grid gap-0 lg:grid-cols-[1.45fr_0.85fr]">
-            <div className="border-b border-border bg-gradient-to-br from-white via-white to-sky-soft/80 p-5 sm:p-7 lg:border-b-0 lg:border-r">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-accent">
+            <div className="hero-main border-b border-border/80 p-5 sm:p-8 lg:border-b-0 lg:border-r lg:p-10">
+              <p className="mb-4 inline-flex rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">
                 flydubai contact centre operations
               </p>
-              <h1 className="max-w-4xl font-display text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
+              <h1 className="max-w-4xl font-display text-4xl font-semibold leading-tight tracking-tight text-ink sm:text-5xl lg:text-6xl">
                 GO TO Contact Centre Guide
               </h1>
-              <p className="mt-4 max-w-3xl text-base leading-7 text-ink-muted">
+              <p className="mt-5 max-w-3xl text-base leading-7 text-ink-muted sm:text-lg">
                 Fast operational guide for Contact Centre procedures, policies, references,
                 and source-backed answers.
               </p>
 
-              <div className="mt-6 rounded-xl border border-border bg-white p-3 shadow-sm">
+              <div className="hero-search mt-7 rounded-2xl p-3">
                 <SearchBar autoFocus />
               </div>
             </div>
 
-            <aside className="grid content-start gap-3 bg-panel p-5 sm:grid-cols-2 lg:grid-cols-1">
+            <aside className="grid content-start gap-3 bg-white/72 p-5 sm:grid-cols-2 lg:grid-cols-1 lg:p-6">
               <Stat label="Total chapters" value={String(list.length || "-")} tone="orange" />
               <Stat label="Source version" value={sourceVersion ?? "Available in chapters"} tone="blue" />
               <Stat label="Last updated" value={lastUpdated ? compactDate(lastUpdated) : "No update date"} tone="green" />
@@ -234,8 +234,8 @@ export default async function Home({
         {list.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="space-y-10">
-            <section>
+          <div className="space-y-8 lg:space-y-10">
+            <section className="section-band p-4 sm:p-5 lg:p-6">
               <SectionHeader
                 eyebrow="Quick access"
                 title="Start with the passenger issue"
@@ -249,7 +249,7 @@ export default async function Home({
             </section>
 
             {recentlyUpdated.length > 0 && (
-              <section>
+              <section className="section-band p-4 sm:p-5 lg:p-6">
                 <SectionHeader
                   eyebrow="Recently updated"
                   title="Latest changed chapters"
@@ -260,7 +260,7 @@ export default async function Home({
                     <Link
                       key={chapter.id}
                       href={`/chapter/${chapter.slug}`}
-                      className="content-card block p-4 transition-colors hover:border-accent hover:bg-panel-hover"
+                      className="content-card quick-card block p-4 transition-all hover:-translate-y-0.5 hover:border-accent"
                     >
                       <span className="font-mono text-xs font-semibold text-accent">
                         Ch. {String(chapter.chapter_number).padStart(2, "0")}
@@ -282,7 +282,7 @@ export default async function Home({
               </section>
             )}
 
-            <section>
+            <section className="section-band p-4 sm:p-5 lg:p-6">
               <SectionHeader
                 eyebrow="Browse by work area"
                 title="Operational workstreams"
@@ -295,7 +295,7 @@ export default async function Home({
               </div>
             </section>
 
-            <section>
+            <section className="section-band p-4 sm:p-5 lg:p-6">
               <SectionHeader
                 eyebrow="Browse manual"
                 title="Full chapter directory"
@@ -307,7 +307,7 @@ export default async function Home({
         )}
       </main>
 
-      <footer className="border-t border-border bg-white/70 py-5">
+      <footer className="border-t border-border bg-white/70 py-5 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 text-xs text-ink-faint sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>Internal flydubai contact centre reference. Not for external distribution.</span>
           <span className="font-mono">{sourceVersion ?? "Source version shown per chapter"}</span>
@@ -327,12 +327,12 @@ function SectionHeader({
   description: string;
 }) {
   return (
-    <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
           {eyebrow}
         </p>
-        <h2 className="mt-1 font-display text-2xl font-semibold tracking-tight text-ink">
+        <h2 className="mt-1 font-display text-2xl font-semibold tracking-tight text-ink sm:text-[1.7rem]">
           {title}
         </h2>
       </div>
@@ -354,7 +354,7 @@ function QuickAccessCard({
   return (
     <Link
       href={`/search?q=${encodeURIComponent(item.query)}`}
-      className="content-card group flex min-h-36 flex-col justify-between p-3.5 transition-all hover:-translate-y-0.5 hover:border-accent hover:bg-panel-hover"
+      className="content-card quick-card group flex min-h-36 flex-col justify-between p-3.5 transition-all hover:-translate-y-0.5 hover:border-accent"
     >
       <span>
         <span className="font-display text-sm font-semibold text-ink group-hover:text-accent">
@@ -368,7 +368,7 @@ function QuickAccessCard({
         {item.keywords.map((keyword) => (
           <span
             key={keyword}
-            className="rounded-md border border-blue-200 bg-sky-soft px-2 py-1 text-[11px] font-semibold text-sky"
+            className="rounded-full border border-blue-200/80 bg-sky-soft px-2.5 py-1 text-[10px] font-semibold text-sky"
           >
             {keyword}
           </span>
@@ -395,13 +395,13 @@ function WorkAreaCard({
   const previewMatches = matches.slice(0, 3);
 
   return (
-    <div className="content-card flex min-h-48 flex-col p-4">
+    <div className="content-card quick-card flex min-h-48 flex-col p-4 transition-all hover:-translate-y-0.5 hover:border-sky">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-display text-base font-semibold text-ink">{area.title}</h3>
           <p className="mt-2 text-sm leading-6 text-ink-muted">{area.description}</p>
         </div>
-        <span className="rounded-lg bg-orange-50 px-2.5 py-1 font-mono text-xs font-semibold text-accent">
+        <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 font-mono text-xs font-semibold text-accent">
           {matches.length}
         </span>
       </div>
@@ -413,7 +413,7 @@ function WorkAreaCard({
               <Link
                 key={chapter.id}
                 href={`/chapter/${chapter.slug}`}
-                className="max-w-full truncate rounded-md border border-blue-200 bg-sky-soft px-2 py-1 text-[11px] font-semibold text-sky transition-colors hover:border-accent hover:text-accent"
+                className="max-w-full truncate rounded-full border border-blue-200 bg-sky-soft px-2.5 py-1 text-[11px] font-semibold text-sky transition-colors hover:border-accent hover:text-accent"
               >
                 {String(chapter.chapter_number).padStart(2, "0")} {chapter.title}
               </Link>
@@ -422,7 +422,7 @@ function WorkAreaCard({
         ) : null}
         <Link
           href={`/search?q=${encodeURIComponent(area.query)}`}
-          className="inline-flex rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent"
+          className="inline-flex rounded-full bg-navy px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-accent"
         >
           Browse area
         </Link>
@@ -443,13 +443,13 @@ function Stat({
   href?: string;
 }) {
   const tones = {
-    orange: "bg-orange-50 text-accent border-orange-200",
-    blue: "bg-sky-soft text-sky border-blue-200",
-    green: "bg-mint-soft text-good border-green-200",
+    orange: "bg-gradient-to-br from-orange-50 to-white text-accent border-orange-200",
+    blue: "bg-gradient-to-br from-sky-soft to-white text-sky border-blue-200",
+    green: "bg-gradient-to-br from-mint-soft to-white text-good border-green-200",
   };
   const content = (
-    <div className={`rounded-lg border p-4 ${tones[tone]}`}>
-      <p className="truncate font-display text-xl font-semibold leading-none">{value}</p>
+    <div className={`stat-card rounded-2xl border p-4 ${tones[tone]}`}>
+      <p className="truncate font-display text-2xl font-semibold leading-none">{value}</p>
       <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider opacity-75">
         {label}
       </p>

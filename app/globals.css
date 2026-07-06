@@ -1,21 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --color-base: #f3f6fb;
+  --color-base: #f5f8fc;
   --color-panel: #ffffff;
-  --color-panel-hover: #fff6ef;
-  --color-border: #d8e0eb;
-  --color-accent: #e85a2a;
-  --color-accent-dim: #be421d;
-  --color-ink: #172032;
-  --color-ink-muted: #5d6b7d;
-  --color-ink-faint: #8d9aac;
-  --color-good: #167a55;
+  --color-panel-hover: #f7fbff;
+  --color-border: #d7e2ef;
+  --color-accent: #f05a28;
+  --color-accent-dim: #c4471d;
+  --color-ink: #0b1b33;
+  --color-ink-muted: #52657c;
+  --color-ink-faint: #8796aa;
+  --color-good: #137457;
   --color-warn: #a66d10;
-  --color-sky: #126fb6;
-  --color-sky-soft: #eaf4ff;
-  --color-mint-soft: #edf9f3;
-  --color-amber-soft: #fff4d8;
+  --color-sky: #075fae;
+  --color-sky-soft: #e8f3ff;
+  --color-mint-soft: #ebf8f2;
+  --color-amber-soft: #fff3dc;
+  --color-navy: #071a33;
+  --color-navy-soft: #102a4c;
 }
 
 @theme inline {
@@ -34,6 +36,8 @@
   --color-sky-soft: var(--color-sky-soft);
   --color-mint-soft: var(--color-mint-soft);
   --color-amber-soft: var(--color-amber-soft);
+  --color-navy: var(--color-navy);
+  --color-navy-soft: var(--color-navy-soft);
   --font-display: var(--font-display);
   --font-body: var(--font-body);
   --font-mono: var(--font-mono);
@@ -49,10 +53,9 @@ html {
 
 body {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(243, 246, 251, 0.98)),
-    radial-gradient(circle at 8% 0%, rgba(232, 90, 42, 0.12), transparent 26%),
-    radial-gradient(circle at 88% 4%, rgba(18, 111, 182, 0.11), transparent 24%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0 25%, transparent 25% 100%);
+    radial-gradient(circle at 14% -10%, rgba(240, 90, 40, 0.14), transparent 30%),
+    radial-gradient(circle at 88% 0%, rgba(7, 95, 174, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 248, 252, 0.98) 42%, rgba(238, 244, 251, 1) 100%);
   color: var(--color-ink);
   font-family: var(--font-body), system-ui, sans-serif;
 }
@@ -91,12 +94,74 @@ body {
 }
 
 .soft-shadow {
-  box-shadow: 0 14px 34px rgba(23, 32, 50, 0.08);
+  box-shadow: 0 20px 45px rgba(7, 26, 51, 0.1);
 }
 
 .content-card {
   border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 8px;
-  box-shadow: 0 10px 24px rgba(23, 32, 50, 0.055);
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 12px;
+  box-shadow: 0 16px 38px rgba(7, 26, 51, 0.065);
+}
+
+.dashboard-shell {
+  position: relative;
+}
+
+.dashboard-shell::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  background:
+    linear-gradient(90deg, rgba(7, 26, 51, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(7, 26, 51, 0.028) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 68%);
+}
+
+.hero-panel {
+  border: 1px solid rgba(133, 156, 184, 0.35);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 251, 255, 0.94) 52%, rgba(232, 243, 255, 0.86) 100%);
+  box-shadow: 0 24px 70px rgba(7, 26, 51, 0.12);
+}
+
+.hero-main {
+  background:
+    radial-gradient(circle at 8% 0%, rgba(240, 90, 40, 0.16), transparent 30%),
+    radial-gradient(circle at 100% 6%, rgba(7, 95, 174, 0.14), transparent 26%);
+}
+
+.hero-search {
+  border: 1px solid rgba(7, 95, 174, 0.18);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 18px 42px rgba(7, 26, 51, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+}
+
+.section-band {
+  border: 1px solid rgba(215, 226, 239, 0.86);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(248, 251, 255, 0.52));
+  box-shadow: 0 18px 48px rgba(7, 26, 51, 0.045);
+}
+
+.quick-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.94));
+}
+
+.quick-card:hover {
+  box-shadow: 0 20px 44px rgba(7, 26, 51, 0.1);
+}
+
+.stat-card {
+  box-shadow:
+    0 14px 30px rgba(7, 26, 51, 0.075),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
