@@ -7,7 +7,7 @@ import { SEARCH_EXAMPLES } from "@/lib/operational-content";
 import { MAX_SEARCH_QUERY_LENGTH, MIN_SEARCH_QUERY_LENGTH, plainSnippet } from "@/lib/search";
 import type { SearchResult } from "@/lib/types";
 
-type ResultKind = "All" | "Procedures" | "Rules" | "Images";
+type ResultKind = "All" | "Steps" | "Rules" | "Images";
 type OperationalSearchResult = SearchResult & {
   page_start?: number | null;
   page_end?: number | null;
@@ -113,7 +113,7 @@ export function SearchBar({
         <div className="absolute z-50 mt-2 max-h-[34rem] w-full overflow-y-auto rounded-2xl border border-border bg-white shadow-2xl shadow-slate-900/15">
           <div className="sticky top-0 z-10 border-b border-border bg-white px-3 py-2">
             <div className="flex gap-1 overflow-x-auto">
-              {(["All", "Procedures", "Rules", "Images"] as ResultKind[]).map((option) => (
+              {(["All", "Steps", "Rules", "Images"] as ResultKind[]).map((option) => (
                 <button
                   key={option}
                   type="button"
@@ -207,7 +207,7 @@ function resultKind(result: OperationalSearchResult): ResultKind {
   if (/\b(must|cannot|not allowed|only|eligible|valid|restriction|condition|exception|required|applicable)\b/.test(text)) {
     return "Rules";
   }
-  return "Procedures";
+  return "Steps";
 }
 
 function sectionForResult(result: OperationalSearchResult) {
