@@ -64,7 +64,7 @@ const CODE_ALIASES: Record<string, string[]> = {
   DCS: ["check-in system"],
   DSO: ["dubai stopover"],
   LNGL: ["lounge"],
-  MCT: ["minimum connection time", "connection time", "transfer time"],
+  MCT: ["minimum connection time", "connection transfers", "connection", "transfer", "connection time", "transfer time"],
 };
 
 const SEARCH_ALIASES: Record<string, string[]> = {
@@ -114,6 +114,42 @@ const SEARCH_ALIASES: Record<string, string[]> = {
   tickets: ["e-ticketing"],
 };
 
+const WORK_AREA_RELEVANCE: Record<
+  string,
+  {
+    preferred: string[];
+    avoid?: string[];
+  }
+> = {
+  MCT: {
+    preferred: [
+      "connection and transfers",
+      "connection transfers",
+      "terminal 3 operation",
+      "terminal 3",
+      "interline",
+      "codeshare",
+      "connection",
+      "transfer",
+      "terminal",
+    ],
+    avoid: ["baggage", "payment", "ok to board", "oktb", "visa"],
+  },
+  EXST: { preferred: ["seat", "extra seat"] },
+  CBBG: { preferred: ["seat", "extra seat", "cabin baggage seat"] },
+  SPEQ: { preferred: ["sporting equipment", "sports equipment"] },
+  WCHR: { preferred: ["wheelchair"] },
+  WCHS: { preferred: ["wheelchair"] },
+  WCHC: { preferred: ["wheelchair"] },
+  WCBD: { preferred: ["wheelchair"] },
+  WCBW: { preferred: ["wheelchair"] },
+  WCLB: { preferred: ["wheelchair"] },
+  FDIS: { preferred: ["flight disruption", "disruption", "schedule change"] },
+  DSO: { preferred: ["dubai stopover", "stopover"] },
+  LNGL: { preferred: ["lounge"] },
+  WT: { preferred: ["baggage", "worldtracer"] },
+};
+
 export function buildSearchTerms(query: string) {
   const trimmed = query.trim().slice(0, MAX_SEARCH_QUERY_LENGTH);
   if (trimmed.length < MIN_SEARCH_QUERY_LENGTH) return "";
@@ -144,12 +180,13 @@ export function isOperationalCodeQuery(query: string) {
 
 export function rankSearchResults<T extends RankableSearchResult>(results: T[], query: string) {
   const code = operationalCodeFromQuery(query);
+  const topic = searchTopicFromQuery(query, code);
   const normalizedQuery = normalize(query);
   const aliasPhrases = code ? phrasesForCode(code).slice(1) : findSearchAlias(query) ?? [];
 
   return [...results].sort((a, b) => {
-    const scoreA = scoreResult(a, normalizedQuery, code, aliasPhrases);
-    const scoreB = scoreResult(b, normalizedQuery, code, aliasPhrases);
+    const scoreA = scoreResult(a, normalizedQuery, code, topic, aliasPhrases);
+    const scoreB = scoreResult(b, normalizedQuery, code, topic, aliasPhrases);
     if (scoreA !== scoreB) return scoreB - scoreA;
     return (b.rank ?? 0) - (a.rank ?? 0);
   });
@@ -159,6 +196,7 @@ function scoreResult(
   result: RankableSearchResult,
   normalizedQuery: string,
   code: string | null,
+  topic: string | null,
   aliasPhrases: string[]
 ) {
   let score = result.rank ?? 0;
@@ -176,8 +214,9 @@ function scoreResult(
 
   if (keywords.some((keyword) => normalize(keyword) === normalizedQuery)) score += 4200;
   if (normalize(title) === normalizedQuery || hasStandaloneToken(title, normalizedQuery)) score += 3600;
-  if (hasStandaloneToken(snippet, normalizedQuery)) score += 2200;
-  if (hasStandaloneToken(body, normalizedQuery)) score += 1200;
+  score += workAreaScore(result, topic, code);
+  if (hasStandaloneToken(snippet, normalizedQuery)) score += 1800;
+  if (hasStandaloneToken(body, normalizedQuery)) score += 800;
 
   for (const phrase of aliasPhrases) {
     const normalizedPhrase = normalize(phrase);
@@ -186,6 +225,51 @@ function scoreResult(
     if (normalize(title).includes(normalizedPhrase)) score += 1500;
     if (normalize(snippet).includes(normalizedPhrase)) score += 900;
     if (normalize(body).includes(normalizedPhrase)) score += 400;
+  }
+
+  return score;
+}
+
+function workAreaScore(result: RankableSearchResult, topic: string | null, code: string | null) {
+  if (!topic) return 0;
+  const rule = WORK_AREA_RELEVANCE[topic];
+  if (!rule) return 0;
+
+  const title = normalize(result.title ?? "");
+  const keywords = (result.search_keywords ?? []).map((keyword) => normalize(keyword)).join(" ");
+  const snippet = normalize(result.snippet ?? "");
+  const body = normalize(result.body_text ?? "");
+  const titleAndKeywords = `${title} ${keywords}`;
+  const allText = `${titleAndKeywords} ${snippet} ${body}`;
+  let score = 0;
+
+  for (const preferred of rule.preferred) {
+    const normalizedPreferred = normalize(preferred);
+    if (!normalizedPreferred) continue;
+    if (title.includes(normalizedPreferred)) score += 5200;
+    if (keywords.includes(normalizedPreferred)) score += 4600;
+    if (snippet.includes(normalizedPreferred)) score += 1600;
+    if (body.includes(normalizedPreferred)) score += 900;
+  }
+
+  const hasExactTopicSignal =
+    (code && (hasStandaloneToken(result.title, code) || (result.search_keywords ?? []).some((keyword) => tokenEquals(keyword, code)))) ||
+    titleAndKeywords.includes("minimum connection time") ||
+    titleAndKeywords.includes("mct");
+
+  if (!hasExactTopicSignal) {
+    for (const avoid of rule.avoid ?? []) {
+      const normalizedAvoid = normalize(avoid);
+      if (!normalizedAvoid) continue;
+      if (title.includes(normalizedAvoid)) score -= 4200;
+      if (keywords.includes(normalizedAvoid)) score -= 3000;
+    }
+  }
+
+  if (topic === "MCT" && title.includes("terminal 3")) score += 4200;
+  if (topic === "MCT" && title.includes("connection")) score += 4600;
+  if (topic === "MCT" && title.includes("baggage") && allText.includes("minimum connection time")) {
+    score += 500;
   }
 
   return score;
@@ -205,6 +289,16 @@ function operationalCodeFromQuery(query: string) {
 
 function phrasesForCode(code: string) {
   return [code.toLowerCase(), ...(CODE_ALIASES[code] ?? [])].slice(0, 6);
+}
+
+function searchTopicFromQuery(query: string, code: string | null) {
+  if (code && WORK_AREA_RELEVANCE[code]) return code;
+  const normalized = normalize(query);
+  if (normalized === "minimum connection time" || normalized.includes("minimum connection time")) {
+    return "MCT";
+  }
+  if (normalized === "worldtracer") return "WT";
+  return null;
 }
 
 function findSearchAlias(query: string) {
