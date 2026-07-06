@@ -25,7 +25,7 @@ create table if not exists procedure_cards (
   aliases text[] not null default '{}',
   priority int not null default 0,
   review_status text not null default 'needs_review',
-  is_published boolean not null default true,
+  is_published boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint procedure_cards_review_status_check check (
@@ -76,7 +76,7 @@ drop policy if exists "Admin+ can delete procedure cards" on procedure_cards;
 create policy "Published procedure cards are public" on procedure_cards
 for select using (
   is_published = true
-  and review_status in ('needs_review', 'approved')
+  and review_status = 'approved'
 );
 
 create policy "Quality+ can read procedure cards" on procedure_cards
