@@ -5,6 +5,7 @@ import {
   archiveProcedure,
   markNeedsReview,
   unpublish,
+  updateProcedureContent,
 } from "@/app/admin/procedures/actions";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import type { JsonValue } from "@/lib/types";
@@ -181,6 +182,7 @@ export default async function AdminProcedureDetailPage({
             <TextSection title="Customer script" value={procedure.customer_script} isScript />
             <TextSection title="SPRINT comment template" value={procedure.sprint_comment_template} isScript />
             <TextSection title="Salesforce classification" value={procedure.salesforce_classification} />
+            <EditProcedureForm procedure={procedure} />
           </div>
 
           <aside className="space-y-5">
@@ -220,6 +222,174 @@ export default async function AdminProcedureDetailPage({
         </div>
       </main>
     </div>
+  );
+}
+
+function EditProcedureForm({ procedure }: { procedure: ProcedureDetail }) {
+  return (
+    <section className="content-card quick-card p-5 sm:p-6">
+      <div className="mb-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+          Edit content
+        </p>
+        <h2 className="mt-2 font-display text-xl font-semibold text-ink">Procedure fields</h2>
+        <p className="mt-2 text-sm leading-6 text-ink-muted">
+          Saving edits will mark this procedure as needs review and unpublish it.
+        </p>
+      </div>
+
+      <form action={updateProcedureContent} className="space-y-5">
+        <input type="hidden" name="slug" value={procedure.slug} />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Title" name="title" defaultValue={procedure.title} required />
+          <Field label="Category" name="category" defaultValue={procedure.category} required />
+        </div>
+
+        <TextArea label="Summary" name="summary" defaultValue={procedure.summary} rows={3} />
+        <TextArea label="When to use" name="when_to_use" defaultValue={procedure.when_to_use} rows={3} />
+        <TextArea
+          label="Agent action"
+          name="agent_action"
+          defaultValue={jsonListToLines(procedure.agent_action)}
+          rows={6}
+          hint="One line per action item."
+        />
+        <TextArea
+          label="Rules"
+          name="rules"
+          defaultValue={jsonListToLines(procedure.rules)}
+          rows={5}
+          hint="One line per rule."
+        />
+        <TextArea
+          label="Exceptions"
+          name="exceptions"
+          defaultValue={jsonListToLines(procedure.exceptions)}
+          rows={5}
+          hint="One line per exception."
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextArea
+            label="Required approval"
+            name="required_approval"
+            defaultValue={procedure.required_approval}
+            rows={3}
+          />
+          <TextArea
+            label="Salesforce classification"
+            name="salesforce_classification"
+            defaultValue={procedure.salesforce_classification}
+            rows={3}
+          />
+        </div>
+
+        <TextArea
+          label="Customer script"
+          name="customer_script"
+          defaultValue={procedure.customer_script}
+          rows={5}
+        />
+        <TextArea
+          label="SPRINT comment template"
+          name="sprint_comment_template"
+          defaultValue={procedure.sprint_comment_template}
+          rows={5}
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextArea
+            label="Source pages"
+            name="source_pages"
+            defaultValue={procedure.source_pages.join(", ")}
+            rows={3}
+            hint="Comma-separated page numbers."
+          />
+          <Field label="Priority" name="priority" defaultValue={String(procedure.priority)} type="number" />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextArea
+            label="Keywords"
+            name="keywords"
+            defaultValue={procedure.keywords.join(", ")}
+            rows={4}
+            hint="Comma-separated or one per line."
+          />
+          <TextArea
+            label="Aliases"
+            name="aliases"
+            defaultValue={procedure.aliases.join(", ")}
+            rows={4}
+            hint="Comma-separated or one per line."
+          />
+        </div>
+
+        <div className="flex justify-end border-t border-border pt-5">
+          <button
+            type="submit"
+            className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-dim"
+          >
+            Save edits
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  name,
+  defaultValue,
+  type = "text",
+  required = false,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string;
+  type?: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">{label}</span>
+      <input
+        name={name}
+        type={type}
+        required={required}
+        defaultValue={defaultValue}
+        className="mt-2 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-accent"
+      />
+    </label>
+  );
+}
+
+function TextArea({
+  label,
+  name,
+  defaultValue,
+  rows,
+  hint,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string | null;
+  rows: number;
+  hint?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">{label}</span>
+      <textarea
+        name={name}
+        defaultValue={defaultValue ?? ""}
+        rows={rows}
+        className="mt-2 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm leading-6 text-ink outline-none transition-colors focus:border-accent"
+      />
+      {hint && <span className="mt-1 block text-xs text-ink-faint">{hint}</span>}
+    </label>
   );
 }
 
@@ -337,6 +507,10 @@ function readableJsonItem(item: JsonValue) {
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   return JSON.stringify(item);
+}
+
+function jsonListToLines(items: JsonValue[]) {
+  return items.map(readableJsonItem).filter(Boolean).join("\n");
 }
 
 function formatSourcePages(pages: number[]) {
