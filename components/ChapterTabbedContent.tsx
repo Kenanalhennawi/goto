@@ -62,14 +62,15 @@ export function ChapterTabbedContent({
 
   return (
     <div className="space-y-5">
-      <div className="flex gap-2 overflow-x-auto rounded-xl border border-border bg-white p-2 soft-shadow">
+      <div className="section-band p-2">
+        <div className="flex gap-2 overflow-x-auto">
         {tabs.map((tab) => (
           <Link
             key={tab.id}
             href={`${baseHref}?section=${tab.id}`}
-            className={`min-w-max rounded-lg px-4 py-3 text-left transition-colors ${
+            className={`min-w-max rounded-xl px-4 py-3 text-left transition-colors ${
               tab.id === activeTab.id
-                ? "bg-ink text-white shadow-sm"
+                ? "bg-navy text-white shadow-sm"
                 : "text-ink-muted hover:bg-sky-soft hover:text-sky"
             }`}
           >
@@ -83,10 +84,11 @@ export function ChapterTabbedContent({
             </span>
           </Link>
         ))}
+        </div>
       </div>
 
-      <section className="content-card overflow-hidden">
-        <div className="border-b border-border bg-sky-soft px-5 py-4">
+      <section className="content-card overflow-hidden" aria-label="Full manual content">
+        <div className="border-b border-border bg-gradient-to-r from-sky-soft to-white px-5 py-4">
           <p className="font-display text-lg font-semibold text-ink">{activeTab.label}</p>
           <p className="mt-1 text-sm text-ink-muted">{activeTab.summary}</p>
           {editHref && (
@@ -100,13 +102,13 @@ export function ChapterTabbedContent({
         </div>
 
         {activeTab.sections.length > 1 && (
-          <nav className="border-b border-border bg-white px-5 py-3">
+          <nav className="border-b border-border bg-white/85 px-5 py-3">
             <div className="flex gap-2 overflow-x-auto">
               {activeTab.sections.slice(0, 16).map((section, index) => (
                 <a
                   key={`${section.title}-nav-${index}`}
                   href={`#${sectionId(section, index)}`}
-                  className="min-w-max rounded-md border border-border bg-sky-soft px-3 py-1.5 text-xs font-semibold text-sky transition-colors hover:border-sky hover:bg-white"
+                  className="min-w-max rounded-full border border-border bg-sky-soft px-3 py-1.5 text-xs font-semibold text-sky transition-colors hover:border-sky hover:bg-white"
                 >
                   {section.title}
                 </a>
@@ -120,7 +122,7 @@ export function ChapterTabbedContent({
             <article
               key={`${section.title}-${index}`}
               id={sectionId(section, index)}
-              className="scroll-mt-24 rounded-lg border border-border bg-white p-4"
+              className="quick-card scroll-mt-24 rounded-xl border border-border bg-white p-4"
             >
               <div className="mb-3 flex items-start gap-3">
                 <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-orange-50 font-mono text-xs font-semibold text-accent">
@@ -136,7 +138,7 @@ export function ChapterTabbedContent({
                 </span>
                 <a
                   href={`#${sectionId(section, index)}`}
-                  className="rounded-md bg-sky-soft px-2 py-1 text-xs font-semibold text-sky transition-colors hover:bg-white"
+                  className="rounded-full bg-sky-soft px-2.5 py-1 text-xs font-semibold text-sky transition-colors hover:bg-white"
                   aria-label={`Copy link to ${section.title}`}
                 >
                   Link
@@ -144,7 +146,7 @@ export function ChapterTabbedContent({
                 {editHref && (
                   <Link
                     href={editHref}
-                    className="rounded-md bg-orange-50 px-2 py-1 text-xs font-semibold text-accent transition-colors hover:bg-white"
+                    className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-accent transition-colors hover:bg-white"
                   >
                     Edit
                   </Link>
@@ -221,8 +223,8 @@ function buildTabs(blocks: ContentBlock[]): Tab[] {
   return [
     {
       id: "guide",
-      label: "Guide",
-      summary: "Read the procedure in order with screenshots placed inside the explanation.",
+      label: "Full guide",
+      summary: "Read the full chapter in order with screenshots and links kept in their original context.",
       sections,
     },
     {
@@ -362,6 +364,19 @@ function FormattedText({ text }: { text: string }) {
           </li>
         ))}
       </ul>
+    );
+  }
+
+  if (isImportantText(text)) {
+    return (
+      <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-[15px] leading-7 text-ink">
+        {lines.map((line, index) => (
+          <p key={`${line}-${index}`}>
+            <span className="font-semibold text-accent">Important: </span>
+            {cleanDisplayText(line).replace(/^important\s*(note)?\s*[:.-]?\s*/i, "")}
+          </p>
+        ))}
+      </div>
     );
   }
 
@@ -534,6 +549,10 @@ function sectionPreview(section: GuideSection) {
 
 function stripListMarker(text: string) {
   return text.replace(BULLET_PATTERN, "").replace(/^step\s*#?\s*\d+\s*[:.-]?\s*/i, "").trim();
+}
+
+function isImportantText(text: string) {
+  return /^important\s*(note)?\s*[:.-]?/i.test(text.trim());
 }
 
 function humanImageTitle(title: string) {
