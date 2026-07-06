@@ -1,0 +1,16 @@
+export const SEARCH_EXAMPLES = [
+  "FDIS",
+  "Auto Split OD",
+  "MCT",
+  "Dubai Stopover",
+  "Lounge Access during OLCI",
+  "Sporting Equipment",
+  "Falcon Handling",
+  "Extra Seat / CBBG",
+  "baggage upgrade",
+  "name correction",
+  "wheelchair",
+  "WorldTracer",
+  "OLCI",
+  "interline",
+];
