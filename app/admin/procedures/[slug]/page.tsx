@@ -8,11 +8,12 @@ import {
   updateProcedureContent,
 } from "@/app/admin/procedures/actions";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import type { JsonValue } from "@/lib/types";
+import type { ContentBlock, JsonValue } from "@/lib/types";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 type ProcedureDetail = {
+  chapter_id: string | null;
   id: string;
   title: string;
   slug: string;
@@ -49,6 +50,19 @@ type ProcedureDetail = {
     | null;
 };
 
+type SourceChapter = {
+  id: string;
+  chapter_number: number;
+  title: string;
+  slug: string;
+  body_text: string;
+  content_blocks: ContentBlock[];
+  page_start: number | null;
+  page_end: number | null;
+  source_version: string | null;
+  updated_at: string | null;
+};
+
 export default async function AdminProcedureDetailPage({
   params,
 }: {
@@ -77,6 +91,7 @@ export default async function AdminProcedureDetailPage({
     .select(
       [
         "id",
+        "chapter_id",
         "title",
         "slug",
         "category",
@@ -109,6 +124,14 @@ export default async function AdminProcedureDetailPage({
   const procedure = data as unknown as ProcedureDetail;
   const chapter = firstChapter(procedure.chapters);
   const canArchive = role.role === "admin" || role.role === "owner";
+  const { data: sourceChapterData } = procedure.chapter_id
+    ? await supabase
+        .from("chapters")
+        .select("id, chapter_number, title, slug, body_text, content_blocks, page_start, page_end, source_version, updated_at")
+        .eq("id", procedure.chapter_id)
+        .single()
+    : { data: null };
+  const sourceChapter = sourceChapterData as SourceChapter | null;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -182,7 +205,10 @@ export default async function AdminProcedureDetailPage({
             <TextSection title="Customer script" value={procedure.customer_script} isScript />
             <TextSection title="SPRINT comment template" value={procedure.sprint_comment_template} isScript />
             <TextSection title="Salesforce classification" value={procedure.salesforce_classification} />
-            <EditProcedureForm procedure={procedure} />
+            <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+              <SourceChapterPanel sourceChapter={sourceChapter} fallbackChapter={chapter} />
+              <EditProcedureForm procedure={procedure} />
+            </div>
           </div>
 
           <aside className="space-y-5">
@@ -335,6 +361,136 @@ function EditProcedureForm({ procedure }: { procedure: ProcedureDetail }) {
           </button>
         </div>
       </form>
+    </section>
+  );
+}
+
+function SourceChapterPanel({
+  sourceChapter,
+  fallbackChapter,
+}: {
+  sourceChapter: SourceChapter | null;
+  fallbackChapter: ReturnType<typeof firstChapter>;
+}) {
+  if (!sourceChapter) {
+    return (
+      <section className="content-card quick-card p-5 sm:p-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+          Linked source chapter
+        </p>
+        <h2 className="mt-2 font-display text-xl font-semibold text-ink">Source preview unavailable</h2>
+        <p className="mt-3 text-sm leading-6 text-ink-muted">
+          This procedure is not linked to a source chapter record with readable text yet.
+          {fallbackChapter ? " Open the linked chapter from the source panel to review it." : ""}
+        </p>
+      </section>
+    );
+  }
+
+  const preview = sourceChapter.body_text.trim().slice(0, 2200);
+  const textBlocks = safeTextBlocks(sourceChapter.content_blocks);
+  const linkBlocks = safeLinkBlocks(sourceChapter.content_blocks);
+  const imageCount = sourceChapter.content_blocks.filter((block) => block.type === "image").length;
+
+  return (
+    <section className="content-card quick-card p-5 sm:p-6">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+        Linked source chapter
+      </p>
+      <h2 className="mt-2 font-display text-xl font-semibold text-ink">
+        Ch. {String(sourceChapter.chapter_number).padStart(2, "0")} - {sourceChapter.title}
+      </h2>
+      <p className="mt-3 rounded-xl border border-warn/20 bg-warn/10 p-3 text-xs leading-5 text-ink-muted">
+        Draft procedure content only from the linked source chapter. Do not add unsupported policy.
+      </p>
+
+      <dl className="mt-4 space-y-3 text-sm">
+        {sourceChapter.source_version && <Fact label="Source" value={sourceChapter.source_version} />}
+        {pageRange(sourceChapter.page_start, sourceChapter.page_end) && (
+          <Fact label="Pages" value={pageRange(sourceChapter.page_start, sourceChapter.page_end)} />
+        )}
+        {sourceChapter.updated_at && <Fact label="Updated" value={safeDate(sourceChapter.updated_at)} />}
+      </dl>
+
+      <Link
+        href={`/chapter/${sourceChapter.slug}`}
+        className="mt-4 inline-flex rounded-full bg-navy px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent"
+      >
+        Open source chapter
+      </Link>
+
+      {preview && (
+        <div className="mt-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+            Source text preview
+          </h3>
+          <pre className="mt-2 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-xl border border-border bg-white p-4 text-xs leading-6 text-ink-muted">
+            {preview}
+            {sourceChapter.body_text.length > preview.length ? "\n\n..." : ""}
+          </pre>
+        </div>
+      )}
+
+      {(textBlocks.length > 0 || linkBlocks.length > 0 || imageCount > 0) && (
+        <div className="mt-5 space-y-4 border-t border-border pt-5">
+          {textBlocks.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                Readable text blocks
+              </h3>
+              <div className="mt-2 space-y-2">
+                {textBlocks.map((block, index) => (
+                  <p
+                    key={`${block}-${index}`}
+                    className="rounded-lg border border-border bg-white p-3 text-xs leading-5 text-ink-muted"
+                  >
+                    {block}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {linkBlocks.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                Source links
+              </h3>
+              <div className="mt-2 space-y-2">
+                {linkBlocks.map((block, index) => (
+                  <a
+                    key={`${block.url}-${index}`}
+                    href={block.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block rounded-lg border border-blue-200 bg-sky-soft p-3 text-xs font-semibold text-sky transition-colors hover:border-sky hover:bg-white"
+                  >
+                    {block.title}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {imageCount > 0 && (
+            <p className="rounded-lg border border-border bg-white p-3 text-xs leading-5 text-ink-muted">
+              {imageCount} image block{imageCount === 1 ? "" : "s"} available in the source chapter.
+              Open the source chapter to review screenshots in context.
+            </p>
+          )}
+        </div>
+      )}
+
+      {sourceChapter.body_text && (
+        <details className="mt-5 rounded-xl border border-border bg-white">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-ink">
+            Show full source text
+          </summary>
+          <pre className="max-h-[560px] overflow-auto whitespace-pre-wrap border-t border-border p-4 text-xs leading-6 text-ink-muted">
+            {sourceChapter.body_text}
+          </pre>
+        </details>
+      )}
     </section>
   );
 }
@@ -521,6 +677,12 @@ function formatSourcePages(pages: number[]) {
   return `Pages ${sorted.join(", ")}`;
 }
 
+function pageRange(start: number | null, end: number | null) {
+  if (!start && !end) return "";
+  if (start === end || !end) return `Page ${start ?? end}`;
+  return `Pages ${start}-${end}`;
+}
+
 function safeDate(value: string | null) {
   if (!value) return "-";
   const date = new Date(value);
@@ -534,4 +696,23 @@ function safeDate(value: string | null) {
 
 function firstChapter(chapters: ProcedureDetail["chapters"]) {
   return Array.isArray(chapters) ? chapters[0] ?? null : chapters;
+}
+
+function safeTextBlocks(blocks: ContentBlock[]) {
+  return blocks
+    .filter((block) => block.type === "text" && block.text)
+    .map((block) => block.text?.replace(/\s+/g, " ").trim() ?? "")
+    .filter((text) => text.length > 60)
+    .slice(0, 4)
+    .map((text) => (text.length > 420 ? `${text.slice(0, 420)}...` : text));
+}
+
+function safeLinkBlocks(blocks: ContentBlock[]) {
+  return blocks
+    .filter((block) => block.type === "link" && block.url)
+    .slice(0, 5)
+    .map((block) => ({
+      title: (block.title || block.text || block.url || "Open source link").replace(/\s+/g, " ").trim(),
+      url: block.url ?? "#",
+    }));
 }
