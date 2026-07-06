@@ -4,7 +4,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SearchBar } from "@/components/SearchBar";
 import { SEARCH_EXAMPLES } from "@/lib/operational-content";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { buildSearchTerms, MIN_SEARCH_QUERY_LENGTH, plainSnippet } from "@/lib/search";
+import { buildSearchTerms, MIN_SEARCH_QUERY_LENGTH, plainSnippet, rankSearchResults } from "@/lib/search";
 import type { SearchResult } from "@/lib/types";
 
 type EnrichedSearchResult = SearchResult & {
@@ -12,6 +12,7 @@ type EnrichedSearchResult = SearchResult & {
   page_end?: number | null;
   search_keywords?: string[] | null;
   source_version?: string | null;
+  body_text?: string | null;
 };
 
 export default async function SearchPage({
@@ -82,7 +83,7 @@ async function search(query: string): Promise<EnrichedSearchResult[]> {
 
   const { data: chapters } = await supabase
     .from("chapters")
-    .select("id, page_start, page_end, search_keywords, source_version")
+    .select("id, page_start, page_end, search_keywords, source_version, body_text")
     .in("id", ids);
 
   const metadata = new Map(
@@ -93,11 +94,15 @@ async function search(query: string): Promise<EnrichedSearchResult[]> {
         page_end: chapter.page_end,
         search_keywords: chapter.search_keywords,
         source_version: chapter.source_version,
+        body_text: chapter.body_text,
       },
     ])
   );
 
-  return results.map((result) => ({ ...result, ...metadata.get(result.id) }));
+  return rankSearchResults(
+    results.map((result) => ({ ...result, ...metadata.get(result.id) })),
+    query
+  );
 }
 
 function SearchResultCard({ result }: { result: EnrichedSearchResult }) {

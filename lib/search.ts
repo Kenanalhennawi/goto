@@ -1,78 +1,112 @@
 export const MIN_SEARCH_QUERY_LENGTH = 2;
 export const MAX_SEARCH_QUERY_LENGTH = 120;
 const MAX_SEARCH_TERMS = 12;
+const NORMAL_SHORT_WORDS = new Set(["in", "to", "on", "of", "as", "is", "no", "if", "or", "an", "at", "by"]);
+
+export type RankableSearchResult = {
+  title: string;
+  snippet?: string | null;
+  rank?: number | null;
+  chapter_number?: number | null;
+  search_keywords?: string[] | null;
+  body_text?: string | null;
+};
+
+const CODE_ALIASES: Record<string, string[]> = {
+  WCHR: ["wheelchair"],
+  WCHS: ["wheelchair"],
+  WCHC: ["wheelchair"],
+  WCBD: ["wheelchair battery dry"],
+  WCBW: ["wheelchair battery wet"],
+  WCLB: ["wheelchair lithium battery"],
+  DPNA: ["disabled passenger"],
+  BLND: ["visual impairment"],
+  DEAF: ["hearing impairment"],
+  MAAS: ["meet and assist"],
+  MASD: ["meet and assist"],
+  MEDA: ["medical"],
+  OXYG: ["oxygen"],
+  OXYGEN: ["oxygen"],
+  O2: ["oxygen"],
+  CPAP: ["medical respiratory device", "oxygen"],
+  EXST: ["extra seat"],
+  CBBG: ["cabin baggage seat"],
+  SEAT: ["seat"],
+  SPEQ: ["sporting equipment", "sports equipment", "weapon"],
+  XBAG: ["excess baggage"],
+  BAGG: ["baggage"],
+  BRB: ["blue ribbon bags", "baggage"],
+  WT: ["worldtracer"],
+  SPML: ["special meal"],
+  AVML: ["asian vegetarian meal"],
+  CHML: ["child meal"],
+  VGML: ["vegetarian meal"],
+  BBML: ["baby meal"],
+  KSML: ["kosher meal"],
+  MOML: ["muslim meal"],
+  HNML: ["hindu meal"],
+  DBML: ["diabetic meal"],
+  GFML: ["gluten free meal"],
+  LCML: ["low calorie meal"],
+  LFML: ["low fat meal"],
+  LSML: ["low salt meal"],
+  NLML: ["non lactose meal"],
+  VJML: ["vegetarian jain meal"],
+  VLML: ["vegetarian lacto ovo meal"],
+  SVAN: ["service animal"],
+  PETC: ["pet in cabin"],
+  AVIH: ["animal in hold"],
+  CCHK: ["card verification"],
+  VIOK: ["visa ok"],
+  OKTB: ["ok to board"],
+  FDIS: ["flight disruption", "schedule change", "cancellation"],
+  OLCI: ["online check-in", "online checkin"],
+  DCS: ["check-in system"],
+  DSO: ["dubai stopover"],
+  LNGL: ["lounge"],
+  MCT: ["minimum connection time", "connection time", "transfer time"],
+};
 
 const SEARCH_ALIASES: Record<string, string[]> = {
   "auto split od": ["auto split od", "fz-fz connection booking", "od split", "connection booking"],
   "auto split": ["auto split", "auto split od", "connection booking"],
-  mct: ["mct", "minimum connection time", "connection time", "transfer time"],
   "minimum connection time": ["minimum connection time", "connection time", "transfer time"],
   "dubai stopover": ["dubai stopover", "dso", "stopover"],
-  dso: ["dso", "dubai stopover", "stopover"],
   "lounge access during olci": ["lounge access", "olci lounge", "online check-in lounge"],
   "lounge access": ["lounge access", "olci lounge"],
   "olci lounge": ["olci lounge", "online check-in lounge", "lounge access"],
-  speq: ["speq", "sporting equipment", "sports equipment", "weapon"],
   "sporting equipment": ["sporting equipment", "speq", "sports equipment", "weapon"],
   "sports equipment": ["sports equipment", "sporting equipment", "speq"],
   "falcon handling": ["falcon handling", "falcon", "birds", "animal carriage"],
   falcon: ["falcon", "falcon handling", "birds"],
   birds: ["birds", "falcon", "animal carriage"],
-  exst: ["exst", "extra seat"],
-  cbbg: ["cbbg", "cabin baggage", "cabin baggage seat"],
   "extra seat": ["extra seat", "exst", "cbbg"],
   "baggage upgrade": ["baggage upgrade", "excess baggage"],
-  fdis: ["fdis", "flight disruption", "schedule change", "cancellation"],
   "flight disruption": ["flight disruption", "schedule change", "cancellation"],
-  olci: ["olci", "online check-in", "online checkin"],
   "online checkin": ["online checkin", "online check-in", "olci"],
   interline: ["interline", "connection", "transfer", "ek", "oal"],
   wheelchair: ["wheelchair", "wchr", "wchs", "wchc"],
-  wchr: ["wchr", "wheelchair"],
-  wchs: ["wchs", "wheelchair"],
-  wchc: ["wchc", "wheelchair"],
   "name correction": ["name correction", "name change", "ncfb", "ncfe"],
   "name change": ["name change", "name correction"],
-  ncfb: ["ncfb", "name correction"],
-  ncfe: ["ncfe", "name correction"],
   "government deals": ["government deals", "esaad", "alsaada", "gdrfa", "immigration deal"],
   esaad: ["esaad", "government deals"],
   alsaada: ["alsaada", "government deals"],
   gdrfa: ["gdrfa", "immigration deal", "government deals"],
   payment: ["payment", "payment failure", "cchk", "card verification"],
-  cchk: ["cchk", "card verification"],
-  viok: ["viok", "visa ok"],
-  oktb: ["oktb", "ok to board"],
   visa: ["visa", "visa change", "tourist visa"],
-  meda: ["meda", "medical"],
-  dpna: ["dpna", "disabled passenger"],
   oxygen: ["oxygen", "o2", "cpap"],
-  o2: ["o2", "oxygen"],
-  cpap: ["cpap", "oxygen"],
   "service animal": ["service animal", "svan", "guide dog"],
-  svan: ["svan", "service animal"],
   bag: ["baggage"],
   bags: ["baggage"],
-  brb: ["brb", "blue ribbon bags", "baggage"],
-  wt: ["wt", "worldtracer"],
   worldtracer: ["worldtracer", "delayed baggage", "damaged baggage", "lost baggage"],
   "world-tracer": ["worldtracer"],
   world: ["worldtracer"],
   tracer: ["worldtracer"],
   "business lounge": ["business lounge", "t2 lounge", "lngl"],
-  lngl: ["lngl", "business lounge"],
   "meet and assist": ["meet and assist", "masd"],
-  masd: ["masd", "meet and assist"],
   "staff tickets": ["staff tickets", "id50", "id90", "staff travel"],
-  id50: ["id50", "staff tickets"],
-  id90: ["id90", "staff tickets"],
   "special meals": ["special meals", "spml", "avml", "chml", "vgml"],
-  spml: ["spml", "special meals"],
-  avml: ["avml", "special meals"],
-  chml: ["chml", "special meals"],
-  vgml: ["vgml", "special meals"],
   ssr: ["ssr", "special request", "cake", "flower", "fruit basket"],
-  dcs: ["dcs", "check-in"],
   sprint: ["sprint", "booking system"],
   skywards: ["skywards", "miles", "frequent flyer"],
   salesforce: ["salesforce", "case classification"],
@@ -83,6 +117,14 @@ const SEARCH_ALIASES: Record<string, string[]> = {
 export function buildSearchTerms(query: string) {
   const trimmed = query.trim().slice(0, MAX_SEARCH_QUERY_LENGTH);
   if (trimmed.length < MIN_SEARCH_QUERY_LENGTH) return "";
+
+  const code = operationalCodeFromQuery(trimmed);
+  if (code) {
+    return phrasesForCode(code)
+      .map((phrase) => phraseToTsQuery(phrase))
+      .filter(Boolean)
+      .join(" | ");
+  }
 
   const aliasPhrases = findSearchAlias(trimmed);
   if (aliasPhrases) {
@@ -96,8 +138,80 @@ export function buildSearchTerms(query: string) {
   return phraseToTsQuery(trimmed);
 }
 
+export function isOperationalCodeQuery(query: string) {
+  return Boolean(operationalCodeFromQuery(query));
+}
+
+export function rankSearchResults<T extends RankableSearchResult>(results: T[], query: string) {
+  const code = operationalCodeFromQuery(query);
+  const normalizedQuery = normalize(query);
+  const aliasPhrases = code ? phrasesForCode(code).slice(1) : findSearchAlias(query) ?? [];
+
+  return [...results].sort((a, b) => {
+    const scoreA = scoreResult(a, normalizedQuery, code, aliasPhrases);
+    const scoreB = scoreResult(b, normalizedQuery, code, aliasPhrases);
+    if (scoreA !== scoreB) return scoreB - scoreA;
+    return (b.rank ?? 0) - (a.rank ?? 0);
+  });
+}
+
+function scoreResult(
+  result: RankableSearchResult,
+  normalizedQuery: string,
+  code: string | null,
+  aliasPhrases: string[]
+) {
+  let score = result.rank ?? 0;
+  const title = result.title ?? "";
+  const snippet = result.snippet ?? "";
+  const body = result.body_text ?? "";
+  const keywords = result.search_keywords ?? [];
+
+  if (code) {
+    if (keywords.some((keyword) => tokenEquals(keyword, code))) score += 10000;
+    if (hasStandaloneToken(title, code)) score += 8000;
+    if (hasStandaloneToken(snippet, code)) score += 6500;
+    if (hasStandaloneToken(body, code)) score += 5000;
+  }
+
+  if (keywords.some((keyword) => normalize(keyword) === normalizedQuery)) score += 4200;
+  if (normalize(title) === normalizedQuery || hasStandaloneToken(title, normalizedQuery)) score += 3600;
+  if (hasStandaloneToken(snippet, normalizedQuery)) score += 2200;
+  if (hasStandaloneToken(body, normalizedQuery)) score += 1200;
+
+  for (const phrase of aliasPhrases) {
+    const normalizedPhrase = normalize(phrase);
+    if (!normalizedPhrase) continue;
+    if (keywords.some((keyword) => normalize(keyword).includes(normalizedPhrase))) score += 1800;
+    if (normalize(title).includes(normalizedPhrase)) score += 1500;
+    if (normalize(snippet).includes(normalizedPhrase)) score += 900;
+    if (normalize(body).includes(normalizedPhrase)) score += 400;
+  }
+
+  return score;
+}
+
+function operationalCodeFromQuery(query: string) {
+  const trimmed = query.trim();
+  const compact = trimmed.replace(/\s+/g, "");
+  if (!/^[A-Za-z0-9]{2,6}$/.test(compact)) return null;
+  if (NORMAL_SHORT_WORDS.has(compact.toLowerCase())) return null;
+
+  const upper = compact.toUpperCase();
+  if (CODE_ALIASES[upper]) return upper;
+  if (compact === trimmed && trimmed === upper) return upper;
+  return null;
+}
+
+function phrasesForCode(code: string) {
+  return [code.toLowerCase(), ...(CODE_ALIASES[code] ?? [])].slice(0, 6);
+}
+
 function findSearchAlias(query: string) {
-  const normalized = query.toLowerCase().replace(/\s+/g, " ").trim();
+  const normalized = normalize(query);
+  const codeAlias = CODE_ALIASES[query.trim().toUpperCase()];
+  if (codeAlias) return [query.trim().toLowerCase(), ...codeAlias];
+
   const phraseAlias = Object.keys(SEARCH_ALIASES)
     .sort((a, b) => b.length - a.length)
     .find((alias) => normalized.includes(alias));
@@ -116,6 +230,25 @@ function phraseToTsQuery(phrase: string) {
   if (terms.length === 0) return "";
   if (terms.length === 1) return terms[0];
   return `(${terms.join(" & ")})`;
+}
+
+function hasStandaloneToken(value: string, token: string) {
+  const normalizedToken = normalize(token);
+  if (!normalizedToken) return false;
+  return tokens(value).includes(normalizedToken);
+}
+
+function tokenEquals(value: string, token: string) {
+  const normalizedToken = normalize(token);
+  return tokens(value).some((candidate) => candidate === normalizedToken);
+}
+
+function tokens(value: string) {
+  return normalize(value).split(" ").filter(Boolean);
+}
+
+function normalize(value: string) {
+  return plainSnippet(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 export function plainSnippet(value?: string | null) {
