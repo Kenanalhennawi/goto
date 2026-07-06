@@ -57,6 +57,21 @@ export async function PATCH(
     return NextResponse.json({ error: "Only the owner can grant owner access." }, { status: 403 });
   }
 
+  if (targetRole?.role === "owner" && role !== "owner") {
+    const { count: ownerCount, error: ownerCountError } = await supabase
+      .from("user_roles")
+      .select("user_id", { count: "exact", head: true })
+      .eq("role", "owner");
+
+    if (ownerCountError) {
+      return NextResponse.json({ error: "Could not verify owner accounts." }, { status: 500 });
+    }
+
+    if ((ownerCount ?? 0) <= 1) {
+      return NextResponse.json({ error: "You cannot remove the last owner." }, { status: 400 });
+    }
+  }
+
   const { error } = await supabase
     .from("user_roles")
     .update({ role })

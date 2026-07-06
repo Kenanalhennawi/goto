@@ -78,6 +78,12 @@ export async function SiteHeader() {
               >
                 Admin
               </Link>
+              <Link
+                href="/account"
+                className="hidden rounded-lg px-3 py-2 font-medium text-ink-muted transition-colors hover:bg-sky-soft hover:text-sky sm:inline-flex"
+              >
+                Account
+              </Link>
               <div className="hidden items-center gap-2 rounded-lg bg-sky-soft px-3 py-2 sm:flex">
                 <span className="max-w-36 truncate text-xs font-semibold text-ink">
                   {displayName}

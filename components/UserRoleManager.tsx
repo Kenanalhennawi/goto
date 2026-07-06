@@ -7,6 +7,7 @@ interface UserRow {
   user_id: string;
   role: UserRole;
   full_name: string | null;
+  email: string | null;
   created_at: string;
 }
 
@@ -63,8 +64,9 @@ export function UserRoleManager({
           {error}
         </p>
       )}
-      <div className="grid grid-cols-[1fr_150px_230px] gap-3 border-b border-border bg-sky-soft px-4 py-3 text-xs font-semibold uppercase tracking-wider text-ink-muted">
+      <div className="grid grid-cols-[1fr_180px_150px_230px] gap-3 border-b border-border bg-sky-soft px-4 py-3 text-xs font-semibold uppercase tracking-wider text-ink-muted">
         <span>User</span>
+        <span>Created</span>
         <span>Current role</span>
         <span>Set access</span>
       </div>
@@ -78,13 +80,15 @@ export function UserRoleManager({
         return (
           <div
             key={user.user_id}
-            className="grid grid-cols-[1fr_150px_230px] items-center gap-3 border-b border-border px-4 py-3 text-sm last:border-0"
+            className="grid grid-cols-[1fr_180px_150px_230px] items-center gap-3 border-b border-border px-4 py-3 text-sm last:border-0"
           >
             <div>
               <p className="font-semibold text-ink">{user.full_name ?? "Unnamed user"}</p>
+              <p className="text-xs text-ink-muted">{user.email ?? "Email not available"}</p>
               <p className="font-mono text-xs text-ink-faint">{user.user_id}</p>
               {isSelf && <p className="mt-1 text-xs font-semibold text-accent">This is you</p>}
             </div>
+            <span className="text-xs text-ink-muted">{safeDate(user.created_at)}</span>
             <RoleBadge role={user.role} />
             <select
               value={user.role}
@@ -119,4 +123,14 @@ function RoleBadge({ role }: { role: UserRole }) {
       {ROLE_LABELS[role]}
     </span>
   );
+}
+
+function safeDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  }).format(date);
 }

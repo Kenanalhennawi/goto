@@ -24,6 +24,11 @@ export default async function AdminUsersPage() {
     .select("user_id, role, full_name, created_at")
     .order("created_at", { ascending: false });
 
+  const usersWithEmail = (users ?? []).map((row) => ({
+    ...row,
+    email: row.user_id === user.id ? user.email ?? null : inferEmail(row.full_name),
+  }));
+
   return (
     <div className="flex min-h-full flex-col">
       <SiteHeader />
@@ -39,11 +44,16 @@ export default async function AdminUsersPage() {
         </section>
 
         <UserRoleManager
-          users={users ?? []}
+          users={usersWithEmail}
           currentUserId={user.id}
           currentRole={currentRole.role}
         />
       </main>
     </div>
   );
+}
+
+function inferEmail(value: string | null) {
+  if (!value || !value.includes("@")) return null;
+  return value;
 }
