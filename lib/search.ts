@@ -2,6 +2,7 @@ export const MIN_SEARCH_QUERY_LENGTH = 2;
 export const MAX_SEARCH_QUERY_LENGTH = 120;
 const MAX_SEARCH_TERMS = 12;
 const NORMAL_SHORT_WORDS = new Set(["in", "to", "on", "of", "as", "is", "no", "if", "or", "an", "at", "by"]);
+export type FieldQueryKind = "passenger_advice" | "restrictions" | "cut_off" | "who_can_action" | "approval" | "channel";
 
 export type RankableSearchResult = {
   title: string;
@@ -219,9 +220,44 @@ export function containsArabic(value: string) {
   return /[\u0600-\u06FF]/.test(value);
 }
 
+export function detectFieldQuery(query: string): FieldQueryKind | null {
+  const normalized = normalize(query);
+  if (/\b(passenger advice|tell passenger|customer advice|what should i tell)\b/.test(normalized)) {
+    return "passenger_advice";
+  }
+  if (/\b(not allowed|restriction|restrictions|cannot)\b/.test(normalized)) return "restrictions";
+  if (/\b(cut off|cutoff|deadline)\b/.test(normalized)) return "cut_off";
+  if (/\b(who can action|who handles|contact centre add|add service|can contact centre)\b/.test(normalized)) {
+    return "who_can_action";
+  }
+  if (/\b(approval required|required approval|supervisor approval)\b/.test(normalized)) return "approval";
+  if (/\b(channel|channels|where can|who handles it)\b/.test(normalized)) return "channel";
+  return null;
+}
+
+export function fieldQueryMessage(kind: FieldQueryKind | null) {
+  switch (kind) {
+    case "passenger_advice":
+      return "Showing cards with passenger advice.";
+    case "restrictions":
+      return "Showing cards with restrictions / not allowed rules.";
+    case "cut_off":
+      return "Showing cards with cut-off or timing information.";
+    case "who_can_action":
+      return "Showing cards by who can action the service.";
+    case "approval":
+      return "Showing cards with approval guidance.";
+    case "channel":
+      return "Showing cards by allowed service channels.";
+    default:
+      return "";
+  }
+}
+
 export function scoreOperationalCard(card: RankableOperationalCard, query: string) {
   const code = operationalCodeFromQuery(query);
   const normalizedQuery = normalize(query);
+  const fieldKind = detectFieldQuery(query);
   const aliasPhrases = code ? phrasesForCode(code).slice(1) : findSearchAlias(query) ?? [];
   const serviceCode = (card.service_code ?? "").toUpperCase();
   const title = normalize(card.title);
@@ -257,20 +293,27 @@ export function scoreOperationalCard(card: RankableOperationalCard, query: strin
     if (fields.includes(normalizedPhrase)) score += 1800;
   }
 
-  if (/\b(cut off|cutoff|deadline|time)\b/.test(normalizedQuery) && cutOff) score += 8500;
-  if (/\b(mct|timing rule|reference rule|connection time|minimum connection)\b/.test(normalizedQuery) && isReferenceCard(card)) {
+  const reference = isReferenceCard(card);
+  const specificReferenceQuery = /\b(mct|timing rule|reference rule|connection|transfer|connection time|minimum connection)\b/.test(normalizedQuery);
+
+  if (fieldKind === "cut_off" && cutOff) score += reference ? 2600 : 8500;
+  if (!fieldKind && /\b(time)\b/.test(normalizedQuery) && cutOff) score += reference ? 1800 : 3500;
+  if (specificReferenceQuery && reference) {
     score += 12000;
   }
-  if (/\b(passenger advice|tell passenger|customer advice)\b/.test(normalizedQuery) && hasItems(card.passenger_advice)) {
-    score += 9000;
+  if (fieldKind === "passenger_advice" && hasItems(card.passenger_advice)) {
+    score += reference ? 3000 : 9000;
   }
-  if (/\b(not allowed|cannot|restriction)\b/.test(normalizedQuery) && hasItems(card.not_allowed)) {
-    score += 9000;
+  if (fieldKind === "restrictions" && hasItems(card.not_allowed)) {
+    score += reference ? 3000 : 9000;
   }
-  if (/\b(who can action|contact centre add|add service|can contact centre)\b/.test(normalizedQuery) && hasItems(card.who_can_action)) {
-    score += 9000;
+  if (fieldKind === "who_can_action" && hasItems(card.who_can_action)) {
+    score += reference ? 3000 : 9000;
   }
-  if (serviceType.includes("reference") || category.includes("reference")) score += 500;
+  if (fieldKind === "approval" && (card.required_information || fields.includes("approval"))) score += reference ? 2000 : 6500;
+  if (fieldKind === "channel" && hasItems(card.channels)) score += reference ? 2500 : 7500;
+  if (reference && fieldKind && !specificReferenceQuery && serviceCode !== (code ?? "")) score -= 3500;
+  if (serviceType.includes("reference") || category.includes("reference")) score += specificReferenceQuery ? 500 : 0;
 
   return score;
 }
@@ -312,6 +355,24 @@ export function operationalCardPreview(card: RankableOperationalCard) {
     card.when_to_use ?? "",
   ];
   return plainSnippet(candidates.find((item) => item.trim()) ?? "").slice(0, 220);
+}
+
+export function compactTimingPreview(value: string, card: Pick<RankableOperationalCard, "service_code" | "service_type" | "category">, maxLines = 2) {
+  const text = value.trim();
+  const lines = (text.includes("\n") ? text.split(/\r?\n/) : text.includes(";") ? text.split(";") : [text])
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (card.service_code?.toUpperCase() === "MCT") {
+    const preferred = [
+      combineHeadingWithNext(lines, "T2 -> T2"),
+      combineHeadingWithNext(lines, "T3 -> T3"),
+      combineHeadingWithNext(lines, "T2/T3 -> T1"),
+    ].filter(Boolean);
+    if (preferred.length) return preferred.slice(0, maxLines);
+  }
+
+  return lines.slice(0, maxLines);
 }
 
 function scoreResult(
@@ -382,6 +443,13 @@ function operationalCardSearchText(card: RankableOperationalCard) {
 
 function hasItems(value: unknown[] | null | undefined) {
   return readableJsonItems(value).length > 0;
+}
+
+function combineHeadingWithNext(lines: string[], heading: string) {
+  const index = lines.findIndex((line) => line.toLowerCase() === heading.toLowerCase());
+  if (index === -1) return "";
+  const next = lines[index + 1];
+  return next ? `${lines[index]} ${next}` : lines[index];
 }
 
 function workAreaScore(result: RankableSearchResult, topic: string | null, code: string | null) {

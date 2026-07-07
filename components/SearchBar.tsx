@@ -11,6 +11,7 @@ import {
   MIN_SEARCH_QUERY_LENGTH,
   plainSnippet,
   readableJsonItems,
+  compactTimingPreview,
   timingLabelForCard,
 } from "@/lib/search";
 import type { ChapterSearchResult, OperationalCardSearchResult, UnifiedSearchResult } from "@/lib/types";
@@ -76,7 +77,9 @@ export function SearchBar({
     if (result.type === "operational_card") return kind !== "Images";
     return resultKind(result) === kind;
   });
+  const visibleResults = filteredResults.slice(0, 5);
   const isArabicNoResult = containsArabic(query) && !loading && filteredResults.length === 0;
+  const trimmedQuery = query.trim();
 
   return (
     <div ref={wrapRef} className="relative">
@@ -114,7 +117,7 @@ export function SearchBar({
       </form>
 
       {open && query.trim().length >= MIN_SEARCH_QUERY_LENGTH && (
-        <div className="absolute z-50 mt-2 max-h-[34rem] w-full overflow-y-auto rounded-2xl border border-border bg-white shadow-2xl shadow-slate-900/15">
+        <div className="absolute z-50 mt-2 max-h-[25rem] w-full overflow-y-auto rounded-2xl border border-border bg-white shadow-2xl shadow-slate-900/15">
           <div className="sticky top-0 z-10 border-b border-border bg-white px-3 py-2">
             <div className="flex gap-1 overflow-x-auto">
               {(["All", "Steps", "Rules", "Images"] as ResultKind[]).map((option) => (
@@ -165,7 +168,7 @@ export function SearchBar({
             </div>
           )}
           {!loading &&
-            filteredResults.map((result) => (
+            visibleResults.map((result) => (
               result.type === "operational_card" ? (
                 <OperationalDropdownItem
                   key={`card-${result.id}`}
@@ -180,6 +183,15 @@ export function SearchBar({
                 />
               )
             ))}
+          {!loading && filteredResults.length > 0 && (
+            <Link
+              href={`/search?q=${encodeURIComponent(trimmedQuery)}`}
+              onClick={() => setOpen(false)}
+              className="sticky bottom-0 block border-t border-border bg-white px-4 py-3 text-center text-xs font-bold text-sky hover:text-accent"
+            >
+              View all results for &quot;{trimmedQuery}&quot;
+            </Link>
+          )}
         </div>
       )}
     </div>
@@ -196,6 +208,7 @@ function OperationalDropdownItem({
   const timingLabel = timingLabelForCard(result);
   const openLabel = isReferenceCard(result) ? "Open card" : "Open service";
   const channels = readableJsonItems(result.channels).slice(0, 2);
+  const timingLines = result.cut_off_time ? compactTimingPreview(result.cut_off_time, result, 1) : [];
 
   return (
     <Link
@@ -216,7 +229,7 @@ function OperationalDropdownItem({
       </div>
       {result.cut_off_time ? (
         <p className="mt-1.5 line-clamp-1 text-xs font-semibold leading-relaxed text-ink">
-          <span className="text-accent">{timingLabel}:</span> {plainSnippet(result.cut_off_time)}
+          <span className="text-accent">{timingLabel}:</span> {timingLines[0] ?? plainSnippet(result.cut_off_time)}
         </p>
       ) : null}
       {plainSnippet(result.snippet) ? (

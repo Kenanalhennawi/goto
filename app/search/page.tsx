@@ -2,11 +2,13 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SearchBar } from "@/components/SearchBar";
-import { SEARCH_EXAMPLES } from "@/lib/operational-content";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   buildSearchTerms,
+  compactTimingPreview,
   containsArabic,
+  detectFieldQuery,
+  fieldQueryMessage,
   isReferenceCard,
   MIN_SEARCH_QUERY_LENGTH,
   operationalCardPreview,
@@ -30,6 +32,7 @@ type ProcedureSearchRow = Parameters<typeof scoreOperationalCard>[0] & {
   source_version: string | null;
   summary: string | null;
 };
+const EMPTY_SUGGESTIONS = ["MCT", "EXST", "CBBG", "SPEQ", "Falcon", "OLCI Lounge", "FDIS", "WCHR"];
 
 export default async function SearchPage({
   searchParams,
@@ -39,6 +42,7 @@ export default async function SearchPage({
   const { q } = await searchParams;
   const query = (q ?? "").trim();
   const results = query.length >= MIN_SEARCH_QUERY_LENGTH ? await search(query) : [];
+  const fieldMessage = fieldQueryMessage(detectFieldQuery(query));
 
   return (
     <div className="flex min-h-full flex-col">
@@ -65,6 +69,12 @@ export default async function SearchPage({
           <SearchBar defaultValue={query} />
         </section>
 
+        {fieldMessage && results.length > 0 ? (
+          <p className="mb-4 rounded-xl border border-blue-200 bg-sky-soft px-4 py-3 text-sm font-semibold text-sky">
+            {fieldMessage}
+          </p>
+        ) : null}
+
         {query.length < MIN_SEARCH_QUERY_LENGTH ? (
           <EmptyState message="Type at least two characters to search by issue, SSR, process, or keyword." />
         ) : results.length === 0 ? (
@@ -79,7 +89,7 @@ export default async function SearchPage({
           <div className="space-y-4">
             {results.map((result) => (
               result.type === "operational_card" ? (
-                <OperationalCardResult key={`card-${result.id}`} result={result} />
+                <OperationalCardResult key={`card-${result.id}`} result={result} query={query} />
               ) : (
                 <SearchResultCard key={`chapter-${result.id}`} result={result} />
               )
@@ -200,11 +210,13 @@ async function searchOperationalCards(
     }));
 }
 
-function OperationalCardResult({ result }: { result: OperationalCardSearchResult }) {
+function OperationalCardResult({ result, query }: { result: OperationalCardSearchResult; query: string }) {
   const channels = readableJsonItems(result.channels).slice(0, 3);
   const pages = sourcePagesLabel(result.source_pages);
   const timingLabel = timingLabelForCard(result);
   const openLabel = isReferenceCard(result) ? "Open card" : "Open service";
+  const timingLines = result.cut_off_time ? compactTimingPreview(result.cut_off_time, result, 2) : [];
+  const matchLabel = operationalMatchLabel(result, query);
 
   return (
     <article className="content-card border-blue-200 bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-accent sm:p-5">
@@ -212,6 +224,7 @@ function OperationalCardResult({ result }: { result: OperationalCardSearchResult
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Badge tone="blue">Operational Card</Badge>
+            <Badge tone="neutral">{matchLabel}</Badge>
             {result.service_code ? <Badge tone="orange">{result.service_code}</Badge> : null}
             <Badge tone="neutral">{result.service_type || result.category}</Badge>
             {pages ? <Badge tone="neutral">{pages}</Badge> : null}
@@ -221,9 +234,19 @@ function OperationalCardResult({ result }: { result: OperationalCardSearchResult
             {result.title}
           </h2>
           {result.cut_off_time ? (
-            <p className="mt-3 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-sm font-semibold text-ink">
-              <span className="text-accent">{timingLabel}:</span> {plainSnippet(result.cut_off_time).slice(0, 150)}
-            </p>
+            <div className="mt-3 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-sm font-semibold text-ink">
+              <p className="text-accent">{timingLabel}:</p>
+              <ul className="mt-1 space-y-1">
+                {timingLines.map((line) => (
+                  <li key={line} className="text-xs leading-5 text-ink">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+              {isReferenceCard(result) ? (
+                <p className="mt-2 text-[11px] font-semibold text-accent">Open card for full rule</p>
+              ) : null}
+            </div>
           ) : null}
           {result.snippet ? (
             <p className="mt-3 max-w-4xl text-sm leading-6 text-ink-muted">{result.snippet}</p>
@@ -262,6 +285,7 @@ function SearchResultCard({ result }: { result: ChapterSearchResult }) {
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Badge tone="blue">Chapter</Badge>
+            <Badge tone="neutral">Source chapter</Badge>
             <Badge tone="orange">Ch. {String(result.chapter_number).padStart(2, "0")}</Badge>
             {pages ? <Badge tone="neutral">{pages}</Badge> : null}
             {result.source_version ? <Badge tone="neutral">{result.source_version}</Badge> : null}
@@ -302,7 +326,7 @@ function EmptyState({ message }: { message: string }) {
       <p className="text-sm font-semibold text-ink">{message}</p>
       <p className="mt-2 text-sm text-ink-muted">Try one of these common operational searches:</p>
       <div className="mt-4 flex flex-wrap gap-2">
-        {SEARCH_EXAMPLES.map((example) => (
+        {EMPTY_SUGGESTIONS.map((example) => (
           <Link
             key={example}
             href={`/search?q=${encodeURIComponent(example)}`}
@@ -314,6 +338,13 @@ function EmptyState({ message }: { message: string }) {
       </div>
     </div>
   );
+}
+
+function operationalMatchLabel(result: OperationalCardSearchResult, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (result.service_code && normalized === result.service_code.toLowerCase()) return "Exact match";
+  if (detectFieldQuery(query)) return "Field match";
+  return "Operational match";
 }
 
 function Badge({
