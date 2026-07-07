@@ -4,6 +4,10 @@ import type { JsonValue } from "@/lib/types";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { canReviewProcedures, normalizeRoleLabel } from "@/lib/permissions";
+import {
+  isReferenceCard,
+  listQualityBadges,
+} from "@/lib/admin-procedure-quality";
 
 type SearchParams = {
   status?: string;
@@ -222,7 +226,7 @@ export default async function AdminProceduresPage({
           {rows.length > 0 ? (
             rows.map((procedure) => {
               const chapter = firstChapter(procedure.chapters);
-              const badges = qualityBadges(procedure);
+              const badges = listQualityBadges(procedure);
               const priority = reviewPriority(procedure);
 
               return (
@@ -405,7 +409,7 @@ function filterRows(rows: ProcedureListRow[], filters: SearchParams) {
 }
 
 function matchesQuality(row: ProcedureListRow, quality: string) {
-  const badges = qualityBadges(row);
+  const badges = listQualityBadges(row);
   if (quality === "ready") return badges.includes("Ready-looking");
   if (quality === "missing_deadline") return badges.includes(isReferenceCard(row) ? "Missing timing rule" : "Missing deadline");
   if (quality === "missing_passenger_advice") return badges.includes("Missing passenger advice");
@@ -419,7 +423,7 @@ function matchesQuality(row: ProcedureListRow, quality: string) {
 function qualitySummary(rows: ProcedureListRow[]) {
   return rows.reduce(
     (summary, row) => {
-      const badges = qualityBadges(row);
+      const badges = listQualityBadges(row);
       summary.total += 1;
       if (row.is_published) summary.published += 1;
       if (!row.is_published || row.review_status === "needs_review" || row.review_status === "draft") summary.drafts += 1;
@@ -448,7 +452,7 @@ function qualitySummary(rows: ProcedureListRow[]) {
 }
 
 function reviewPriority(row: ProcedureListRow): "High" | "Medium" | "Low" {
-  const badges = qualityBadges(row);
+  const badges = listQualityBadges(row);
   const isDraft = !row.is_published || row.review_status === "needs_review" || row.review_status === "draft";
   const critical = badges.some((badge) =>
     ["Missing deadline", "Missing timing rule", "Missing passenger advice", "Missing restrictions", "Generic filler"].includes(badge)
@@ -473,88 +477,6 @@ function firstChapter(chapters: ProcedureListRow["chapters"]) {
   return Array.isArray(chapters) ? chapters[0] ?? null : chapters;
 }
 
-function qualityBadges(procedure: ProcedureListRow) {
-  const badges: string[] = [];
-  const isReference = isReferenceCard(procedure);
-  if (!procedure.is_published || procedure.review_status === "needs_review" || procedure.review_status === "draft") {
-    badges.push("Draft");
-  } else {
-    badges.push("Published");
-  }
-  if (isReference && !hasText(procedure.cut_off_time)) badges.push("Missing timing rule");
-  if (!isReference && !hasText(procedure.cut_off_time)) badges.push("Missing deadline");
-  if (!hasItems(procedure.passenger_advice)) badges.push("Missing passenger advice");
-  if (!hasItems(procedure.not_allowed)) badges.push("Missing restrictions");
-  if (!hasItems(procedure.escalation_points)) badges.push("Missing escalation");
-  if (!hasText(procedure.source_confidence)) badges.push("Missing source confidence");
-  if (hasGenericFiller(procedure)) badges.push("Generic filler");
-  if (badges.length === 1) badges.push("Ready-looking");
-  return badges;
-}
-
-function isReferenceCard(card: Pick<ProcedureListRow, "service_code" | "service_type" | "category">) {
-  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
-  return (
-    card.service_code?.toUpperCase() === "MCT" ||
-    type.includes("reference") ||
-    type.includes("rule") ||
-    type.includes("timing") ||
-    type.includes("connection reference")
-  );
-}
-
-const GENERIC_FILLER_PHRASES = [
-  "source chapter",
-  "source-supported",
-  "linked source",
-  "quality review",
-  "check the source",
-  "according to source",
-  "source rules",
-  "source process",
-  "pending source review",
-  "draft operational card",
-  "use this card after",
-  "where source allows",
-  "escalate unclear",
-];
-
-function hasGenericFiller(
-  procedure: Pick<
-    ProcedureListRow,
-    | "summary"
-    | "when_to_use"
-    | "required_information"
-    | "system_steps"
-    | "passenger_advice"
-    | "allowed"
-    | "not_allowed"
-    | "escalation_points"
-    | "fees_charges"
-  >
-) {
-  const content = [
-    procedure.summary ?? "",
-    procedure.when_to_use ?? "",
-    procedure.fees_charges ?? "",
-    jsonItemsToSearchText(procedure.required_information),
-    jsonItemsToSearchText(procedure.system_steps),
-    jsonItemsToSearchText(procedure.passenger_advice),
-    jsonItemsToSearchText(procedure.allowed),
-    jsonItemsToSearchText(procedure.not_allowed),
-    jsonItemsToSearchText(procedure.escalation_points),
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  return GENERIC_FILLER_PHRASES.some((phrase) => content.includes(phrase));
-}
-
-function jsonItemsToSearchText(items: JsonValue[] | null | undefined) {
-  if (!Array.isArray(items)) return "";
-  return items.map((item) => readableJsonItem(item)).filter(Boolean).join(" ");
-}
-
 function workAreaFor(card: Pick<ProcedureListRow, "service_code" | "service_type" | "category" | "title">): WorkArea {
   const text = normalize(`${card.service_type ?? ""} ${card.category} ${card.service_code ?? ""} ${card.title}`);
 
@@ -567,28 +489,6 @@ function workAreaFor(card: Pick<ProcedureListRow, "service_code" | "service_type
   if (matches(text, ["baggage", "speq", "spex", "falcon", "petc"])) return "Baggage";
   if (matches(text, ["booking", "name", "seat", "cbbg", "exst", "stopover", "government", "fare"])) return "Booking Changes";
   return "Other References";
-}
-
-function hasText(value: string | null | undefined) {
-  return Boolean(value?.trim());
-}
-
-function hasItems(items: JsonValue[] | null | undefined) {
-  return Array.isArray(items) && items.some((item) => readableJsonItem(item));
-}
-
-function readableJsonItem(item: JsonValue) {
-  if (typeof item === "string") return item.trim();
-  if (typeof item === "number" || typeof item === "boolean") return String(item);
-  if (!item || Array.isArray(item) || typeof item !== "object") return "";
-
-  const record = item as Record<string, JsonValue>;
-  for (const key of ["label", "text", "value", "title", "description"]) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-
-  return "";
 }
 
 function matches(value: string, terms: string[]) {

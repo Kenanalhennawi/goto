@@ -11,6 +11,14 @@ import {
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import type { ContentBlock, JsonValue } from "@/lib/types";
 import { canArchiveProcedures, canReviewProcedures } from "@/lib/permissions";
+import {
+  detailQualityBadges,
+  genericFillerFields,
+  hasItems,
+  hasText,
+  isReferenceCard,
+  readableJsonItem,
+} from "@/lib/admin-procedure-quality";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -458,7 +466,7 @@ function evaluateProcedureQuality(procedure: ProcedureDetail): QualityResult {
   const redMissing = items.some((item) => !item.ok && item.severity === "red");
   const amberMissing = items.some((item) => !item.ok && item.severity === "amber");
   const level: QualityLevel = redMissing ? "critical" : amberMissing ? "review" : "ready";
-  const badges = qualityBadges(procedure, isReference);
+  const badges = detailQualityBadges(procedure, isReference);
 
   return {
     level,
@@ -469,80 +477,8 @@ function evaluateProcedureQuality(procedure: ProcedureDetail): QualityResult {
   };
 }
 
-function qualityBadges(procedure: ProcedureDetail, isReference: boolean) {
-  const badges: string[] = [];
-  if (!isReference && !hasText(procedure.cut_off_time)) badges.push("Missing deadline");
-  if (!hasItems(procedure.passenger_advice)) badges.push("Missing passenger advice");
-  if (!hasItems(procedure.not_allowed)) badges.push("Missing restrictions");
-  if (isReference && !hasText(procedure.cut_off_time)) badges.push("Missing timing rule");
-  if (genericFillerFields(procedure).length > 0) badges.push("Generic filler");
-  if (badges.length === 0) badges.push("Ready-looking");
-  return badges;
-}
-
 function check(label: string, ok: boolean, severity: "amber" | "red"): QualityItem {
   return { label, ok, severity: ok ? "green" : severity };
-}
-
-const GENERIC_FILLER_PHRASES = [
-  "source chapter",
-  "source-supported",
-  "linked source",
-  "quality review",
-  "check the source",
-  "according to source",
-  "source rules",
-  "source process",
-  "pending source review",
-  "draft operational card",
-  "use this card after",
-  "where source allows",
-  "escalate unclear",
-];
-
-function genericFillerFields(procedure: ProcedureDetail) {
-  const fields: Array<[string, string]> = [
-    ["summary", procedure.summary ?? ""],
-    ["when_to_use", procedure.when_to_use ?? ""],
-    ["required_information", jsonItemsToSearchText(procedure.required_information)],
-    ["system_steps", jsonItemsToSearchText(procedure.system_steps)],
-    ["passenger_advice", jsonItemsToSearchText(procedure.passenger_advice)],
-    ["allowed", jsonItemsToSearchText(procedure.allowed)],
-    ["not_allowed", jsonItemsToSearchText(procedure.not_allowed)],
-    ["escalation_points", jsonItemsToSearchText(procedure.escalation_points)],
-    ["fees_charges", procedure.fees_charges ?? ""],
-  ];
-
-  return fields
-    .filter(([, value]) => {
-      const normalized = value.toLowerCase();
-      return GENERIC_FILLER_PHRASES.some((phrase) => normalized.includes(phrase));
-    })
-    .map(([field]) => field);
-}
-
-function jsonItemsToSearchText(items: JsonValue[] | null | undefined) {
-  if (!Array.isArray(items)) return "";
-  return items.map((item) => readableJsonItem(item)).filter(Boolean).join(" ");
-}
-
-function isReferenceCard(card: Pick<ProcedureDetail, "service_code" | "service_type" | "category">) {
-  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
-  return (
-    card.service_code?.toUpperCase() === "MCT" ||
-    type.includes("reference") ||
-    type.includes("rule") ||
-    type.includes("timing") ||
-    type.includes("connection reference")
-  );
-}
-
-function hasText(value: string | null | undefined) {
-  return Boolean(value?.trim());
-}
-
-function hasItems(items: JsonValue[] | null | undefined) {
-  return Array.isArray(items) && items.some((item) => Boolean(readableJsonItem(item)));
 }
 
 function ActionStatusMessage({ status }: { status: Record<string, string | undefined> }) {
@@ -856,7 +792,7 @@ function ServicePreview({ procedure }: { procedure: ProcedureDetail }) {
       )}
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {sections.map((section) => {
-          const items = section.items.map(readableJsonItem).filter(Boolean);
+          const items = section.items.map((item) => readableJsonItem(item, { fallbackJson: true })).filter(Boolean);
           if (items.length === 0) return null;
           return (
             <div key={section.title} className="rounded-xl border border-border bg-white p-3">
@@ -1117,7 +1053,7 @@ function TextSection({ title, value, isScript = false }: { title: string; value:
 }
 
 function ListSection({ title, items }: { title: string; items: JsonValue[] }) {
-  const rendered = items.map(readableJsonItem).filter(Boolean);
+  const rendered = items.map((item) => readableJsonItem(item, { fallbackJson: true })).filter(Boolean);
   if (rendered.length === 0) return null;
 
   return (
@@ -1171,21 +1107,8 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function readableJsonItem(item: JsonValue) {
-  if (typeof item === "string") return item.trim();
-  if (typeof item === "number" || typeof item === "boolean") return String(item);
-  if (!item || Array.isArray(item)) return "";
-
-  const record = item as Record<string, JsonValue>;
-  for (const key of ["label", "text", "value", "title", "description"]) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return JSON.stringify(item);
-}
-
 function jsonListToLines(items: JsonValue[]) {
-  return items.map(readableJsonItem).filter(Boolean).join("\n");
+  return items.map((item) => readableJsonItem(item, { fallbackJson: true })).filter(Boolean).join("\n");
 }
 
 function formatSourcePages(pages: number[]) {
