@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { SEARCH_EXAMPLES } from "@/lib/operational-content";
 import {
   containsArabic,
@@ -80,10 +80,15 @@ export function SearchBar({
   const visibleResults = filteredResults.slice(0, 5);
   const isArabicNoResult = containsArabic(query) && !loading && filteredResults.length === 0;
   const trimmedQuery = query.trim();
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!trimmedQuery) return;
+    window.location.href = `/search?q=${encodeURIComponent(trimmedQuery)}`;
+  };
 
   return (
     <div ref={wrapRef} className="relative">
-      <form className="relative" action="/search">
+      <form className="relative" autoComplete="off" onSubmit={submitSearch}>
         <svg
           className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-faint"
           fill="none"
@@ -98,8 +103,13 @@ export function SearchBar({
           />
         </svg>
         <input
-          name="q"
+          name="goto_operational_lookup"
           type="text"
+          aria-label="Search GO TO guide"
+          autoComplete="new-password"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
           autoFocus={autoFocus}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
