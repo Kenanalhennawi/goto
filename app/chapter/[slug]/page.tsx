@@ -2,11 +2,14 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ChapterBadge } from "@/components/ChapterBadge";
 import { ChapterTabbedContent } from "@/components/ChapterTabbedContent";
+import { CollapsibleManualContent } from "@/components/chapter/CollapsibleManualContent";
+import { OperationalSummary } from "@/components/chapter/OperationalSummary";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { ReportIssueButton } from "@/components/ReportIssueButton";
+import { fetchRelatedCards } from "@/lib/fetch-related-cards";
 import { normalizeExternalUrl } from "@/lib/links";
 import type { Chapter, ContentBlock } from "@/lib/types";
-import { canEditProcedures } from "@/lib/permissions";
+import { canEditProcedures, canReviewProcedures } from "@/lib/permissions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -44,6 +47,7 @@ export default async function ChapterPage({
         .single()
     : { data: null };
   const canEdit = canEditProcedures(role?.role);
+  const canReviewCards = canReviewProcedures(role?.role);
 
   const { data: neighbors } = await supabase
     .from("chapters")
@@ -55,6 +59,7 @@ export default async function ChapterPage({
   const chapterPath = `/chapter/${ch.slug}`;
   const overview = chapterOverview(ch);
   const references = keyReferences(ch.content_blocks);
+  const relatedCards = await fetchRelatedCards(supabase, ch, { includeDrafts: canReviewCards });
   const sourceFacts = [
     ch.source_version ? { label: "Source", value: ch.source_version } : null,
     pageRange(ch.page_start, ch.page_end) ? { label: "Pages", value: pageRange(ch.page_start, ch.page_end) } : null,
@@ -222,14 +227,20 @@ export default async function ChapterPage({
           </div>
         </section>
 
-        <div id="manual-content" className="scroll-mt-24">
-        <ChapterTabbedContent
-          blocks={ch.content_blocks}
-          activeSection={section}
-          baseHref={`/chapter/${ch.slug}`}
-          editHref={canEdit ? `/admin/chapter/${ch.slug}` : undefined}
+        <OperationalSummary
+          cards={relatedCards}
+          canReview={canReviewCards}
+          showEmpty={canReviewCards}
         />
-        </div>
+
+        <CollapsibleManualContent defaultOpen={Boolean(section)}>
+          <ChapterTabbedContent
+            blocks={ch.content_blocks}
+            activeSection={section}
+            baseHref={`/chapter/${ch.slug}`}
+            editHref={canEdit ? `/admin/chapter/${ch.slug}` : undefined}
+          />
+        </CollapsibleManualContent>
 
         <nav className="mt-8 grid grid-cols-1 gap-3 border-t border-border pt-6 sm:grid-cols-2">
           {prev ? (
