@@ -239,6 +239,11 @@ export default async function AdminProcedureDetailPage({
                   This card has missing operational fields. Review before publishing.
                 </div>
               )}
+              {quality.fillerFields.length > 0 && (
+                <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                  Do not publish: generic filler detected.
+                </div>
+              )}
               <div className="mt-4 space-y-2">
                 <ActionForm action={approveAndPublish} slug={procedure.slug} label="Approve & publish" tone="primary" />
                 <ActionForm action={unpublish} slug={procedure.slug} label="Unpublish" />
@@ -253,6 +258,7 @@ export default async function AdminProcedureDetailPage({
 
         <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
           <div className="space-y-5">
+            <GenericFillerWarning fields={quality.fillerFields} />
             <QualityChecklist quality={quality} />
             <TextSection title="Summary" value={procedure.summary} />
             <TextSection title="When to use" value={procedure.when_to_use} />
@@ -328,6 +334,7 @@ type QualityResult = {
   summary: string;
   badges: string[];
   items: QualityItem[];
+  fillerFields: string[];
 };
 
 function QualityChecklist({ quality }: { quality: QualityResult }) {
@@ -389,9 +396,36 @@ function QualityChecklist({ quality }: { quality: QualityResult }) {
   );
 }
 
+function GenericFillerWarning({ fields }: { fields: string[] }) {
+  if (fields.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700 shadow-sm sm:p-6">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em]">
+        Generic filler detected
+      </p>
+      <h2 className="mt-2 font-display text-xl font-semibold">
+        This card should not be published yet
+      </h2>
+      <p className="mt-2 text-sm leading-6">
+        This card contains generic filler text and should not be published until rewritten into real operational guidance.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {fields.map((field) => (
+          <span key={field} className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold">
+            {field}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function evaluateProcedureQuality(procedure: ProcedureDetail): QualityResult {
   const isReference = isReferenceCard(procedure);
+  const fillerFields = genericFillerFields(procedure);
   const items: QualityItem[] = [
+    check("No generic filler text", fillerFields.length === 0, "red"),
     check("Has service code or clear reference code", hasText(procedure.service_code), "red"),
     check("Has service type", hasText(procedure.service_type), "red"),
     check("Has who can action", hasItems(procedure.who_can_action), "red"),
@@ -431,6 +465,7 @@ function evaluateProcedureQuality(procedure: ProcedureDetail): QualityResult {
     summary: level === "ready" ? "Ready-looking" : level === "critical" ? "Critical missing fields" : "Needs review",
     badges,
     items,
+    fillerFields,
   };
 }
 
@@ -440,12 +475,55 @@ function qualityBadges(procedure: ProcedureDetail, isReference: boolean) {
   if (!hasItems(procedure.passenger_advice)) badges.push("Missing passenger advice");
   if (!hasItems(procedure.not_allowed)) badges.push("Missing restrictions");
   if (isReference && !hasText(procedure.cut_off_time)) badges.push("Missing timing rule");
+  if (genericFillerFields(procedure).length > 0) badges.push("Generic filler");
   if (badges.length === 0) badges.push("Ready-looking");
   return badges;
 }
 
 function check(label: string, ok: boolean, severity: "amber" | "red"): QualityItem {
   return { label, ok, severity: ok ? "green" : severity };
+}
+
+const GENERIC_FILLER_PHRASES = [
+  "source chapter",
+  "source-supported",
+  "linked source",
+  "quality review",
+  "check the source",
+  "according to source",
+  "source rules",
+  "source process",
+  "pending source review",
+  "draft operational card",
+  "use this card after",
+  "where source allows",
+  "escalate unclear",
+];
+
+function genericFillerFields(procedure: ProcedureDetail) {
+  const fields: Array<[string, string]> = [
+    ["summary", procedure.summary ?? ""],
+    ["when_to_use", procedure.when_to_use ?? ""],
+    ["required_information", jsonItemsToSearchText(procedure.required_information)],
+    ["system_steps", jsonItemsToSearchText(procedure.system_steps)],
+    ["passenger_advice", jsonItemsToSearchText(procedure.passenger_advice)],
+    ["allowed", jsonItemsToSearchText(procedure.allowed)],
+    ["not_allowed", jsonItemsToSearchText(procedure.not_allowed)],
+    ["escalation_points", jsonItemsToSearchText(procedure.escalation_points)],
+    ["fees_charges", procedure.fees_charges ?? ""],
+  ];
+
+  return fields
+    .filter(([, value]) => {
+      const normalized = value.toLowerCase();
+      return GENERIC_FILLER_PHRASES.some((phrase) => normalized.includes(phrase));
+    })
+    .map(([field]) => field);
+}
+
+function jsonItemsToSearchText(items: JsonValue[] | null | undefined) {
+  if (!Array.isArray(items)) return "";
+  return items.map((item) => readableJsonItem(item)).filter(Boolean).join(" ");
 }
 
 function isReferenceCard(card: Pick<ProcedureDetail, "service_code" | "service_type" | "category">) {

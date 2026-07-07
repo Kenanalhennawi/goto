@@ -20,10 +20,16 @@ type ProcedureListRow = {
   category: string;
   service_code: string | null;
   service_type: string | null;
+  summary: string | null;
+  when_to_use: string | null;
   cut_off_time: string | null;
+  required_information: JsonValue[];
+  system_steps: JsonValue[];
   passenger_advice: JsonValue[];
+  allowed: JsonValue[];
   not_allowed: JsonValue[];
   escalation_points: JsonValue[];
+  fees_charges: string | null;
   source_confidence: string | null;
   review_status: string;
   is_published: boolean;
@@ -84,7 +90,7 @@ export default async function AdminProceduresPage({
   const { data: procedures } = await supabase
     .from("procedure_cards")
     .select(
-      "id, title, slug, category, service_code, service_type, cut_off_time, passenger_advice, not_allowed, escalation_points, source_confidence, review_status, is_published, priority, updated_at, chapters(chapter_number, title, slug)"
+      "id, title, slug, category, service_code, service_type, summary, when_to_use, cut_off_time, required_information, system_steps, passenger_advice, allowed, not_allowed, escalation_points, fees_charges, source_confidence, review_status, is_published, priority, updated_at, chapters(chapter_number, title, slug)"
     )
     .order("priority", { ascending: false })
     .order("updated_at", { ascending: false });
@@ -124,6 +130,7 @@ export default async function AdminProceduresPage({
           <SummaryTile label="Missing restrictions" value={summary.missingRestrictions} tone="warn" />
           <SummaryTile label="Missing escalation" value={summary.missingEscalation} tone="warn" />
           <SummaryTile label="Missing source confidence" value={summary.missingSourceConfidence} tone="warn" />
+          <SummaryTile label="Generic filler" value={summary.genericFiller} tone="warn" />
         </section>
 
         <section className="content-card mb-6 p-4">
@@ -147,6 +154,7 @@ export default async function AdminProceduresPage({
               <option value="missing_restrictions">Missing restrictions</option>
               <option value="missing_escalation">Missing escalation</option>
               <option value="missing_source_confidence">Missing source confidence</option>
+              <option value="generic_filler">Generic filler</option>
             </select>
             <select
               name="area"
@@ -185,6 +193,7 @@ export default async function AdminProceduresPage({
               ["missing_restrictions", "Missing restrictions"],
               ["missing_escalation", "Missing escalation"],
               ["missing_source_confidence", "Missing source confidence"],
+              ["generic_filler", "Generic filler"],
             ].map(([quality, label]) => (
               <FilterLink
                 key={quality}
@@ -311,6 +320,14 @@ function PriorityBadge({ priority }: { priority: "High" | "Medium" | "Low" }) {
 }
 
 function QualityBadge({ label }: { label: string }) {
+  if (label === "Generic filler") {
+    return (
+      <span className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] text-red-700">
+        {label}
+      </span>
+    );
+  }
+
   const critical = label.startsWith("Missing") || label === "Draft";
   return (
     <span
@@ -395,6 +412,7 @@ function matchesQuality(row: ProcedureListRow, quality: string) {
   if (quality === "missing_restrictions") return badges.includes("Missing restrictions");
   if (quality === "missing_escalation") return badges.includes("Missing escalation");
   if (quality === "missing_source_confidence") return badges.includes("Missing source confidence");
+  if (quality === "generic_filler") return badges.includes("Generic filler");
   return true;
 }
 
@@ -411,6 +429,7 @@ function qualitySummary(rows: ProcedureListRow[]) {
       if (badges.includes("Missing restrictions")) summary.missingRestrictions += 1;
       if (badges.includes("Missing escalation")) summary.missingEscalation += 1;
       if (badges.includes("Missing source confidence")) summary.missingSourceConfidence += 1;
+      if (badges.includes("Generic filler")) summary.genericFiller += 1;
       return summary;
     },
     {
@@ -423,6 +442,7 @@ function qualitySummary(rows: ProcedureListRow[]) {
       missingRestrictions: 0,
       missingEscalation: 0,
       missingSourceConfidence: 0,
+      genericFiller: 0,
     }
   );
 }
@@ -431,7 +451,7 @@ function reviewPriority(row: ProcedureListRow): "High" | "Medium" | "Low" {
   const badges = qualityBadges(row);
   const isDraft = !row.is_published || row.review_status === "needs_review" || row.review_status === "draft";
   const critical = badges.some((badge) =>
-    ["Missing deadline", "Missing timing rule", "Missing passenger advice", "Missing restrictions"].includes(badge)
+    ["Missing deadline", "Missing timing rule", "Missing passenger advice", "Missing restrictions", "Generic filler"].includes(badge)
   );
   if (isDraft && critical) return "High";
   if (isDraft) return "Medium";
@@ -467,7 +487,8 @@ function qualityBadges(procedure: ProcedureListRow) {
   if (!hasItems(procedure.not_allowed)) badges.push("Missing restrictions");
   if (!hasItems(procedure.escalation_points)) badges.push("Missing escalation");
   if (!hasText(procedure.source_confidence)) badges.push("Missing source confidence");
-  if (badges.length === (procedure.is_published ? 1 : 1)) badges.push("Ready-looking");
+  if (hasGenericFiller(procedure)) badges.push("Generic filler");
+  if (badges.length === 1) badges.push("Ready-looking");
   return badges;
 }
 
@@ -480,6 +501,58 @@ function isReferenceCard(card: Pick<ProcedureListRow, "service_code" | "service_
     type.includes("timing") ||
     type.includes("connection reference")
   );
+}
+
+const GENERIC_FILLER_PHRASES = [
+  "source chapter",
+  "source-supported",
+  "linked source",
+  "quality review",
+  "check the source",
+  "according to source",
+  "source rules",
+  "source process",
+  "pending source review",
+  "draft operational card",
+  "use this card after",
+  "where source allows",
+  "escalate unclear",
+];
+
+function hasGenericFiller(
+  procedure: Pick<
+    ProcedureListRow,
+    | "summary"
+    | "when_to_use"
+    | "required_information"
+    | "system_steps"
+    | "passenger_advice"
+    | "allowed"
+    | "not_allowed"
+    | "escalation_points"
+    | "fees_charges"
+  >
+) {
+  const content = [
+    procedure.summary ?? "",
+    procedure.when_to_use ?? "",
+    procedure.fees_charges ?? "",
+    jsonItemsToSearchText(procedure.required_information),
+    jsonItemsToSearchText(procedure.system_steps),
+    jsonItemsToSearchText(procedure.passenger_advice),
+    jsonItemsToSearchText(procedure.allowed),
+    jsonItemsToSearchText(procedure.not_allowed),
+    jsonItemsToSearchText(procedure.escalation_points),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return GENERIC_FILLER_PHRASES.some((phrase) => content.includes(phrase));
+}
+
+function jsonItemsToSearchText(items: JsonValue[] | null | undefined) {
+  if (!Array.isArray(items)) return "";
+  return items.map((item) => readableJsonItem(item)).filter(Boolean).join(" ");
 }
 
 function workAreaFor(card: Pick<ProcedureListRow, "service_code" | "service_type" | "category" | "title">): WorkArea {
