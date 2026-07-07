@@ -160,6 +160,29 @@ body {
   box-shadow: 0 20px 44px rgba(7, 26, 51, 0.1);
 }
 
+.service-console-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.service-console-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 251, 255, 0.96));
+}
+
+.service-card {
+  box-shadow:
+    0 14px 34px rgba(7, 26, 51, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+@media (min-width: 1024px) {
+  .service-console-grid {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    align-items: start;
+  }
+}
+
 .stat-card {
   box-shadow:
     0 14px 30px rgba(7, 26, 51, 0.075),
