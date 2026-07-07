@@ -26,7 +26,7 @@ export function LoginForm() {
       return;
     }
 
-    router.push("/admin");
+    router.push("/account");
     router.refresh();
   }
 

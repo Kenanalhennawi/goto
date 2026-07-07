@@ -4,8 +4,9 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { SignOutButton } from "@/components/SignOutButton";
 
-export function AccountForm({ email }: { email: string }) {
-  const [password, setPassword] = useState("");
+export function AccountForm({ email, roleLabel }: { email: string; roleLabel: string }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -17,18 +18,39 @@ export function AccountForm({ email }: { email: string }) {
     setMessage(null);
     setError(null);
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setError("All password fields are required.");
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (newPassword.length < 8) {
+      setError("New password must be at least 8 characters.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
 
+    if (newPassword === currentPassword) {
+      setError("New password must be different from current password.");
+      return;
+    }
+
     setLoading(true);
-    const { error: updateError } = await supabase.auth.updateUser({ password });
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+
+    if (verifyError) {
+      setLoading(false);
+      setError("Current password is incorrect.");
+      return;
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
     setLoading(false);
 
     if (updateError) {
@@ -36,7 +58,8 @@ export function AccountForm({ email }: { email: string }) {
       return;
     }
 
-    setPassword("");
+    setCurrentPassword("");
+    setNewPassword("");
     setConfirmPassword("");
     setMessage("Password updated.");
   }
@@ -52,16 +75,30 @@ export function AccountForm({ email }: { email: string }) {
           <dt className="text-ink-muted">Email</dt>
           <dd className="font-semibold text-ink">{email}</dd>
         </div>
+        <div className="mt-3 flex items-center justify-between gap-4 border-t border-border pt-3">
+          <dt className="text-ink-muted">Access</dt>
+          <dd className="font-semibold text-ink">{roleLabel}</dd>
+        </div>
       </dl>
 
       <form onSubmit={handlePasswordChange} className="mt-6 space-y-4">
+        <Field label="Current password">
+          <input
+            type="password"
+            required
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            className="w-full rounded-lg border border-border bg-white px-4 py-2.5 text-ink focus:border-accent"
+            placeholder="Current password"
+          />
+        </Field>
         <Field label="New password">
           <input
             type="password"
             required
             minLength={8}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
             className="w-full rounded-lg border border-border bg-white px-4 py-2.5 text-ink focus:border-accent"
             placeholder="Minimum 8 characters"
           />

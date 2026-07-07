@@ -1,7 +1,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
+import { canManageUsers, isOwner, normalizeRole } from "@/lib/permissions";
 
-const ROLES = new Set(["agent", "supervisor", "quality", "admin", "owner"]);
+const ROLES = new Set(["no_special_access", "editor", "admin", "owner"]);
 
 export async function PATCH(
   request: Request,
@@ -28,7 +29,7 @@ export async function PATCH(
     .eq("user_id", user.id)
     .single();
 
-  if (currentRole?.role !== "admin" && currentRole?.role !== "owner") {
+  if (!canManageUsers(currentRole?.role)) {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
 
@@ -45,19 +46,22 @@ export async function PATCH(
 
   const { data: targetRole } = await supabase
     .from("user_roles")
-    .select("role")
+    .select("role, full_name")
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
 
-  if (targetRole?.role === "owner" && currentRole.role !== "owner") {
+  const currentIsOwner = isOwner(currentRole?.role);
+  const targetNormalizedRole = normalizeRole(targetRole?.role);
+
+  if (targetNormalizedRole === "owner" && !currentIsOwner) {
     return NextResponse.json({ error: "Only the owner can change owner accounts." }, { status: 403 });
   }
 
-  if (role === "owner" && currentRole.role !== "owner") {
+  if (role === "owner" && !currentIsOwner) {
     return NextResponse.json({ error: "Only the owner can grant owner access." }, { status: 403 });
   }
 
-  if (targetRole?.role === "owner" && role !== "owner") {
+  if (targetNormalizedRole === "owner" && role !== "owner") {
     const { count: ownerCount, error: ownerCountError } = await supabase
       .from("user_roles")
       .select("user_id", { count: "exact", head: true })
@@ -72,13 +76,28 @@ export async function PATCH(
     }
   }
 
-  const { error } = await supabase
-    .from("user_roles")
-    .update({ role })
-    .eq("user_id", userId);
+  if (role === "no_special_access") {
+    const { error } = await supabase.from("user_roles").delete().eq("user_id", userId);
+
+    if (error) {
+      return NextResponse.json({ error: "Could not remove user access." }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  }
+
+  const payload = {
+    user_id: userId,
+    role,
+    full_name: targetRole?.full_name ?? null,
+  };
+
+  const { error } = targetRole
+    ? await supabase.from("user_roles").update({ role }).eq("user_id", userId)
+    : await supabase.from("user_roles").insert(payload);
 
   if (error) {
-    return NextResponse.json({ error: "Could not update user role." }, { status: 500 });
+    return NextResponse.json({ error: "Could not update user access." }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { redirect } from "next/navigation";
 import { UserRoleManager } from "@/components/UserRoleManager";
+import { canManageUsers } from "@/lib/permissions";
 
 export default async function AdminUsersPage() {
   const supabase = await createServerSupabaseClient();
@@ -17,7 +18,7 @@ export default async function AdminUsersPage() {
     .eq("user_id", user.id)
     .single();
 
-  if (currentRole?.role !== "admin" && currentRole?.role !== "owner") redirect("/admin");
+  if (!canManageUsers(currentRole?.role)) redirect("/admin");
 
   const { data: users } = await supabase
     .from("user_roles")
@@ -39,14 +40,14 @@ export default async function AdminUsersPage() {
           </p>
           <h1 className="font-display text-2xl font-semibold text-ink">User access</h1>
           <p className="mt-2 text-sm leading-6 text-ink-muted">
-            New users stay as agent until an admin approves them as quality or admin.
+            New users have no special access until an admin or owner assigns editor, admin, or owner access.
           </p>
         </section>
 
         <UserRoleManager
           users={usersWithEmail}
           currentUserId={user.id}
-          currentRole={currentRole.role}
+          currentRole={currentRole?.role}
         />
       </main>
     </div>

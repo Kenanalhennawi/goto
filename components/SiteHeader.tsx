@@ -2,14 +2,7 @@ import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SignOutButton } from "@/components/SignOutButton";
 import type { UserRole } from "@/lib/types";
-
-const ROLE_LABELS: Record<UserRole, string> = {
-  agent: "Pending",
-  supervisor: "Supervisor",
-  quality: "Editor",
-  admin: "Admin",
-  owner: "Owner",
-};
+import { isEditorRole, normalizeRoleLabel } from "@/lib/permissions";
 
 export async function SiteHeader() {
   const supabase = await createServerSupabaseClient();
@@ -27,9 +20,7 @@ export async function SiteHeader() {
 
   const roleName = role?.role as UserRole | undefined;
   const displayName = role?.full_name ?? user?.email ?? null;
-  const canReviewProcedures = roleName
-    ? ["quality", "admin", "owner"].includes(roleName)
-    : false;
+  const showAdmin = isEditorRole(roleName);
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-white/88 backdrop-blur-xl">
@@ -64,7 +55,7 @@ export async function SiteHeader() {
 
           {user ? (
             <>
-              {canReviewProcedures && (
+              {showAdmin && (
                 <Link
                   href="/admin/procedures"
                   className="hidden rounded-lg px-3 py-2 font-medium text-ink-muted transition-colors hover:bg-sky-soft hover:text-sky sm:inline-flex"
@@ -72,12 +63,14 @@ export async function SiteHeader() {
                   Procedures
                 </Link>
               )}
-              <Link
-                href="/admin"
-                className="rounded-lg border border-border bg-white px-3 py-2 font-medium text-ink transition-colors hover:border-accent hover:text-accent"
-              >
-                Admin
-              </Link>
+              {showAdmin && (
+                <Link
+                  href="/admin"
+                  className="rounded-lg border border-border bg-white px-3 py-2 font-medium text-ink transition-colors hover:border-accent hover:text-accent"
+                >
+                  Admin
+                </Link>
+              )}
               <Link
                 href="/account"
                 className="hidden rounded-lg px-3 py-2 font-medium text-ink-muted transition-colors hover:bg-sky-soft hover:text-sky sm:inline-flex"
@@ -89,7 +82,7 @@ export async function SiteHeader() {
                   {displayName}
                 </span>
                 <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-sky">
-                  {roleName ? ROLE_LABELS[roleName] : "Signed in"}
+                  {normalizeRoleLabel(roleName)}
                 </span>
               </div>
               <SignOutButton />

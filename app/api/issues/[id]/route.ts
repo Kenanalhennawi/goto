@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { canManageUsers, isEditorRole } from "@/lib/permissions";
 
 const STATUSES = new Set(["open", "reviewing", "resolved", "dismissed"]);
 
@@ -23,7 +24,7 @@ export async function PATCH(
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
+  if (!isEditorRole(role?.role)) {
     return NextResponse.json({ error: "No access." }, { status: 403 });
   }
 
@@ -69,7 +70,7 @@ export async function DELETE(
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["admin", "owner"].includes(role.role)) {
+  if (!canManageUsers(role?.role)) {
     return NextResponse.json({ error: "Only admins can delete issues." }, { status: 403 });
   }
 

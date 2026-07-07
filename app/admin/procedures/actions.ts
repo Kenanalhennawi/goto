@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { canApproveProcedures, canArchiveProcedures, canEditProcedures } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -39,7 +40,7 @@ export async function updateProcedureContent(formData: FormData) {
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
+  if (!canEditProcedures(role?.role)) {
     redirect("/admin");
   }
 
@@ -137,9 +138,8 @@ async function updateProcedureReviewState(formData: FormData, action: ProcedureA
     .eq("user_id", user.id)
     .single();
 
-  const userRole = role?.role;
-  const canReview = userRole && ["quality", "admin", "owner"].includes(userRole);
-  const canArchive = userRole && ["admin", "owner"].includes(userRole);
+  const canReview = canApproveProcedures(role?.role);
+  const canArchive = canArchiveProcedures(role?.role);
 
   if (!canReview || (action === "archive" && !canArchive)) {
     redirect("/admin");

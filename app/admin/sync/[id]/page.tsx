@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { redirect, notFound } from "next/navigation";
 import { SyncReviewClient } from "@/components/SyncReviewClient";
+import { canManageUsers, isEditorRole } from "@/lib/permissions";
 
 export default async function SyncReviewPage({
   params,
@@ -20,7 +21,7 @@ export default async function SyncReviewPage({
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
+  if (!isEditorRole(role?.role)) {
     redirect("/admin");
   }
 
@@ -45,7 +46,7 @@ export default async function SyncReviewPage({
         <SyncReviewClient
           syncRun={syncRun}
           changes={changes ?? []}
-          canPublish={role.role === "admin" || role.role === "owner"}
+          canPublish={canManageUsers(role?.role)}
         />
       </main>
     </div>

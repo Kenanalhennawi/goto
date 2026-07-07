@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import type { ProcedureCard, UserRole } from "@/lib/types";
+import { canReviewProcedures } from "@/lib/permissions";
 
 export interface ProcedureSourceChapter {
   id: string;
@@ -22,7 +23,7 @@ export async function getProcedureBySlug(slug: string) {
     ? await supabase.from("user_roles").select("role").eq("user_id", user.id).single()
     : { data: null };
   const role = roleRow?.role as UserRole | undefined;
-  const canManage = role ? ["quality", "admin", "owner"].includes(role) : false;
+  const canManage = canReviewProcedures(role);
 
   const { data, error } = await supabase
     .from("procedure_cards")

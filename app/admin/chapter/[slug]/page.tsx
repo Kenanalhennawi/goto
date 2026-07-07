@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { redirect, notFound } from "next/navigation";
 import { ChapterEditor } from "@/components/ChapterEditor";
+import { canEditProcedures } from "@/lib/permissions";
 
 export default async function AdminChapterEditPage({
   params,
@@ -20,7 +21,7 @@ export default async function AdminChapterEditPage({
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
+  if (!canEditProcedures(role?.role)) {
     redirect("/admin");
   }
 

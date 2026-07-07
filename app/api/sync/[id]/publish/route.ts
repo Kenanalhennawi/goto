@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
+import { canManageUsers } from "@/lib/permissions";
 
 export async function POST(
   request: Request,
@@ -19,7 +20,7 @@ export async function POST(
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["admin", "owner"].includes(role.role)) {
+  if (!canManageUsers(role?.role)) {
     return NextResponse.json(
       { error: "Only admins can publish live content." },
       { status: 403 }

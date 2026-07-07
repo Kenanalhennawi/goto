@@ -2,8 +2,9 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 import { normalizeExternalUrl } from "@/lib/links";
 import type { ContentBlock } from "@/lib/types";
+import { canEditProcedures } from "@/lib/permissions";
 
-// Handles a direct, small edit to a single chapter made by quality team in the
+// Handles a direct, small edit to a single chapter made by an editor in the
 // admin UI. Writes the change to edit_history *before* updating the chapter,
 // so there's always a rollback path even if something goes wrong after.
 export async function PATCH(
@@ -24,7 +25,7 @@ export async function PATCH(
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
+  if (!canEditProcedures(role?.role)) {
     return NextResponse.json(
       { error: "Your account doesn't have edit access." },
       { status: 403 }

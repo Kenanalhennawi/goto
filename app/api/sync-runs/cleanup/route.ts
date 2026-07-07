@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { canManageUsers } from "@/lib/permissions";
 
 const KEEP_RECENT_COUNT = 3;
 
@@ -19,7 +20,7 @@ export async function DELETE() {
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["admin", "owner"].includes(role.role)) {
+  if (!canManageUsers(role?.role)) {
     return NextResponse.json({ error: "Only admins can clean up sync runs." }, { status: 403 });
   }
 

@@ -9,6 +9,7 @@ import {
 } from "@/app/admin/procedures/actions";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import type { ContentBlock, JsonValue } from "@/lib/types";
+import { canArchiveProcedures, canReviewProcedures } from "@/lib/permissions";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -85,7 +86,7 @@ export default async function AdminProcedureDetailPage({
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
+  if (!canReviewProcedures(role?.role)) {
     redirect("/admin");
   }
 
@@ -126,7 +127,7 @@ export default async function AdminProcedureDetailPage({
 
   const procedure = data as unknown as ProcedureDetail;
   const chapter = firstChapter(procedure.chapters);
-  const canArchive = role.role === "admin" || role.role === "owner";
+  const canArchive = canArchiveProcedures(role?.role);
   const { data: sourceChapterData } = procedure.chapter_id
     ? await supabase
         .from("chapters")

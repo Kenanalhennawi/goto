@@ -6,6 +6,7 @@ import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { ReportIssueButton } from "@/components/ReportIssueButton";
 import { normalizeExternalUrl } from "@/lib/links";
 import type { Chapter, ContentBlock } from "@/lib/types";
+import { canEditProcedures } from "@/lib/permissions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -42,7 +43,7 @@ export default async function ChapterPage({
         .eq("user_id", user.id)
         .single()
     : { data: null };
-  const canEdit = !!role && ["quality", "admin", "owner"].includes(role.role);
+  const canEdit = canEditProcedures(role?.role);
 
   const { data: neighbors } = await supabase
     .from("chapters")

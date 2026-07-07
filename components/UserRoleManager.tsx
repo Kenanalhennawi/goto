@@ -2,22 +2,17 @@
 
 import { useState } from "react";
 import type { UserRole } from "@/lib/types";
+import { canManageUsers, isOwner, normalizeRole, normalizeRoleLabel } from "@/lib/permissions";
 
 interface UserRow {
   user_id: string;
-  role: UserRole;
+  role: UserRole | null;
   full_name: string | null;
   email: string | null;
   created_at: string;
 }
 
-const ROLE_LABELS: Record<UserRole, string> = {
-  agent: "Pending / no edit",
-  supervisor: "Supervisor",
-  quality: "Editor",
-  admin: "Admin",
-  owner: "Owner",
-};
+type RoleSelection = "no_special_access" | "editor" | "admin" | "owner";
 
 export function UserRoleManager({
   users,
@@ -26,13 +21,13 @@ export function UserRoleManager({
 }: {
   users: UserRow[];
   currentUserId: string;
-  currentRole: UserRole;
+  currentRole: UserRole | string | null;
 }) {
   const [rows, setRows] = useState(users);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function updateRole(userId: string, role: UserRole) {
+  async function updateRole(userId: string, role: RoleSelection) {
     setSavingId(userId);
     setError(null);
 
@@ -49,7 +44,11 @@ export function UserRoleManager({
         return;
       }
 
-      setRows((prev) => prev.map((row) => (row.user_id === userId ? { ...row, role } : row)));
+      setRows((prev) =>
+        prev.map((row) =>
+          row.user_id === userId ? { ...row, role: role === "no_special_access" ? null : role } : row
+        )
+      );
     } catch {
       setError("Could not update user role. Check your connection and try again.");
     } finally {
@@ -72,10 +71,11 @@ export function UserRoleManager({
       </div>
       {rows.map((user) => {
         const isSelf = user.user_id === currentUserId;
-        const isOwner = user.role === "owner";
+        const targetRole = normalizeRole(user.role);
         const canChange =
           !isSelf &&
-          (currentRole === "owner" || (currentRole === "admin" && !isOwner));
+          canManageUsers(currentRole) &&
+          (isOwner(currentRole) || targetRole !== "owner");
 
         return (
           <div
@@ -91,16 +91,15 @@ export function UserRoleManager({
             <span className="text-xs text-ink-muted">{safeDate(user.created_at)}</span>
             <RoleBadge role={user.role} />
             <select
-              value={user.role}
+              value={targetRole ?? "no_special_access"}
               disabled={!canChange || savingId === user.user_id}
-              onChange={(event) => updateRole(user.user_id, event.target.value as UserRole)}
+              onChange={(event) => updateRole(user.user_id, event.target.value as RoleSelection)}
               className="rounded-lg border border-border bg-white px-3 py-2 text-sm text-ink disabled:opacity-50"
             >
-              <option value="agent">Pending / no edit</option>
-              <option value="supervisor">Supervisor</option>
-              <option value="quality">Editor</option>
+              <option value="no_special_access">No special access</option>
+              <option value="editor">Editor</option>
               <option value="admin">Admin</option>
-              {currentRole === "owner" && <option value="owner">Owner</option>}
+              {isOwner(currentRole) && <option value="owner">Owner</option>}
             </select>
           </div>
         );
@@ -109,18 +108,22 @@ export function UserRoleManager({
   );
 }
 
-function RoleBadge({ role }: { role: UserRole }) {
-  const styles: Record<UserRole, string> = {
-    agent: "border-amber-200 bg-amber-soft text-warn",
-    supervisor: "border-blue-200 bg-sky-soft text-sky",
-    quality: "border-green-200 bg-mint-soft text-good",
+function RoleBadge({ role }: { role: UserRole | null }) {
+  const normalized = normalizeRole(role);
+  const styles: Record<"none" | "editor" | "admin" | "owner", string> = {
+    none: "border-border bg-white text-ink-faint",
+    editor: "border-green-200 bg-mint-soft text-good",
     admin: "border-purple-200 bg-purple-50 text-purple-700",
     owner: "border-orange-200 bg-orange-50 text-accent",
   };
 
   return (
-    <span className={`w-max rounded-full border px-3 py-1 text-xs font-semibold ${styles[role]}`}>
-      {ROLE_LABELS[role]}
+    <span
+      className={`w-max rounded-full border px-3 py-1 text-xs font-semibold ${
+        styles[normalized ?? "none"]
+      }`}
+    >
+      {normalizeRoleLabel(role)}
     </span>
   );
 }

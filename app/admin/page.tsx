@@ -4,6 +4,7 @@ import { DeleteButton } from "@/components/DeleteButton";
 import { AdminActionButton } from "@/components/AdminActionButton";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { canManageUsers, isEditorRole, normalizeRoleLabel } from "@/lib/permissions";
 
 export default async function AdminDashboard() {
   const supabase = await createServerSupabaseClient();
@@ -17,22 +18,24 @@ export default async function AdminDashboard() {
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
+  if (!isEditorRole(role?.role)) {
     return (
       <div className="flex flex-col flex-1">
         <SiteHeader />
         <main className="flex-1 flex items-center justify-center px-6">
           <div className="text-center max-w-sm">
-            <h1 className="font-display text-xl text-ink mb-2">No edit access yet</h1>
+            <h1 className="font-display text-xl text-ink mb-2">No special access yet</h1>
             <p className="text-sm text-ink-muted">
-              Your account is signed in but hasn&rsquo;t been granted quality team or admin
-              access. Ask an existing admin to add your role in the user_roles table.
+              Your account is signed in but has not been assigned editor, admin, or owner
+              access. Ask an admin or owner to update your access.
             </p>
           </div>
         </main>
       </div>
     );
   }
+
+  const activeRole = role!;
 
   const { data: chapters } = await supabase
     .from("chapters")
@@ -67,10 +70,10 @@ export default async function AdminDashboard() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="font-display text-2xl font-semibold text-ink">
-              Quality team dashboard
+              Admin dashboard
             </h1>
             <p className="text-sm text-ink-muted mt-1">
-              Signed in as {role.full_name ?? user.email} · {role.role}
+              Signed in as {activeRole.full_name ?? user.email} - {normalizeRoleLabel(activeRole.role)}
             </p>
           </div>
           <div className="flex gap-2">
@@ -80,7 +83,7 @@ export default async function AdminDashboard() {
             >
               Issues{openIssueCount ? ` (${openIssueCount})` : ""}
             </Link>
-            {(role.role === "admin" || role.role === "owner") && (
+            {canManageUsers(activeRole.role) && (
               <Link
                 href="/admin/users"
                 className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-ink hover:border-accent"
@@ -124,7 +127,7 @@ export default async function AdminDashboard() {
           <div className="mb-10">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-xs uppercase tracking-wider text-ink-faint">Recent syncs</h2>
-              {(role.role === "admin" || role.role === "owner") && (
+              {canManageUsers(activeRole.role) && (
                 <AdminActionButton
                   endpoint="/api/sync-runs/cleanup"
                   method="DELETE"
@@ -144,7 +147,7 @@ export default async function AdminDashboard() {
                   <div className="flex items-center gap-3">
                     <span className="text-ink-muted text-xs">{s.chapters_changed} changed</span>
                     <StatusBadge status={s.status} />
-                    {(role.role === "admin" || role.role === "owner") && (
+                    {canManageUsers(activeRole.role) && (
                       <DeleteButton
                         endpoint={`/api/sync-runs/${s.id}`}
                         label="Delete"
@@ -192,7 +195,7 @@ export default async function AdminDashboard() {
                 </span>
                 <span className="text-ink group-hover:text-accent transition-colors">{c.title}</span>
               </div>
-              <span className="text-xs text-ink-faint">Edit →</span>
+              <span className="text-xs text-ink-faint">Edit -&gt;</span>
             </Link>
           ))}
         </div>

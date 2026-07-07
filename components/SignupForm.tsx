@@ -34,7 +34,7 @@ export function SignupForm() {
       return;
     }
 
-    setMessage("Account created. An owner/admin must approve edit access.");
+    setMessage("Account created. An admin or owner must assign special access.");
     window.setTimeout(() => router.push("/login"), 1800);
   }
 
@@ -45,7 +45,7 @@ export function SignupForm() {
       </p>
       <h1 className="font-display text-2xl font-semibold text-ink">Create account</h1>
       <p className="mt-2 text-sm leading-6 text-ink-muted">
-        New accounts can browse immediately. Editing requires owner/admin approval.
+        New accounts can browse and manage their account. Editor/admin access requires approval.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">

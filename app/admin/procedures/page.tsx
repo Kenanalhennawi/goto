@@ -2,6 +2,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { canReviewProcedures, normalizeRoleLabel } from "@/lib/permissions";
 
 type SearchParams = {
   status?: string;
@@ -51,9 +52,11 @@ export default async function AdminProceduresPage({
     .eq("user_id", user.id)
     .single();
 
-  if (!role || !["quality", "admin", "owner"].includes(role.role)) {
+  if (!canReviewProcedures(role?.role)) {
     redirect("/admin");
   }
+
+  const activeRole = role!;
 
   let query = supabase
     .from("procedure_cards")
@@ -92,7 +95,7 @@ export default async function AdminProceduresPage({
             </p>
           </div>
           <div className="rounded-lg border border-border bg-white px-4 py-3 text-xs text-ink-muted">
-            Signed in as {role.full_name ?? user.email} · {role.role}
+            Signed in as {activeRole.full_name ?? user.email} - {normalizeRoleLabel(activeRole.role)}
           </div>
         </div>
 

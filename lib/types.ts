@@ -45,7 +45,7 @@ export interface SearchResult {
   rank: number;
 }
 
-export type UserRole = "agent" | "supervisor" | "quality" | "admin" | "owner";
+export type UserRole = "editor" | "admin" | "owner" | "quality" | "supervisor" | "agent";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
