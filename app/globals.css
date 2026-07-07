@@ -134,6 +134,17 @@ body {
     radial-gradient(circle at 100% 6%, rgba(7, 95, 174, 0.14), transparent 26%);
 }
 
+.hero-helper-text {
+  display: inline-block;
+  color: #334155 !important;
+  opacity: 1 !important;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+
 .hero-search {
   border: 1px solid rgba(7, 95, 174, 0.18);
   background: rgba(255, 255, 255, 0.88);

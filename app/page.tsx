@@ -163,7 +163,7 @@ export default async function Home({
                 <p className="mt-2 font-display text-2xl font-semibold text-sky sm:text-3xl">
                   What are you handling now?
                 </p>
-                <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-600 sm:text-base">
+                <p className="hero-helper-text mt-2 max-w-2xl text-sm sm:text-base">
                   Search by service, SSR code, passenger issue, cut-off time, or process.
                 </p>
 
