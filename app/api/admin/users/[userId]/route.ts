@@ -2,7 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 import { canManageUsers, isOwner, normalizeRole } from "@/lib/permissions";
 
-const ROLES = new Set(["no_special_access", "editor", "admin", "owner"]);
+const ROLES = new Set(["no_special_access", "quality", "admin", "owner"]);
 
 export async function PATCH(
   request: Request,

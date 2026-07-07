@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SignOutButton } from "@/components/SignOutButton";
 import type { UserRole } from "@/lib/types";
-import { isEditorRole, normalizeRoleLabel } from "@/lib/permissions";
+import { canAccessAdmin, normalizeRoleLabel } from "@/lib/permissions";
 
 export async function SiteHeader() {
   const supabase = await createServerSupabaseClient();
@@ -20,7 +20,7 @@ export async function SiteHeader() {
 
   const roleName = role?.role as UserRole | undefined;
   const displayName = role?.full_name ?? user?.email ?? null;
-  const showAdmin = isEditorRole(roleName);
+  const showAdmin = canAccessAdmin(roleName);
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-white/88 backdrop-blur-xl">

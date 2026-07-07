@@ -12,7 +12,7 @@ interface UserRow {
   created_at: string;
 }
 
-type RoleSelection = "no_special_access" | "editor" | "admin" | "owner";
+type RoleSelection = "no_special_access" | "quality" | "admin" | "owner";
 
 export function UserRoleManager({
   users,
@@ -97,7 +97,7 @@ export function UserRoleManager({
               className="rounded-lg border border-border bg-white px-3 py-2 text-sm text-ink disabled:opacity-50"
             >
               <option value="no_special_access">No special access</option>
-              <option value="editor">Editor</option>
+              <option value="quality">Quality</option>
               <option value="admin">Admin</option>
               {isOwner(currentRole) && <option value="owner">Owner</option>}
             </select>
@@ -110,9 +110,9 @@ export function UserRoleManager({
 
 function RoleBadge({ role }: { role: UserRole | null }) {
   const normalized = normalizeRole(role);
-  const styles: Record<"none" | "editor" | "admin" | "owner", string> = {
+  const styles: Record<"none" | "quality" | "admin" | "owner", string> = {
     none: "border-border bg-white text-ink-faint",
-    editor: "border-green-200 bg-mint-soft text-good",
+    quality: "border-green-200 bg-mint-soft text-good",
     admin: "border-purple-200 bg-purple-50 text-purple-700",
     owner: "border-orange-200 bg-orange-50 text-accent",
   };

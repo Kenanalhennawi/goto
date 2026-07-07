@@ -40,7 +40,7 @@ export default async function AdminUsersPage() {
           </p>
           <h1 className="font-display text-2xl font-semibold text-ink">User access</h1>
           <p className="mt-2 text-sm leading-6 text-ink-muted">
-            New users have no special access until an admin or owner assigns editor, admin, or owner access.
+            New users have no special access until an admin or owner assigns quality, admin, or owner access.
           </p>
         </section>
 

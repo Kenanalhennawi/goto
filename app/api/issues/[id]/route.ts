@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { canManageUsers, isEditorRole } from "@/lib/permissions";
+import { canAccessAdmin, canManageUsers } from "@/lib/permissions";
 
 const STATUSES = new Set(["open", "reviewing", "resolved", "dismissed"]);
 
@@ -24,7 +24,7 @@ export async function PATCH(
     .eq("user_id", user.id)
     .single();
 
-  if (!isEditorRole(role?.role)) {
+  if (!canAccessAdmin(role?.role)) {
     return NextResponse.json({ error: "No access." }, { status: 403 });
   }
 

@@ -2,7 +2,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { isEditorRole } from "@/lib/permissions";
+import { canAccessAdmin } from "@/lib/permissions";
 
 export default async function NewSyncPage() {
   const supabase = await createServerSupabaseClient();
@@ -18,7 +18,7 @@ export default async function NewSyncPage() {
     .eq("user_id", user.id)
     .single();
 
-  if (!isEditorRole(role?.role)) {
+  if (!canAccessAdmin(role?.role)) {
     redirect("/admin");
   }
 

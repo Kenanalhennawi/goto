@@ -4,7 +4,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { IssueStatusSelect } from "@/components/IssueStatusSelect";
 import { DeleteButton } from "@/components/DeleteButton";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { isEditorRole } from "@/lib/permissions";
+import { canAccessAdmin } from "@/lib/permissions";
 
 type IssueRow = {
   id: string;
@@ -31,7 +31,7 @@ export default async function AdminIssuesPage() {
     .eq("user_id", user.id)
     .single();
 
-  if (!isEditorRole(role?.role)) {
+  if (!canAccessAdmin(role?.role)) {
     redirect("/admin");
   }
 

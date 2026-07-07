@@ -4,7 +4,7 @@ import { normalizeExternalUrl } from "@/lib/links";
 import type { ContentBlock } from "@/lib/types";
 import { canEditProcedures } from "@/lib/permissions";
 
-// Handles a direct, small edit to a single chapter made by an editor in the
+// Handles a direct, small edit to a single chapter made by the quality/admin team in the
 // admin UI. Writes the change to edit_history *before* updating the chapter,
 // so there's always a rollback path even if something goes wrong after.
 export async function PATCH(

@@ -4,7 +4,7 @@ import { DeleteButton } from "@/components/DeleteButton";
 import { AdminActionButton } from "@/components/AdminActionButton";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { canManageUsers, isEditorRole, normalizeRoleLabel } from "@/lib/permissions";
+import { canAccessAdmin, canManageUsers, normalizeRoleLabel } from "@/lib/permissions";
 
 export default async function AdminDashboard() {
   const supabase = await createServerSupabaseClient();
@@ -18,7 +18,7 @@ export default async function AdminDashboard() {
     .eq("user_id", user.id)
     .single();
 
-  if (!isEditorRole(role?.role)) {
+  if (!canAccessAdmin(role?.role)) {
     return (
       <div className="flex flex-col flex-1">
         <SiteHeader />
@@ -26,7 +26,7 @@ export default async function AdminDashboard() {
           <div className="text-center max-w-sm">
             <h1 className="font-display text-xl text-ink mb-2">No special access yet</h1>
             <p className="text-sm text-ink-muted">
-              Your account is signed in but has not been assigned editor, admin, or owner
+              Your account is signed in but has not been assigned quality, admin, or owner
               access. Ask an admin or owner to update your access.
             </p>
           </div>
