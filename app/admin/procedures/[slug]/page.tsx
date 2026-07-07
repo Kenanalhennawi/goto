@@ -367,7 +367,13 @@ function EditProcedureForm({ procedure }: { procedure: ProcedureDetail }) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Cut-off time" name="cut_off_time" defaultValue={procedure.cut_off_time ?? ""} />
+          <TextArea
+            label="Cut-off / timing rule"
+            name="cut_off_time"
+            defaultValue={procedure.cut_off_time}
+            rows={5}
+            hint="For services, enter the cut-off time. For reference cards such as MCT, enter timing rules on separate lines."
+          />
           <TextArea
             label="Required information"
             name="required_information"
@@ -520,7 +526,7 @@ function ServicePreview({ procedure }: { procedure: ProcedureDetail }) {
   const serviceFacts = [
     procedure.service_code ? { label: "Service code", value: procedure.service_code } : null,
     procedure.service_type ? { label: "Service type", value: procedure.service_type } : null,
-    procedure.cut_off_time ? { label: "Cut-off time", value: procedure.cut_off_time } : null,
+    procedure.cut_off_time ? { label: getTimingLabel(procedure), value: procedure.cut_off_time } : null,
     procedure.fees_charges ? { label: "Fees / charges", value: procedure.fees_charges } : null,
   ].filter((item): item is { label: string; value: string } => Boolean(item));
 
@@ -549,7 +555,7 @@ function ServicePreview({ procedure }: { procedure: ProcedureDetail }) {
               <dt className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
                 {fact.label}
               </dt>
-              <dd className="mt-1 text-sm font-semibold text-ink">{fact.value}</dd>
+              <dd className="mt-1 whitespace-pre-line text-sm font-semibold text-ink">{fact.value}</dd>
             </div>
           ))}
         </dl>
@@ -574,6 +580,14 @@ function ServicePreview({ procedure }: { procedure: ProcedureDetail }) {
       </div>
     </section>
   );
+}
+
+function getTimingLabel(card: Pick<ProcedureDetail, "service_code" | "service_type" | "category">) {
+  if (card.service_code?.toUpperCase() === "MCT") return "MCT rule";
+  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
+  if (type.includes("reference")) return "Reference rule";
+  if (type.includes("rule")) return "Timing rule";
+  return "Cut-off time";
 }
 
 function SourceChapterPanel({

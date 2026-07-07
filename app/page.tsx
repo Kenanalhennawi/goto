@@ -208,10 +208,10 @@ export default async function Home({
                 <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                      Live service cards
+                      Live operational cards
                     </p>
                     <h2 className="font-display text-2xl font-semibold text-ink">
-                      Live Service Cards
+                      Live Operational Cards
                     </h2>
                   </div>
                   <span className="text-xs font-semibold text-ink-faint">
@@ -327,6 +327,7 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
   const whoCanAction = readableItems(service.who_can_action);
   const steps = readableItems(service.system_steps);
   const serviceMeta = service.service_type || service.category;
+  const timingLabel = getTimingLabel(service);
 
   return (
     <article className="service-card flex min-h-56 flex-col justify-between rounded-2xl border border-blue-100 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-md">
@@ -353,9 +354,7 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
           {service.title}
         </h3>
         {service.cut_off_time && (
-          <span className="mt-4 block rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-sm font-bold text-orange-700">
-            Cut-off: {service.cut_off_time}
-          </span>
+          <TimingDisplay label={timingLabel} value={service.cut_off_time} />
         )}
       </span>
 
@@ -383,6 +382,79 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
       </span>
     </article>
   );
+}
+
+function TimingDisplay({ label, value }: { label: string; value: string }) {
+  const groups = timingGroups(value);
+  const isStructured = groups.length > 1 || groups.some((group) => group.items.length > 1);
+
+  return (
+    <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-sm text-orange-800">
+      <p className="font-bold">{label}:</p>
+      {isStructured ? (
+        <div className="mt-2 space-y-2">
+          {groups.map((group, index) => (
+            <div key={`${group.heading}-${index}`}>
+              {group.heading && (
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-orange-700">
+                  {group.heading}
+                </p>
+              )}
+              <ul className="mt-1 space-y-1">
+                {group.items.map((item) => (
+                  <li key={item} className="text-xs font-semibold leading-5 text-ink">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 font-semibold text-ink">{value}</p>
+      )}
+    </div>
+  );
+}
+
+function getTimingLabel(card: Pick<HomeServiceCard, "service_code" | "service_type" | "category">) {
+  if (card.service_code?.toUpperCase() === "MCT") return "MCT rule";
+  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
+  if (type.includes("reference")) return "Reference rule";
+  if (type.includes("rule")) return "Timing rule";
+  return "Cut-off";
+}
+
+function timingGroups(value: string) {
+  const text = value.trim();
+  const lines = text.includes("\n")
+    ? text.split(/\r?\n/)
+    : text.includes(";")
+      ? text.split(";")
+      : [text];
+  const groups: { heading: string; items: string[] }[] = [];
+  let current: { heading: string; items: string[] } = { heading: "", items: [] };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      if (current.heading || current.items.length) {
+        groups.push(current);
+        current = { heading: "", items: [] };
+      }
+      continue;
+    }
+
+    const isHeading = !line.includes(":") && current.items.length === 0;
+    if (isHeading) {
+      current.heading = line;
+    } else {
+      current.items.push(line);
+    }
+  }
+
+  if (current.heading || current.items.length) groups.push(current);
+  return groups.length ? groups : [{ heading: "", items: [text] }];
 }
 
 function QuickFact({ label, value }: { label: string; value: string }) {

@@ -208,6 +208,7 @@ function TextSection({
 }
 
 function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapter }) {
+  const timingLabel = getTimingLabel(procedure);
   const listSections = [
     { title: "Channels", items: procedure.channels },
     { title: "Who can action", items: procedure.who_can_action },
@@ -241,9 +242,11 @@ function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapte
           {procedure.cut_off_time && (
             <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
               <dt className="text-xs font-semibold uppercase tracking-wider text-accent">
-                Cut-off time
+                {timingLabel}
               </dt>
-              <dd className="mt-1 text-sm font-semibold text-ink">{procedure.cut_off_time}</dd>
+              <dd className="mt-2">
+                <StructuredText value={procedure.cut_off_time} />
+              </dd>
             </div>
           )}
           {procedure.fees_charges && (
@@ -281,6 +284,76 @@ function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapte
       </div>
     </section>
   );
+}
+
+function StructuredText({ value }: { value: string }) {
+  const groups = timingGroups(value);
+  const isStructured = groups.length > 1 || groups.some((group) => group.items.length > 1);
+
+  if (!isStructured) {
+    return <span className="text-sm font-semibold text-ink">{value}</span>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {groups.map((group, index) => (
+        <div key={`${group.heading}-${index}`}>
+          {group.heading && (
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-accent">
+              {group.heading}
+            </p>
+          )}
+          <ul className="mt-1 space-y-1">
+            {group.items.map((item) => (
+              <li key={item} className="text-sm font-semibold leading-6 text-ink">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function getTimingLabel(card: Pick<ProcedureCardWithChapter, "service_code" | "service_type" | "category">) {
+  if (card.service_code?.toUpperCase() === "MCT") return "MCT rule";
+  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
+  if (type.includes("reference")) return "Reference rule";
+  if (type.includes("rule")) return "Timing rule";
+  return "Cut-off time";
+}
+
+function timingGroups(value: string) {
+  const text = value.trim();
+  const lines = text.includes("\n")
+    ? text.split(/\r?\n/)
+    : text.includes(";")
+      ? text.split(";")
+      : [text];
+  const groups: { heading: string; items: string[] }[] = [];
+  let current: { heading: string; items: string[] } = { heading: "", items: [] };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      if (current.heading || current.items.length) {
+        groups.push(current);
+        current = { heading: "", items: [] };
+      }
+      continue;
+    }
+
+    const isHeading = !line.includes(":") && current.items.length === 0;
+    if (isHeading) {
+      current.heading = line;
+    } else {
+      current.items.push(line);
+    }
+  }
+
+  if (current.heading || current.items.length) groups.push(current);
+  return groups.length ? groups : [{ heading: "", items: [text] }];
 }
 
 function ListSection({
