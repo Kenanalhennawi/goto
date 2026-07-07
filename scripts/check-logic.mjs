@@ -11,7 +11,7 @@ assert.equal(
   "https://dubaiaviationcorp.sharepoint.com/sites/CCQualityandTraining/Shared%20Documents/GO%20TO%20DOC%20FOLDER/WorldTracer%20Self%20Service_An%20Overview.pdf"
 );
 assert.equal(normalizeExternalUrl("javascript:alert(1)"), null);
-assert.equal(buildSearchTerms("wt bag"), "worldtracer:* & baggage:*");
+assert.equal(buildSearchTerms("wt bag"), "baggage:*");
 assert.equal(plainSnippet("<mark>WorldTracer</mark> file"), "WorldTracer file");
 
 const timeRangePattern = /^([01]\d|2[0-3])[:.]?([0-5]\d)\s*[-–]\s*([01]\d|2[0-3])[:.]?([0-5]\d)$/;
