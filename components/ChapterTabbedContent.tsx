@@ -263,6 +263,7 @@ function buildGuideSections(blocks: ContentBlock[]): GuideSection[] {
 
   for (const block of blocks) {
     if (block.type === "image" && block.url) {
+      if (!isSafeImageUrl(block.url)) continue;
       ensureSection().pieces.push({
         kind: "image",
         title: block.filename ?? "Reference screenshot",
@@ -553,6 +554,21 @@ function stripListMarker(text: string) {
 
 function isImportantText(text: string) {
   return /^important\s*(note)?\s*[:.-]?/i.test(text.trim());
+}
+
+function isSafeImageUrl(url: string) {
+  if (url.startsWith("/") || url.startsWith("./") || url.startsWith("../")) return true;
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    if (parsed.hostname.endsWith(".supabase.co")) return true;
+    if (parsed.hostname === "dubaiaviationcorp.sharepoint.com") return true;
+    if (parsed.hostname === "goto-xi.vercel.app") return true;
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 function humanImageTitle(title: string) {

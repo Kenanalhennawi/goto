@@ -52,15 +52,15 @@ export async function updateProcedureContent(formData: FormData) {
   const sourcePages = numberListField(formData, "source_pages");
 
   if (!title || !category) {
-    redirectWithStatus(slug, { error: "Title and category are required." });
+    redirectWithStatus(slug, { error: "invalid_input" });
   }
 
   if (priority.error) {
-    redirectWithStatus(slug, { error: priority.error });
+    redirectWithStatus(slug, { error: "invalid_input" });
   }
 
   if (sourcePages.error) {
-    redirectWithStatus(slug, { error: sourcePages.error });
+    redirectWithStatus(slug, { error: "invalid_input" });
   }
 
   const { data: previous, error: fetchError } = await supabase
@@ -70,7 +70,8 @@ export async function updateProcedureContent(formData: FormData) {
     .single();
 
   if (fetchError || !previous) {
-    redirectWithStatus(slug, { error: fetchError?.message ?? "Procedure was not found." });
+    console.error("Procedure content fetch failed", fetchError);
+    redirectWithStatus(slug, { error: "save_failed" });
   }
 
   const updatePayload = {
@@ -114,9 +115,8 @@ export async function updateProcedureContent(formData: FormData) {
     .single();
 
   if (updateError || !updated) {
-    redirectWithStatus(slug, {
-      error: updateError?.message ?? "Could not update procedure content.",
-    });
+    console.error("Procedure content update failed", updateError);
+    redirectWithStatus(slug, { error: "save_failed" });
   }
 
   const { error: historyError } = await supabase.from("procedure_edit_history").insert({
@@ -127,7 +127,8 @@ export async function updateProcedureContent(formData: FormData) {
   });
 
   if (historyError) {
-    redirectWithStatus(slug, { error: historyError.message });
+    console.error("Procedure content history insert failed", historyError);
+    redirectWithStatus(slug, { error: "save_failed" });
   }
 
   revalidatePath("/admin/procedures");
@@ -160,7 +161,7 @@ export async function updateHomepageVisibility(formData: FormData) {
 
   const homepageOrder = numberField(formData, "homepage_order");
   if (homepageOrder.error) {
-    redirectWithStatus(slug, { error: homepageOrder.error });
+    redirectWithStatus(slug, { error: "invalid_input" });
   }
 
   const { data: previous, error: fetchError } = await supabase
@@ -170,7 +171,8 @@ export async function updateHomepageVisibility(formData: FormData) {
     .single();
 
   if (fetchError || !previous) {
-    redirectWithStatus(slug, { error: fetchError?.message ?? "Procedure was not found." });
+    console.error("Homepage visibility fetch failed", fetchError);
+    redirectWithStatus(slug, { error: "homepage_failed" });
   }
 
   const updatePayload = {
@@ -186,9 +188,8 @@ export async function updateHomepageVisibility(formData: FormData) {
     .single();
 
   if (updateError || !updated) {
-    redirectWithStatus(slug, {
-      error: updateError?.message ?? "Could not update homepage visibility.",
-    });
+    console.error("Homepage visibility update failed", updateError);
+    redirectWithStatus(slug, { error: "homepage_failed" });
   }
 
   const { error: historyError } = await supabase.from("procedure_edit_history").insert({
@@ -199,7 +200,8 @@ export async function updateHomepageVisibility(formData: FormData) {
   });
 
   if (historyError) {
-    redirectWithStatus(slug, { error: historyError.message });
+    console.error("Homepage visibility history insert failed", historyError);
+    redirectWithStatus(slug, { error: "homepage_failed" });
   }
 
   revalidatePath("/");
@@ -240,7 +242,8 @@ async function updateProcedureReviewState(formData: FormData, action: ProcedureA
     .single();
 
   if (fetchError || !previous) {
-    redirectWithStatus(slug, { error: fetchError?.message ?? "Procedure was not found." });
+    console.error("Procedure review fetch failed", fetchError);
+    redirectWithStatus(slug, { error: actionErrorCode(action) });
   }
 
   const nextState = nextReviewState(action, user.id);
@@ -252,9 +255,8 @@ async function updateProcedureReviewState(formData: FormData, action: ProcedureA
     .single();
 
   if (updateError || !updated) {
-    redirectWithStatus(slug, {
-      error: updateError?.message ?? "Could not update procedure review state.",
-    });
+    console.error("Procedure review update failed", updateError);
+    redirectWithStatus(slug, { error: actionErrorCode(action) });
   }
 
   const { error: historyError } = await supabase.from("procedure_edit_history").insert({
@@ -265,7 +267,8 @@ async function updateProcedureReviewState(formData: FormData, action: ProcedureA
   });
 
   if (historyError) {
-    redirectWithStatus(slug, { error: historyError.message });
+    console.error("Procedure review history insert failed", historyError);
+    redirectWithStatus(slug, { error: actionErrorCode(action) });
   }
 
   revalidatePath("/admin/procedures");
@@ -349,5 +352,18 @@ function successParam(action: ProcedureAction) {
       return "needs_review";
     case "archive":
       return "archived";
+  }
+}
+
+function actionErrorCode(action: ProcedureAction) {
+  switch (action) {
+    case "approve_publish":
+      return "publish_failed";
+    case "unpublish":
+      return "unpublish_failed";
+    case "needs_review":
+      return "review_failed";
+    case "archive":
+      return "archive_failed";
   }
 }

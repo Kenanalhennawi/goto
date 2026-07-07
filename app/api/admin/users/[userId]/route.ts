@@ -3,12 +3,17 @@ import { NextResponse } from "next/server";
 import { canManageUsers, isOwner, normalizeRole } from "@/lib/permissions";
 
 const ROLES = new Set(["no_special_access", "quality", "admin", "owner"]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   const { userId } = await params;
+  if (!UUID_PATTERN.test(userId)) {
+    return NextResponse.json({ error: "Invalid user reference." }, { status: 400 });
+  }
+
   const supabase = await createServerSupabaseClient();
 
   const {

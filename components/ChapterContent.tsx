@@ -9,6 +9,8 @@ export function ChapterContent({ blocks }: { blocks: ContentBlock[] }) {
     <div className="space-y-4">
       {blocks.map((block, i) => {
         if (block.type === "image" && block.url) {
+          if (!isSafeImageUrl(block.url)) return null;
+
           return (
             <figure key={i} className="my-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -34,4 +36,19 @@ export function ChapterContent({ blocks }: { blocks: ContentBlock[] }) {
       })}
     </div>
   );
+}
+
+function isSafeImageUrl(url: string) {
+  if (url.startsWith("/") || url.startsWith("./") || url.startsWith("../")) return true;
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    if (parsed.hostname.endsWith(".supabase.co")) return true;
+    if (parsed.hostname === "dubaiaviationcorp.sharepoint.com") return true;
+    if (parsed.hostname === "goto-xi.vercel.app") return true;
+    return false;
+  } catch {
+    return false;
+  }
 }

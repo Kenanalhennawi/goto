@@ -4,6 +4,13 @@ import { normalizeExternalUrl } from "@/lib/links";
 import type { ContentBlock } from "@/lib/types";
 import { canEditProcedures } from "@/lib/permissions";
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_BODY_TEXT_LENGTH = 250_000;
+const MAX_CONTENT_BLOCKS = 1_500;
+const MAX_BLOCK_TEXT_LENGTH = 50_000;
+const MAX_BLOCK_URL_LENGTH = 4_000;
+const MAX_KEYWORDS = 120;
+
 // Handles a direct, small edit to a single chapter made by the quality/admin team in the
 // admin UI. Writes the change to edit_history *before* updating the chapter,
 // so there's always a rollback path even if something goes wrong after.
@@ -12,6 +19,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!UUID_PATTERN.test(id)) {
+    return NextResponse.json({ error: "Invalid chapter reference." }, { status: 400 });
+  }
+
   const supabase = await createServerSupabaseClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -46,6 +57,7 @@ export async function PATCH(
   if (
     search_keywords !== undefined &&
     (!Array.isArray(search_keywords) ||
+      search_keywords.length > MAX_KEYWORDS ||
       search_keywords.some((keyword) => typeof keyword !== "string" || keyword.length > 120))
   ) {
     return NextResponse.json({ error: "Invalid search keywords." }, { status: 400 });
@@ -56,6 +68,20 @@ export async function PATCH(
       { error: "Chapter text can't be empty." },
       { status: 400 }
     );
+  }
+
+  if (body_text.length > MAX_BODY_TEXT_LENGTH) {
+    return NextResponse.json({ error: "Chapter text is too large." }, { status: 400 });
+  }
+
+  if (body.content_blocks !== undefined) {
+    if (!Array.isArray(body.content_blocks) || body.content_blocks.length > MAX_CONTENT_BLOCKS) {
+      return NextResponse.json({ error: "Invalid chapter content." }, { status: 400 });
+    }
+
+    if (!body.content_blocks.every(isValidContentBlockInput)) {
+      return NextResponse.json({ error: "Invalid chapter content." }, { status: 400 });
+    }
   }
 
   const { data: existing, error: fetchError } = await supabase
@@ -164,4 +190,20 @@ function sanitizeContentBlocks(blocks: ContentBlock[]) {
   }
 
   return sanitized;
+}
+
+function isValidContentBlockInput(block: unknown): block is ContentBlock {
+  if (!block || typeof block !== "object" || Array.isArray(block)) return false;
+  const candidate = block as ContentBlock;
+  if (!["text", "image", "link"].includes(candidate.type)) return false;
+
+  if (candidate.text !== undefined && typeof candidate.text !== "string") return false;
+  if (candidate.text && candidate.text.length > MAX_BLOCK_TEXT_LENGTH) return false;
+  if (candidate.title !== undefined && typeof candidate.title !== "string") return false;
+  if (candidate.title && candidate.title.length > 500) return false;
+  if (candidate.filename !== undefined && typeof candidate.filename !== "string") return false;
+  if (candidate.filename && candidate.filename.length > 500) return false;
+  if (candidate.url !== undefined && candidate.url !== null && typeof candidate.url !== "string") return false;
+  if (candidate.url && candidate.url.length > MAX_BLOCK_URL_LENGTH) return false;
+  return true;
 }

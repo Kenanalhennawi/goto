@@ -25,7 +25,7 @@ export async function getProcedureBySlug(slug: string) {
   const role = roleRow?.role as UserRole | undefined;
   const canManage = canReviewProcedures(role);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("procedure_cards")
     .select(
       [
@@ -71,8 +71,13 @@ export async function getProcedureBySlug(slug: string) {
         "chapters(id, chapter_number, title, slug)",
       ].join(", ")
     )
-    .eq("slug", slug)
-    .maybeSingle();
+    .eq("slug", slug);
+
+  if (!canManage) {
+    query = query.eq("is_published", true).eq("review_status", "approved");
+  }
+
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     console.error("Unable to fetch procedure", error.message);
