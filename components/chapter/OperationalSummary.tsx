@@ -43,6 +43,10 @@ export function OperationalSummary({
 function OperationalCard({ card, canReview }: { card: ProcedureCard; canReview: boolean }) {
   const isDraft = card.review_status !== "approved" || !card.is_published;
   const timing = textValue(card.cut_off_time);
+  const whoCanAction = jsonItems(card.who_can_action);
+  const passengerAdvice = jsonItems(card.passenger_advice);
+  const channels = jsonItems(card.channels);
+  const missingServiceDeadline = canReview && isServiceCard(card) && !timing;
 
   return (
     <article className="rounded-2xl border border-border bg-white p-4 shadow-sm">
@@ -81,13 +85,33 @@ function OperationalCard({ card, canReview }: { card: ProcedureCard; canReview: 
         </p>
       )}
 
+      {missingServiceDeadline && (
+        <p className="mt-3 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-semibold text-accent">
+          This service card has no deadline/cut-off captured yet. Review source before publishing.
+        </p>
+      )}
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <DecisionFact
+          label={isReferenceCard(card) ? "Timing rule" : "Deadline / cut-off"}
+          value={timing}
+          emptyLabel={canReview && isServiceCard(card) ? "Needs review" : undefined}
+        />
+        <DecisionFact
+          label="Can Contact Centre action?"
+          value={bestActionOwner(whoCanAction, channels)}
+        />
+        <DecisionFact label="Who handles it?" value={firstValue(whoCanAction)} />
+        <DecisionFact label="What to tell passenger" value={firstValue(passengerAdvice)} />
+      </div>
+
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         {timing && <TextField label={timingLabel(card)} value={timing} preserveLines />}
-        <ListField label="Channels" values={jsonItems(card.channels)} />
-        <ListField label="Who can action" values={jsonItems(card.who_can_action)} />
+        <ListField label="Channels" values={channels} />
+        <ListField label="Who can action" values={whoCanAction} />
         <ListField label="Required information" values={jsonItems(card.required_information)} />
         <ListField label="System steps" values={jsonItems(card.system_steps)} wide />
-        <ListField label="Passenger advice" values={jsonItems(card.passenger_advice)} wide />
+        <ListField label="Passenger advice" values={passengerAdvice} wide />
         <ListField label="Allowed" values={jsonItems(card.allowed)} />
         <ListField label="Not allowed" values={jsonItems(card.not_allowed)} />
         <ListField label="Escalation points" values={jsonItems(card.escalation_points)} wide />
@@ -95,6 +119,27 @@ function OperationalCard({ card, canReview }: { card: ProcedureCard; canReview: 
         {card.source_confidence && <TextField label="Source confidence" value={sourceConfidenceLabel(card.source_confidence)} />}
       </div>
     </article>
+  );
+}
+
+function DecisionFact({
+  label,
+  value,
+  emptyLabel,
+}: {
+  label: string;
+  value: string | null;
+  emptyLabel?: string;
+}) {
+  if (!value && !emptyLabel) return null;
+
+  return (
+    <div className="rounded-xl border border-blue-100 bg-sky-soft/70 px-3 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-sky">{label}</p>
+      <p className="mt-1 line-clamp-3 text-sm font-semibold leading-6 text-ink">
+        {value ?? emptyLabel}
+      </p>
+    </div>
   );
 }
 
@@ -149,6 +194,28 @@ function timingLabel(card: ProcedureCard) {
   if (card.service_code?.toUpperCase() === "MCT") return "MCT rule";
   if (type.includes("reference") || type.includes("rule")) return "Timing rule";
   return "Cut-off";
+}
+
+function isReferenceCard(card: ProcedureCard) {
+  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
+  return card.service_code?.toUpperCase() === "MCT" || type.includes("reference") || type.includes("rule");
+}
+
+function isServiceCard(card: ProcedureCard) {
+  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
+  if (isReferenceCard(card)) return false;
+  return ["service", "booking", "baggage", "special assistance"].some((term) => type.includes(term));
+}
+
+function firstValue(values: string[]) {
+  return values[0] ?? null;
+}
+
+function bestActionOwner(whoCanAction: string[], channels: string[]) {
+  const contactCentre = [...whoCanAction, ...channels].find((value) =>
+    /contact centre|contact center/i.test(value)
+  );
+  return contactCentre ?? firstValue(whoCanAction) ?? firstValue(channels);
 }
 
 function jsonItems(value: JsonValue[] | null | undefined) {

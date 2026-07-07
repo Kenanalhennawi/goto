@@ -54,10 +54,9 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
         </div>
 
         <section className="hero-panel mb-6 overflow-hidden rounded-[22px]">
-          <div className="grid gap-0 lg:grid-cols-[1fr_300px]">
-            <div className="hero-main border-b border-border/80 p-5 sm:p-7 lg:border-b-0 lg:border-r">
+          <div className="hero-main p-5 sm:p-7">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                Procedure
+                Agent operational card
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {procedure.service_code && (
@@ -114,67 +113,26 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
                   ))}
                 </div>
               )}
-            </div>
-
-            <SourceEvidenceCard
-              procedure={procedure}
-              sourcePages={sourcePages}
-              updatedAt={updatedAt}
-            />
           </div>
         </section>
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-          <div className="space-y-5">
-            <ServiceCardSections procedure={procedure} />
-            <TextSection title="Summary" value={procedure.summary} />
-            <TextSection title="When to use" value={procedure.when_to_use} />
-            <ListSection title="Agent action" items={procedure.agent_action} canShowFallback={canManage} />
-            <ListSection title="Rules" items={procedure.rules} canShowFallback={canManage} />
-            <ListSection title="Exceptions" items={procedure.exceptions} canShowFallback={canManage} />
-            <TextSection title="Required approval" value={procedure.required_approval} />
-            <TextSection title="Customer script" value={procedure.customer_script} isScript />
-            <TextSection title="SPRINT comment template" value={procedure.sprint_comment_template} isScript />
-            <TextSection title="Salesforce classification" value={procedure.salesforce_classification} />
-          </div>
+        <div className="space-y-5">
+          <ServiceCardSections procedure={procedure} />
+          <TextSection title="Summary" value={procedure.summary} />
+          <TextSection title="When to use" value={procedure.when_to_use} />
+          <ListSection title="Agent action" items={procedure.agent_action} canShowFallback={canManage} />
+          <ListSection title="Rules" items={procedure.rules} canShowFallback={canManage} />
+          <ListSection title="Exceptions" items={procedure.exceptions} canShowFallback={canManage} />
+          <TextSection title="Required approval" value={procedure.required_approval} />
+          <TextSection title="Customer script" value={procedure.customer_script} isScript />
+          <TextSection title="SPRINT comment template" value={procedure.sprint_comment_template} isScript />
+          <TextSection title="Salesforce classification" value={procedure.salesforce_classification} />
 
-          <aside className="space-y-5">
-            <section className="content-card quick-card p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                Source evidence
-              </p>
-              <dl className="mt-4 space-y-3 text-sm">
-                {procedure.source_version && <Fact label="Source" value={procedure.source_version} />}
-                {sourcePages && <Fact label="Pages" value={sourcePages} />}
-                {procedure.source_updated_at && (
-                  <Fact label="Source updated" value={safeDate(procedure.source_updated_at)} />
-                )}
-                {updatedAt && <Fact label="Procedure updated" value={updatedAt} />}
-                {procedure.source_confidence && (
-                  <Fact label="Confidence" value={procedure.source_confidence.replace("_", " ")} />
-                )}
-              </dl>
-            </section>
-
-            {procedure.chapters && (
-              <section className="content-card quick-card p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                  Related chapter
-                </p>
-                <Link
-                  href={`/chapter/${procedure.chapters.slug}`}
-                  className="mt-3 block rounded-xl border border-border bg-white p-4 transition-colors hover:border-accent"
-                >
-                  <span className="text-xs font-semibold text-ink-faint">
-                    Chapter {String(procedure.chapters.chapter_number).padStart(2, "0")}
-                  </span>
-                  <span className="mt-1 block text-sm font-semibold text-ink">
-                    {procedure.chapters.title}
-                  </span>
-                </Link>
-              </section>
-            )}
-          </aside>
+          <ProcedureSourceAuditDetails
+            procedure={procedure}
+            sourcePages={sourcePages}
+            updatedAt={updatedAt}
+          />
         </div>
       </main>
     </div>
@@ -209,6 +167,10 @@ function TextSection({
 
 function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapter }) {
   const timingLabel = getTimingLabel(procedure);
+  const whoCanAction = procedure.who_can_action.map(readableJsonItem).filter(Boolean);
+  const passengerAdvice = procedure.passenger_advice.map(readableJsonItem).filter(Boolean);
+  const requiredInfo = procedure.required_information.map(readableJsonItem).filter(Boolean);
+  const channels = procedure.channels.map(readableJsonItem).filter(Boolean);
   const listSections = [
     { title: "Channels", items: procedure.channels },
     { title: "Who can action", items: procedure.who_can_action },
@@ -235,6 +197,16 @@ function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapte
         <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
           Operational handling
         </h2>
+      </div>
+
+      <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <DecisionFact
+          label={procedure.service_code?.toUpperCase() === "MCT" ? "Timing rule" : "Deadline / cut-off"}
+          value={procedure.cut_off_time}
+        />
+        <DecisionFact label="Who can action" value={whoCanAction[0] ?? channels[0]} />
+        <DecisionFact label="Required information" value={requiredInfo[0]} />
+        <DecisionFact label="What to tell passenger" value={passengerAdvice[0]} />
       </div>
 
       {hasFacts && (
@@ -283,6 +255,18 @@ function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapte
         })}
       </div>
     </section>
+  );
+}
+
+function DecisionFact({ label, value }: { label: string; value: string | undefined | null }) {
+  const text = value?.trim();
+  if (!text) return null;
+
+  return (
+    <div className="rounded-xl border border-blue-100 bg-sky-soft/70 px-3 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-sky">{label}</p>
+      <p className="mt-1 line-clamp-3 text-sm font-semibold leading-6 text-ink">{text}</p>
+    </div>
   );
 }
 
@@ -390,7 +374,7 @@ function ListSection({
   );
 }
 
-function SourceEvidenceCard({
+function ProcedureSourceAuditDetails({
   procedure,
   sourcePages,
   updatedAt,
@@ -400,22 +384,50 @@ function SourceEvidenceCard({
   updatedAt: string;
 }) {
   return (
-    <aside className="bg-white/75 p-5 sm:p-6">
-      <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
-        Source evidence
-      </p>
-      <dl className="mt-4 space-y-3 text-sm">
-        {procedure.source_version && <Fact label="Source" value={procedure.source_version} />}
-        {sourcePages && <Fact label="Pages" value={sourcePages} />}
-        {updatedAt && <Fact label="Updated" value={updatedAt} />}
+    <details className="content-card overflow-hidden">
+      <summary className="cursor-pointer list-none px-5 py-4 marker:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-faint">
+              Source & audit details
+            </p>
+            <p className="mt-1 text-sm text-ink-muted">
+              Source version, pages, confidence, and linked chapter.
+            </p>
+          </div>
+          <span className="rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted">
+            Show audit details
+          </span>
+        </div>
+      </summary>
+      <div className="border-t border-border p-5">
+        <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          {procedure.source_version && <Fact label="Source" value={procedure.source_version} />}
+          {sourcePages && <Fact label="Pages" value={sourcePages} />}
+          {procedure.source_updated_at && (
+            <Fact label="Source updated" value={safeDate(procedure.source_updated_at)} />
+          )}
+          {updatedAt && <Fact label="Procedure updated" value={updatedAt} />}
+          {procedure.source_confidence && (
+            <Fact label="Confidence" value={procedure.source_confidence.replace("_", " ")} />
+          )}
+        </dl>
+
         {procedure.chapters && (
-          <Fact
-            label="Chapter"
-            value={`${String(procedure.chapters.chapter_number).padStart(2, "0")} ${procedure.chapters.title}`}
-          />
+          <div className="mt-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+              Related chapter
+            </p>
+            <Link
+              href={`/chapter/${procedure.chapters.slug}`}
+              className="mt-2 inline-flex rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-ink transition-colors hover:border-accent hover:text-accent"
+            >
+              Chapter {String(procedure.chapters.chapter_number).padStart(2, "0")} - {procedure.chapters.title}
+            </Link>
+          </div>
         )}
-      </dl>
-    </aside>
+      </div>
+    </details>
   );
 }
 
