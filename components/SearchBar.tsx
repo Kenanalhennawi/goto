@@ -87,7 +87,7 @@ export function SearchBar({
   };
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div ref={wrapRef} className="relative z-50">
       <form className="relative" autoComplete="off" onSubmit={submitSearch}>
         <svg
           className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-faint"
@@ -127,8 +127,8 @@ export function SearchBar({
       </form>
 
       {open && query.trim().length >= MIN_SEARCH_QUERY_LENGTH && (
-        <div className="absolute z-50 mt-2 max-h-[25rem] w-full overflow-y-auto rounded-2xl border border-border bg-white shadow-2xl shadow-slate-900/15">
-          <div className="sticky top-0 z-10 border-b border-border bg-white px-3 py-2">
+        <div className="absolute left-0 right-0 top-full z-[90] mt-3 max-h-[min(32rem,calc(100vh-8rem))] w-full overflow-y-auto rounded-2xl border border-blue-100 bg-white p-2 shadow-2xl shadow-slate-900/20 ring-1 ring-sky/10">
+          <div className="sticky top-0 z-10 rounded-xl border border-border bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
             <div className="flex gap-1 overflow-x-auto">
               {(["All", "Steps", "Rules", "Images"] as ResultKind[]).map((option) => (
                 <button
@@ -147,14 +147,14 @@ export function SearchBar({
             </div>
           </div>
           {loading && (
-            <div className="space-y-2 px-4 py-4">
+            <div className="space-y-2 px-2 py-3">
               <div className="h-4 w-1/3 animate-pulse rounded bg-sky-soft" />
               <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
               <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
             </div>
           )}
           {!loading && filteredResults.length === 0 && (
-            <div className="px-4 py-4">
+            <div className="m-2 rounded-xl border border-border bg-slate-50 px-4 py-4">
               <p className="text-sm font-semibold text-ink">
                 {isArabicNoResult ? "Try SSR code or English keyword" : "Try an operational shortcut"}
               </p>
@@ -197,7 +197,7 @@ export function SearchBar({
             <Link
               href={`/search?q=${encodeURIComponent(trimmedQuery)}`}
               onClick={() => setOpen(false)}
-              className="sticky bottom-0 block border-t border-border bg-white px-4 py-3 text-center text-xs font-bold text-sky hover:text-accent"
+              className="sticky bottom-0 mt-2 block rounded-xl border border-blue-100 bg-white px-4 py-3 text-center text-xs font-bold text-sky shadow-sm hover:text-accent"
             >
               View all results for &quot;{trimmedQuery}&quot;
             </Link>
@@ -224,23 +224,33 @@ function OperationalDropdownItem({
     <Link
       href={`/procedure/${result.slug}`}
       onClick={onOpen}
-      className="block border-b border-border px-4 py-3 last:border-0 hover:bg-panel-hover focus:bg-panel-hover"
+      className="my-2 block rounded-xl border border-border bg-white px-3 py-3 shadow-sm transition-colors hover:border-sky hover:bg-panel-hover focus:border-sky focus:bg-panel-hover"
     >
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <Badge tone="blue">Operational Card</Badge>
         {result.service_code ? <Badge tone="orange">{result.service_code}</Badge> : null}
         <Badge tone="neutral">{result.service_type || result.category}</Badge>
       </div>
-      <div className="flex items-start justify-between gap-3">
-        <span className="font-display text-sm font-semibold leading-5 text-ink">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <span className="min-w-0 font-display text-sm font-semibold leading-5 text-ink">
           {result.title}
         </span>
-        <span className="shrink-0 text-[11px] font-semibold text-accent">{openLabel}</span>
+        <span className="shrink-0 rounded-full bg-orange-50 px-2 py-1 text-[11px] font-semibold text-accent">
+          {openLabel}
+        </span>
       </div>
       {result.cut_off_time ? (
-        <p className="mt-1.5 line-clamp-1 text-xs font-semibold leading-relaxed text-ink">
-          <span className="text-accent">{timingLabel}:</span> {timingLines[0] ?? plainSnippet(result.cut_off_time)}
-        </p>
+        <div className="mt-2 rounded-lg border border-orange-100 bg-orange-50 px-2.5 py-1.5">
+          <p className="line-clamp-1 text-xs font-semibold leading-5 text-ink">
+            <span className="text-accent">{timingLabel}:</span>{" "}
+            {timingLines[0] ?? plainSnippet(result.cut_off_time)}
+          </p>
+          {isReferenceCard(result) ? (
+            <p className="mt-0.5 text-[11px] font-semibold text-orange-700">
+              Open card for full rule
+            </p>
+          ) : null}
+        </div>
       ) : null}
       {plainSnippet(result.snippet) ? (
         <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-ink-muted">
@@ -274,7 +284,7 @@ function ChapterDropdownItem({
     <Link
       href={`/chapter/${result.slug}?section=${sectionForResult(result)}`}
       onClick={onOpen}
-      className="block border-b border-border px-4 py-3 last:border-0 hover:bg-panel-hover focus:bg-panel-hover"
+      className="my-2 block rounded-xl border border-border bg-white px-3 py-3 shadow-sm transition-colors hover:border-sky hover:bg-panel-hover focus:border-sky focus:bg-panel-hover"
     >
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <Badge tone="orange">Ch. {formatChapterNumber(result.chapter_number)}</Badge>
@@ -282,11 +292,13 @@ function ChapterDropdownItem({
         <Badge tone="neutral">{resultKind(result)}</Badge>
         {sourceMeta(result) ? <Badge tone="neutral">{sourceMeta(result)}</Badge> : null}
       </div>
-      <div className="flex items-start justify-between gap-3">
-        <span className="font-display text-sm font-semibold leading-5 text-ink">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <span className="min-w-0 font-display text-sm font-semibold leading-5 text-ink">
           {result.title}
         </span>
-        <span className="shrink-0 text-[11px] font-semibold text-accent">Open chapter</span>
+        <span className="shrink-0 rounded-full bg-orange-50 px-2 py-1 text-[11px] font-semibold text-accent">
+          Open chapter
+        </span>
       </div>
       {plainSnippet(result.snippet) ? (
         <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-ink-muted">

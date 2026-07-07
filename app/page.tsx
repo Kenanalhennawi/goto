@@ -143,7 +143,7 @@ export default async function Home({
       <SiteHeader />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
-        <section className="hero-panel mb-5 overflow-hidden rounded-[18px]">
+        <section className="hero-panel relative z-20 mb-5 overflow-visible rounded-[18px]">
           <div className="hero-main p-4 sm:p-5 lg:p-6">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-start">
               <div>
@@ -163,11 +163,11 @@ export default async function Home({
                 <p className="mt-2 font-display text-2xl font-semibold text-sky sm:text-3xl">
                   What are you handling now?
                 </p>
-                <p className="mt-2 max-w-2xl text-sm font-medium text-ink-muted sm:text-base">
+                <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-600 sm:text-base">
                   Search by service, SSR code, passenger issue, cut-off time, or process.
                 </p>
 
-                <div className="hero-search mt-5 rounded-2xl p-3">
+                <div className="hero-search relative z-30 mt-5 rounded-2xl p-3">
                   <SearchBar autoFocus />
                 </div>
 
