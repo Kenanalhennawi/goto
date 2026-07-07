@@ -330,7 +330,7 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
   const timingLabel = getTimingLabel(service);
 
   return (
-    <article className="service-card flex min-h-56 flex-col justify-between rounded-2xl border border-blue-100 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-md">
+    <article className="service-card flex flex-col rounded-2xl border border-blue-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-md sm:p-5">
       <span>
         <span className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <span className="flex flex-wrap gap-2">
@@ -350,7 +350,7 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
             Open service
           </Link>
         </span>
-        <h3 className="font-display text-xl font-semibold leading-snug text-ink">
+        <h3 className="font-display text-lg font-semibold leading-snug text-ink sm:text-xl">
           {service.title}
         </h3>
         {service.cut_off_time && (
@@ -358,7 +358,7 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
         )}
       </span>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
         <QuickFact label="Channels" value={channels.length ? channels.join(", ") : "Check service"} />
         <QuickFact
           label="Who can action"
@@ -370,7 +370,7 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
         />
       </div>
 
-      <span className="mt-4 flex flex-wrap gap-1.5">
+      <span className="mt-3 flex flex-wrap gap-1.5">
           {channels.map((channel) => (
             <span
               key={channel}
@@ -385,34 +385,28 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
 }
 
 function TimingDisplay({ label, value }: { label: string; value: string }) {
-  const groups = timingGroups(value);
-  const isStructured = groups.length > 1 || groups.some((group) => group.items.length > 1);
+  const preview = timingPreview(value, label);
+  const isStructured = preview.lines.length > 1 || preview.isTruncated;
 
   return (
-    <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-sm text-orange-800">
+    <div className="mt-3 max-h-36 overflow-hidden rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-sm text-orange-800">
       <p className="font-bold">{label}:</p>
       {isStructured ? (
-        <div className="mt-2 space-y-2">
-          {groups.map((group, index) => (
-            <div key={`${group.heading}-${index}`}>
-              {group.heading && (
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-orange-700">
-                  {group.heading}
-                </p>
-              )}
-              <ul className="mt-1 space-y-1">
-                {group.items.map((item) => (
-                  <li key={item} className="text-xs font-semibold leading-5 text-ink">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
+        <ul className="mt-1 space-y-1">
+          {preview.lines.map((line) => (
+            <li key={line} className="text-xs font-semibold leading-5 text-ink">
+              {line}
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
         <p className="mt-1 font-semibold text-ink">{value}</p>
       )}
+      <p className="mt-2 text-[11px] font-semibold text-orange-700">
+        {label === "MCT rule" || label.includes("rule")
+          ? "Open card for full rule"
+          : "Open service for full details"}
+      </p>
     </div>
   );
 }
@@ -425,36 +419,32 @@ function getTimingLabel(card: Pick<HomeServiceCard, "service_code" | "service_ty
   return "Cut-off";
 }
 
-function timingGroups(value: string) {
+function timingPreview(value: string, label: string) {
   const text = value.trim();
-  const lines = text.includes("\n")
-    ? text.split(/\r?\n/)
-    : text.includes(";")
-      ? text.split(";")
-      : [text];
-  const groups: { heading: string; items: string[] }[] = [];
-  let current: { heading: string; items: string[] } = { heading: "", items: [] };
+  const rawLines = text.includes("\n") ? text.split(/\r?\n/) : text.includes(";") ? text.split(";") : [text];
+  const meaningful = rawLines.map((line) => line.trim()).filter(Boolean);
 
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) {
-      if (current.heading || current.items.length) {
-        groups.push(current);
-        current = { heading: "", items: [] };
-      }
-      continue;
-    }
+  if (label === "MCT rule") {
+    const preferred = [
+      combineHeadingWithNext(meaningful, "T2 -> T2"),
+      combineHeadingWithNext(meaningful, "T3 -> T3"),
+      combineHeadingWithNext(meaningful, "T2/T3 -> T1"),
+    ].filter(Boolean);
 
-    const isHeading = !line.includes(":") && current.items.length === 0;
-    if (isHeading) {
-      current.heading = line;
-    } else {
-      current.items.push(line);
+    if (preferred.length > 0) {
+      return { lines: preferred.slice(0, 3), isTruncated: meaningful.length > preferred.length };
     }
   }
 
-  if (current.heading || current.items.length) groups.push(current);
-  return groups.length ? groups : [{ heading: "", items: [text] }];
+  const lines = meaningful.slice(0, text.includes(";") ? 3 : 3);
+  return { lines, isTruncated: meaningful.length > lines.length };
+}
+
+function combineHeadingWithNext(lines: string[], heading: string) {
+  const index = lines.findIndex((line) => line.toLowerCase() === heading.toLowerCase());
+  if (index === -1) return "";
+  const next = lines[index + 1];
+  return next ? `${lines[index]} ${next}` : lines[index];
 }
 
 function QuickFact({ label, value }: { label: string; value: string }) {
