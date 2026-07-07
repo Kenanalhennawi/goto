@@ -28,6 +28,8 @@ type HomeServiceCard = {
   service_type: string | null;
   cut_off_time: string | null;
   channels: JsonValue[] | null;
+  who_can_action: JsonValue[] | null;
+  system_steps: JsonValue[] | null;
   priority: number | null;
 };
 
@@ -35,12 +37,12 @@ const HERO_SHORTCUTS = [
   ["MCT", "MCT"],
   ["EXST", "EXST"],
   ["CBBG", "CBBG"],
+  ["SPEQ", "SPEQ"],
   ["FDIS", "FDIS"],
-  ["OLCI", "OLCI"],
+  ["WCHR", "WCHR"],
+  ["OLCI Lounge", "OLCI lounge"],
   ["Falcon", "Falcon"],
-  ["Auto Split", "Auto Split OD"],
   ["Dubai Stopover", "Dubai Stopover"],
-  ["Sporting Equipment", "Sporting Equipment"],
   ["Name Correction", "Name Correction"],
 ];
 
@@ -85,27 +87,24 @@ const WORK_MODES = [
 
 const CRITICAL_SHORTCUTS = [
   ["MCT", "MCT"],
-  ["Auto Split OD", "Auto Split OD"],
-  ["Dubai Stopover", "Dubai Stopover"],
-  ["Lounge OLCI", "lounge access OLCI"],
   ["EXST / CBBG", "EXST CBBG extra seat"],
-  ["Sporting Equipment", "SPEQ sporting equipment"],
-  ["Falcon Handling", "falcon handling"],
+  ["SPEQ", "SPEQ sporting equipment"],
+  ["Falcon", "falcon handling"],
+  ["Lounge OLCI", "lounge access OLCI"],
+  ["FDIS", "FDIS flight disruption"],
+  ["WCHR", "WCHR WCHS WCHC wheelchair"],
+  ["Dubai Stopover", "Dubai Stopover"],
+  ["Name Correction", "name correction"],
   ["Baggage Upgrade", "baggage upgrade"],
-  ["Wheelchair", "WCHR WCHS WCHC wheelchair"],
-  ["Interline", "interline connection"],
-  ["Government Deals", "government deals"],
 ];
 
 const QUICK_CHECKS = [
-  ["Cut-off times", "cut off time service deadline"],
-  ["Add service", "add service SSR"],
-  ["SSR codes", "SSR codes"],
-  ["Baggage / CBBG", "baggage CBBG"],
-  ["Check-in / OLCI", "check-in OLCI"],
-  ["Disruption / FDIS", "disruption FDIS"],
-  ["Special assistance", "special assistance WCHR MEDA"],
-  ["Connection / MCT", "connection MCT minimum connection time"],
+  ["What is the cut-off?", "cut off time"],
+  ["Can Contact Centre add it?", "contact centre add service"],
+  ["What should I tell passenger?", "passenger advice"],
+  ["Is approval required?", "approval required"],
+  ["What is not allowed?", "not allowed"],
+  ["Which channel handles it?", "channel service"],
 ];
 
 export default async function Home({
@@ -121,7 +120,7 @@ export default async function Home({
     .order("chapter_number", { ascending: true });
   const { data: serviceCards } = await supabase
     .from("procedure_cards")
-    .select("id, title, slug, category, service_code, service_type, cut_off_time, channels, priority")
+    .select("id, title, slug, category, service_code, service_type, cut_off_time, channels, who_can_action, system_steps, priority")
     .eq("is_published", true)
     .eq("review_status", "approved")
     .order("priority", { ascending: false })
@@ -142,38 +141,60 @@ export default async function Home({
       <SiteHeader />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
-        <section className="hero-panel mb-6 overflow-hidden rounded-[22px]">
-          <div className="hero-main p-5 sm:p-7 lg:p-9">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <section className="hero-panel mb-5 overflow-hidden rounded-[18px]">
+          <div className="hero-main p-4 sm:p-5 lg:p-6">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-start">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
-                  Command center
-                </p>
-                <h1 className="mt-2 font-display text-4xl font-semibold leading-tight tracking-tight text-ink sm:text-5xl">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
+                    Agent task console
+                  </p>
+                  <MetaStrip
+                    chapters={list.length}
+                    sourceVersion={sourceVersion}
+                    lastUpdated={lastUpdated}
+                  />
+                </div>
+                <h1 className="mt-3 font-display text-3xl font-semibold leading-tight tracking-tight text-ink sm:text-4xl">
                   GO TO Contact Centre Guide
                 </h1>
-                <p className="mt-3 text-sm font-semibold uppercase tracking-[0.2em] text-sky">
-                  Operational service console
+                <p className="mt-2 font-display text-2xl font-semibold text-sky sm:text-3xl">
+                  What are you handling now?
                 </p>
-                <p className="mt-3 max-w-2xl text-lg font-medium text-ink-muted">
-                  Find cut-off times, service rules, allowed channels, and agent actions fast.
+                <p className="mt-2 max-w-2xl text-sm font-medium text-ink-muted sm:text-base">
+                  Search by service, SSR code, passenger issue, cut-off time, or process.
                 </p>
+
+                <div className="hero-search mt-5 rounded-2xl p-3">
+                  <SearchBar autoFocus />
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {HERO_SHORTCUTS.map(([label, query]) => (
+                    <ShortcutChip key={label} label={label} query={query} />
+                  ))}
+                </div>
               </div>
-              <MetaStrip
-                chapters={list.length}
-                sourceVersion={sourceVersion}
-                lastUpdated={lastUpdated}
-              />
-            </div>
 
-            <div className="hero-search mt-7 rounded-2xl p-3">
-              <SearchBar autoFocus />
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {HERO_SHORTCUTS.map(([label, query]) => (
-                <ShortcutChip key={label} label={label} query={query} />
-              ))}
+              <aside className="answer-panel rounded-2xl border border-blue-100 bg-white/86 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+                  Answer fast
+                </p>
+                <h2 className="mt-1 font-display text-lg font-semibold text-ink">
+                  Answer the passenger fast
+                </h2>
+                <div className="mt-4 grid gap-2">
+                  {QUICK_CHECKS.map(([label, query]) => (
+                    <Link
+                      key={label}
+                      href={`/search?q=${encodeURIComponent(query)}`}
+                      className="rounded-xl border border-border bg-white px-3 py-2 text-sm font-semibold text-ink transition-colors hover:border-accent hover:text-accent"
+                    >
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+              </aside>
             </div>
           </div>
         </section>
@@ -182,15 +203,15 @@ export default async function Home({
           <EmptyState />
         ) : (
           <div className="space-y-6">
-            <section className="service-console-grid">
+            <section>
               <div className="content-card service-console-panel p-4 sm:p-5">
                 <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                      Service cards
+                      Live service cards
                     </p>
                     <h2 className="font-display text-2xl font-semibold text-ink">
-                      Operational Service Cards
+                      Live Service Cards
                     </h2>
                   </div>
                   <span className="text-xs font-semibold text-ink-faint">
@@ -199,48 +220,33 @@ export default async function Home({
                 </div>
 
                 {services.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                     {services.map((service) => (
                       <ServiceCard key={service.id} service={service} />
                     ))}
+                    {services.length < 4 && (
+                      <div className="rounded-2xl border border-dashed border-blue-200 bg-white/70 p-5">
+                        <p className="font-display text-lg font-semibold text-ink">
+                          More service cards coming after review
+                        </p>
+                        <p className="mt-2 text-sm text-ink-muted">
+                          Quality-approved cards will appear here as operational drafts are reviewed and published.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-blue-200 bg-sky-soft/50 p-6 text-sm text-ink-muted">
-                    <p className="font-semibold text-ink">No published service cards yet.</p>
-                    <p className="mt-1">Approved service cards will appear here.</p>
+                    <p className="font-semibold text-ink">No approved service cards yet.</p>
+                    <p className="mt-1">Use search while Quality reviews service cards.</p>
                   </div>
                 )}
-              </div>
-
-              <aside className="content-card p-4 sm:p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                  Quick checks
-                </p>
-                <h2 className="mt-1 font-display text-xl font-semibold text-ink">
-                  Quick operational checks
-                </h2>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {QUICK_CHECKS.map(([label, query]) => (
-                    <ShortcutChip key={label} label={label} query={query} />
-                  ))}
-                </div>
-              </aside>
-            </section>
-
-            <section>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="font-display text-xl font-semibold text-ink">Work modes</h2>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                {WORK_MODES.map((mode) => (
-                  <WorkModeCard key={mode.title} mode={mode} />
-                ))}
               </div>
             </section>
 
             <section className="content-card p-4">
               <h2 className="mb-3 font-display text-lg font-semibold text-ink">
-                Critical shortcuts
+                Operational shortcuts
               </h2>
               <div className="flex flex-wrap gap-2">
                 {CRITICAL_SHORTCUTS.map(([label, query]) => (
@@ -249,44 +255,56 @@ export default async function Home({
               </div>
             </section>
 
-            {recentlyUpdated.length > 0 && (
-              <section className="content-card overflow-hidden">
-                <div className="border-b border-border px-4 py-3">
-                  <h2 className="font-display text-lg font-semibold text-ink">Recent updates</h2>
-                </div>
-                <div className="divide-y divide-border">
-                  {recentlyUpdated.map((chapter) => (
-                    <Link
-                      key={chapter.id}
-                      href={`/chapter/${chapter.slug}`}
-                      className="grid gap-2 px-4 py-3 text-sm transition-colors hover:bg-panel-hover sm:grid-cols-[72px_1fr_auto]"
-                    >
-                      <span className="font-mono text-xs font-semibold text-accent">
-                        Ch. {String(chapter.chapter_number).padStart(2, "0")}
-                      </span>
-                      <span className="font-semibold text-ink">{chapter.title}</span>
-                      <span className="text-xs text-ink-faint">{compactDate(chapter.updated_at)}</span>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
-
             <details className="content-card group overflow-hidden">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4">
                 <span>
                   <span className="block font-display text-lg font-semibold text-ink">
-                    Browse all chapters
+                    Manual / chapter browser
                   </span>
                   <span className="mt-1 block text-xs text-ink-muted">
-                    Open the full manual directory when you need chapter-by-chapter browsing.
+                    Last-resort manual browsing, work areas, and recent chapter updates.
                   </span>
                 </span>
                 <span className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold text-sky group-open:text-accent">
                   Open
                 </span>
               </summary>
-              <div className="border-t border-border p-4">
+              <div className="space-y-5 border-t border-border p-4">
+                <details className="rounded-2xl border border-border bg-white/70">
+                  <summary className="cursor-pointer px-4 py-3 font-display text-base font-semibold text-ink">
+                    Browse by work area
+                  </summary>
+                  <div className="grid grid-cols-1 gap-3 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {WORK_MODES.map((mode) => (
+                      <WorkModeCard key={mode.title} mode={mode} />
+                    ))}
+                  </div>
+                </details>
+
+                {recentlyUpdated.length > 0 && (
+                  <details className="rounded-2xl border border-border bg-white/70">
+                    <summary className="cursor-pointer px-4 py-3 font-display text-base font-semibold text-ink">
+                      Recent chapter updates
+                    </summary>
+                    <div className="divide-y divide-border border-t border-border">
+                      {recentlyUpdated.map((chapter) => (
+                        <Link
+                          key={chapter.id}
+                          href={`/chapter/${chapter.slug}`}
+                          className="grid gap-2 px-4 py-3 text-sm transition-colors hover:bg-panel-hover sm:grid-cols-[72px_1fr_auto]"
+                        >
+                          <span className="font-mono text-xs font-semibold text-accent">
+                            Ch. {String(chapter.chapter_number).padStart(2, "0")}
+                          </span>
+                          <span className="font-semibold text-ink">{chapter.title}</span>
+                          <span className="text-xs text-ink-faint">{compactDate(chapter.updated_at)}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </details>
+                )}
+
+                <h2 className="font-display text-lg font-semibold text-ink">Browse all chapters</h2>
                 <ChapterDirectory chapters={list} activeGroupId={group} />
               </div>
             </details>
@@ -306,36 +324,54 @@ export default async function Home({
 
 function ServiceCard({ service }: { service: HomeServiceCard }) {
   const channels = readableItems(service.channels).slice(0, 3);
+  const whoCanAction = readableItems(service.who_can_action);
+  const steps = readableItems(service.system_steps);
   const serviceMeta = service.service_type || service.category;
 
   return (
-    <Link
-      href={`/procedure/${service.slug}`}
-      className="service-card group flex min-h-44 flex-col justify-between rounded-2xl border border-blue-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-md"
-    >
+    <article className="service-card flex min-h-56 flex-col justify-between rounded-2xl border border-blue-100 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-md">
       <span>
-        <span className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="flex flex-wrap gap-2">
           {service.service_code && (
             <span className="rounded-lg bg-accent-soft px-2.5 py-1 font-mono text-xs font-bold text-accent">
               {service.service_code}
             </span>
           )}
-          <span className="rounded-lg bg-sky-soft px-2.5 py-1 text-xs font-semibold text-sky">
-            {serviceMeta}
+            <span className="rounded-lg bg-sky-soft px-2.5 py-1 text-xs font-semibold text-sky">
+              {serviceMeta}
+            </span>
           </span>
+          <Link
+            href={`/procedure/${service.slug}`}
+            className="rounded-lg bg-accent px-3 py-1 text-xs font-bold text-white transition-colors hover:bg-accent-dim"
+          >
+            Open service
+          </Link>
         </span>
-        <span className="block font-display text-lg font-semibold leading-snug text-ink group-hover:text-accent">
+        <h3 className="font-display text-xl font-semibold leading-snug text-ink">
           {service.title}
-        </span>
+        </h3>
         {service.cut_off_time && (
-          <span className="mt-3 block rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700">
+          <span className="mt-4 block rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-sm font-bold text-orange-700">
             Cut-off: {service.cut_off_time}
           </span>
         )}
       </span>
 
-      <span className="mt-4 flex items-center justify-between gap-3">
-        <span className="flex flex-wrap gap-1.5">
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <QuickFact label="Channels" value={channels.length ? channels.join(", ") : "Check service"} />
+        <QuickFact
+          label="Who can action"
+          value={whoCanAction[0] ?? "Action guide"}
+        />
+        <QuickFact
+          label="Steps"
+          value={steps.length ? `${steps.length} steps` : "Action guide"}
+        />
+      </div>
+
+      <span className="mt-4 flex flex-wrap gap-1.5">
           {channels.map((channel) => (
             <span
               key={channel}
@@ -344,10 +380,19 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
               {channel}
             </span>
           ))}
-        </span>
-        <span className="shrink-0 text-xs font-bold text-accent">Open service</span>
       </span>
-    </Link>
+    </article>
+  );
+}
+
+function QuickFact({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="rounded-xl border border-border bg-sky-soft/45 px-3 py-2">
+      <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">
+        {label}
+      </span>
+      <span className="mt-1 block truncate text-xs font-semibold text-ink">{value}</span>
+    </span>
   );
 }
 

@@ -143,6 +143,12 @@ body {
   backdrop-filter: blur(14px);
 }
 
+.answer-panel {
+  box-shadow:
+    0 18px 44px rgba(7, 26, 51, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
 .section-band {
   border: 1px solid rgba(215, 226, 239, 0.86);
   border-radius: 18px;
