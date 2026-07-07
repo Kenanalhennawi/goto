@@ -31,6 +31,7 @@ type HomeServiceCard = {
   who_can_action: JsonValue[] | null;
   system_steps: JsonValue[] | null;
   priority: number | null;
+  homepage_order: number | null;
 };
 
 const HERO_SHORTCUTS = [
@@ -120,12 +121,14 @@ export default async function Home({
     .order("chapter_number", { ascending: true });
   const { data: serviceCards } = await supabase
     .from("procedure_cards")
-    .select("id, title, slug, category, service_code, service_type, cut_off_time, channels, who_can_action, system_steps, priority")
+    .select("id, title, slug, category, service_code, service_type, cut_off_time, channels, who_can_action, system_steps, priority, homepage_order")
     .eq("is_published", true)
     .eq("review_status", "approved")
+    .eq("show_on_homepage", true)
+    .order("homepage_order", { ascending: true })
     .order("priority", { ascending: false })
     .order("title", { ascending: true })
-    .limit(12);
+    .limit(2);
 
   const list = ((chapters ?? []) as HomeChapter[]).filter(Boolean);
   const services = ((serviceCards ?? []) as HomeServiceCard[]).filter(Boolean);
@@ -208,37 +211,32 @@ export default async function Home({
                 <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                      Live operational cards
+                      Featured operational cards
                     </p>
                     <h2 className="font-display text-2xl font-semibold text-ink">
-                      Live Operational Cards
+                      Featured Operational Cards
                     </h2>
+                    <p className="mt-1 text-sm text-ink-muted">
+                      Selected high-impact cards for quick access.
+                    </p>
                   </div>
                   <span className="text-xs font-semibold text-ink-faint">
-                    Approved and published only
+                    Featured by admin
                   </span>
                 </div>
 
                 {services.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <div className={`grid grid-cols-1 gap-4 ${services.length > 1 ? "lg:grid-cols-2" : ""}`}>
                     {services.map((service) => (
                       <ServiceCard key={service.id} service={service} />
                     ))}
-                    {services.length < 4 && (
-                      <div className="rounded-2xl border border-dashed border-blue-200 bg-white/70 p-5">
-                        <p className="font-display text-lg font-semibold text-ink">
-                          More service cards coming after review
-                        </p>
-                        <p className="mt-2 text-sm text-ink-muted">
-                          Quality-approved cards will appear here as operational drafts are reviewed and published.
-                        </p>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-blue-200 bg-sky-soft/50 p-6 text-sm text-ink-muted">
-                    <p className="font-semibold text-ink">No approved service cards yet.</p>
-                    <p className="mt-1">Use search while Quality reviews service cards.</p>
+                    <p className="font-semibold text-ink">No featured operational cards yet.</p>
+                    <p className="mt-1">
+                      Use search or direct procedure links while cards are selected for the homepage.
+                    </p>
                   </div>
                 )}
               </div>
@@ -328,6 +326,7 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
   const steps = readableItems(service.system_steps);
   const serviceMeta = service.service_type || service.category;
   const timingLabel = getTimingLabel(service);
+  const openLabel = isReferenceCard(service) ? "Open card" : "Open service";
 
   return (
     <article className="service-card flex flex-col rounded-2xl border border-blue-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-md sm:p-5">
@@ -347,7 +346,7 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
             href={`/procedure/${service.slug}`}
             className="rounded-lg bg-accent px-3 py-1 text-xs font-bold text-white transition-colors hover:bg-accent-dim"
           >
-            Open service
+            {openLabel}
           </Link>
         </span>
         <h3 className="font-display text-lg font-semibold leading-snug text-ink sm:text-xl">
@@ -417,6 +416,11 @@ function getTimingLabel(card: Pick<HomeServiceCard, "service_code" | "service_ty
   if (type.includes("reference")) return "Reference rule";
   if (type.includes("rule")) return "Timing rule";
   return "Cut-off";
+}
+
+function isReferenceCard(card: Pick<HomeServiceCard, "service_code" | "service_type" | "category">) {
+  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
+  return card.service_code?.toUpperCase() === "MCT" || type.includes("reference") || type.includes("rule");
 }
 
 function timingPreview(value: string, label: string) {

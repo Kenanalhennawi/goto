@@ -6,6 +6,7 @@ import {
   markNeedsReview,
   unpublish,
   updateProcedureContent,
+  updateHomepageVisibility,
 } from "@/app/admin/procedures/actions";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import type { ContentBlock, JsonValue } from "@/lib/types";
@@ -48,6 +49,8 @@ type ProcedureDetail = {
   priority: number;
   review_status: string;
   is_published: boolean;
+  show_on_homepage: boolean;
+  homepage_order: number;
   source_confidence: string;
   last_reviewed_at: string | null;
   last_reviewed_by: string | null;
@@ -143,6 +146,8 @@ export default async function AdminProcedureDetailPage({
         "priority",
         "review_status",
         "is_published",
+        "show_on_homepage",
+        "homepage_order",
         "source_confidence",
         "last_reviewed_at",
         "last_reviewed_by",
@@ -158,6 +163,7 @@ export default async function AdminProcedureDetailPage({
   const procedure = data as unknown as ProcedureDetail;
   const chapter = firstChapter(procedure.chapters);
   const canArchive = canArchiveProcedures(role?.role);
+  const canFeatureOnHomepage = canArchive;
   const { data: sourceChapterData } = procedure.chapter_id
     ? await supabase
         .from("chapters")
@@ -288,6 +294,7 @@ export default async function AdminProcedureDetailPage({
 
             <ChipSection title="Keywords" items={procedure.keywords} />
             <ChipSection title="Aliases" items={procedure.aliases} />
+            {canFeatureOnHomepage && <HomepageVisibilityForm procedure={procedure} />}
           </aside>
         </div>
       </main>
@@ -307,7 +314,9 @@ function ActionStatusMessage({ status }: { status: Record<string, string | undef
             ? "Procedure marked as needs review and unpublished."
             : status.archived === "1"
               ? "Procedure archived and unpublished."
-              : "";
+              : status.homepage === "1"
+                ? "Homepage visibility updated."
+                : "";
 
   if (status.error) {
     return (
@@ -323,6 +332,45 @@ function ActionStatusMessage({ status }: { status: Record<string, string | undef
     <div className="mb-6 rounded-xl border border-good/20 bg-good/10 px-4 py-3 text-sm font-medium text-good">
       {message}
     </div>
+  );
+}
+
+function HomepageVisibilityForm({ procedure }: { procedure: ProcedureDetail }) {
+  return (
+    <section className="content-card quick-card p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+        Homepage visibility
+      </p>
+      <h2 className="mt-2 font-display text-lg font-semibold text-ink">Featured card</h2>
+      <p className="mt-2 text-xs leading-5 text-ink-muted">
+        Admin/owner control for selecting the few cards shown on the homepage. This does not
+        publish, unpublish, or change review status.
+      </p>
+      <form action={updateHomepageVisibility} className="mt-4 space-y-4">
+        <input type="hidden" name="slug" value={procedure.slug} />
+        <label className="flex items-center gap-3 rounded-xl border border-border bg-white p-3 text-sm font-semibold text-ink">
+          <input
+            type="checkbox"
+            name="show_on_homepage"
+            defaultChecked={procedure.show_on_homepage}
+            className="h-4 w-4 accent-[var(--color-accent)]"
+          />
+          Show on homepage
+        </label>
+        <Field
+          label="Homepage order"
+          name="homepage_order"
+          defaultValue={String(procedure.homepage_order)}
+          type="number"
+        />
+        <button
+          type="submit"
+          className="w-full rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent"
+        >
+          Update homepage visibility
+        </button>
+      </form>
+    </section>
   );
 }
 

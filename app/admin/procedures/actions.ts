@@ -131,9 +131,82 @@ export async function updateProcedureContent(formData: FormData) {
   }
 
   revalidatePath("/admin/procedures");
+  revalidatePath("/");
   revalidatePath(`/admin/procedures/${slug}`);
   revalidatePath(`/procedure/${slug}`);
   redirectWithStatus(slug, { saved: "1" });
+}
+
+export async function updateHomepageVisibility(formData: FormData) {
+  const slug = String(formData.get("slug") ?? "");
+  if (!slug) redirect("/admin/procedures");
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const { data: role } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!canArchiveProcedures(role?.role)) {
+    redirect("/admin");
+  }
+
+  const homepageOrder = numberField(formData, "homepage_order");
+  if (homepageOrder.error) {
+    redirectWithStatus(slug, { error: homepageOrder.error });
+  }
+
+  const { data: previous, error: fetchError } = await supabase
+    .from("procedure_cards")
+    .select("*")
+    .eq("slug", slug)
+    .single();
+
+  if (fetchError || !previous) {
+    redirectWithStatus(slug, { error: fetchError?.message ?? "Procedure was not found." });
+  }
+
+  const updatePayload = {
+    show_on_homepage: formData.get("show_on_homepage") === "on",
+    homepage_order: homepageOrder.value,
+  };
+
+  const { data: updated, error: updateError } = await supabase
+    .from("procedure_cards")
+    .update(updatePayload)
+    .eq("slug", slug)
+    .select("*")
+    .single();
+
+  if (updateError || !updated) {
+    redirectWithStatus(slug, {
+      error: updateError?.message ?? "Could not update homepage visibility.",
+    });
+  }
+
+  const { error: historyError } = await supabase.from("procedure_edit_history").insert({
+    procedure_id: previous.id,
+    edited_by: user.id,
+    previous_data: previous,
+    new_data: updated,
+  });
+
+  if (historyError) {
+    redirectWithStatus(slug, { error: historyError.message });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/admin/procedures");
+  revalidatePath(`/admin/procedures/${slug}`);
+  revalidatePath(`/procedure/${slug}`);
+  redirectWithStatus(slug, { homepage: "1" });
 }
 
 async function updateProcedureReviewState(formData: FormData, action: ProcedureAction) {
@@ -196,6 +269,7 @@ async function updateProcedureReviewState(formData: FormData, action: ProcedureA
   }
 
   revalidatePath("/admin/procedures");
+  revalidatePath("/");
   revalidatePath(`/admin/procedures/${slug}`);
   revalidatePath(`/procedure/${slug}`);
   redirectWithStatus(slug, { [successParam(action)]: "1" });

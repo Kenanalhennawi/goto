@@ -88,6 +88,8 @@ export interface ProcedureCard {
   priority: number;
   review_status: ProcedureReviewStatus;
   is_published: boolean;
+  show_on_homepage: boolean;
+  homepage_order: number;
   source_confidence: SourceConfidence;
   last_reviewed_at: string | null;
   last_reviewed_by: string | null;
