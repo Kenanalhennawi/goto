@@ -4,16 +4,18 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { SEARCH_EXAMPLES } from "@/lib/operational-content";
-import { MAX_SEARCH_QUERY_LENGTH, MIN_SEARCH_QUERY_LENGTH, plainSnippet } from "@/lib/search";
-import type { SearchResult } from "@/lib/types";
+import {
+  containsArabic,
+  isReferenceCard,
+  MAX_SEARCH_QUERY_LENGTH,
+  MIN_SEARCH_QUERY_LENGTH,
+  plainSnippet,
+  readableJsonItems,
+  timingLabelForCard,
+} from "@/lib/search";
+import type { ChapterSearchResult, OperationalCardSearchResult, UnifiedSearchResult } from "@/lib/types";
 
 type ResultKind = "All" | "Steps" | "Rules" | "Images";
-type OperationalSearchResult = SearchResult & {
-  page_start?: number | null;
-  page_end?: number | null;
-  source_version?: string | null;
-  search_keywords?: string[] | null;
-};
 
 export function SearchBar({
   autoFocus = false,
@@ -23,7 +25,7 @@ export function SearchBar({
   defaultValue?: string;
 }) {
   const [query, setQuery] = useState(defaultValue);
-  const [results, setResults] = useState<OperationalSearchResult[]>([]);
+  const [results, setResults] = useState<UnifiedSearchResult[]>([]);
   const [kind, setKind] = useState<ResultKind>("All");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -42,7 +44,7 @@ export function SearchBar({
         const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
           signal: controller.signal,
         });
-        const json = (await res.json()) as { results?: OperationalSearchResult[] };
+        const json = (await res.json()) as { results?: UnifiedSearchResult[] };
         setResults(json.results ?? []);
         setOpen(true);
       } catch {
@@ -71,8 +73,10 @@ export function SearchBar({
 
   const filteredResults = results.filter((result) => {
     if (kind === "All") return true;
+    if (result.type === "operational_card") return kind !== "Images";
     return resultKind(result) === kind;
   });
+  const isArabicNoResult = containsArabic(query) && !loading && filteredResults.length === 0;
 
   return (
     <div ref={wrapRef} className="relative">
@@ -99,7 +103,7 @@ export function SearchBar({
           maxLength={MAX_SEARCH_QUERY_LENGTH}
           onFocus={() => query.trim().length >= MIN_SEARCH_QUERY_LENGTH && setOpen(true)}
           placeholder="Search by issue, SSR, process, keyword..."
-          className="w-full rounded-lg border border-border bg-white py-3.5 pl-12 pr-24 font-body text-[15px] text-ink transition-colors placeholder:text-ink-faint focus:border-accent"
+          className="w-full rounded-lg border border-border bg-white py-3.5 pl-12 pr-24 font-body text-[15px] text-ink transition-colors placeholder:text-ink-faint focus:border-sky focus:outline-none focus:ring-2 focus:ring-sky/15"
         />
         <button
           type="submit"
@@ -138,12 +142,16 @@ export function SearchBar({
           )}
           {!loading && filteredResults.length === 0 && (
             <div className="px-4 py-4">
-              <p className="text-sm font-semibold text-ink">Try an operational shortcut</p>
+              <p className="text-sm font-semibold text-ink">
+                {isArabicNoResult ? "Try SSR code or English keyword" : "Try an operational shortcut"}
+              </p>
               <p className="mt-1 text-xs leading-5 text-ink-muted">
-                Search by SSR code, process name, passenger issue, or internal shorthand.
+                {isArabicNoResult
+                  ? "Search works best with English service names or SSR codes."
+                  : "Search by SSR code, process name, passenger issue, or internal shorthand."}
               </p>
               <div className="mt-3 flex flex-wrap gap-1.5">
-                {SEARCH_EXAMPLES.slice(0, 10).map((example) => (
+                {(isArabicNoResult ? ["EXST", "CBBG", "MCT", "SPEQ", "FDIS", "WCHR"] : SEARCH_EXAMPLES.slice(0, 10)).map((example) => (
                   <Link
                     key={example}
                     href={`/search?q=${encodeURIComponent(example)}`}
@@ -158,42 +166,19 @@ export function SearchBar({
           )}
           {!loading &&
             filteredResults.map((result) => (
-              <Link
-                key={result.id}
-                href={`/chapter/${result.slug}?section=${sectionForResult(result)}`}
-                onClick={() => setOpen(false)}
-                className="block border-b border-border px-4 py-3 last:border-0 hover:bg-panel-hover focus:bg-panel-hover"
-              >
-                <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                  <Badge tone="orange">Ch. {formatChapterNumber(result.chapter_number)}</Badge>
-                  <Badge tone="blue">Chapter</Badge>
-                  <Badge tone="neutral">{resultKind(result)}</Badge>
-                  {sourceMeta(result) ? <Badge tone="neutral">{sourceMeta(result)}</Badge> : null}
-                </div>
-                <div className="flex items-start justify-between gap-3">
-                  <span className="font-display text-sm font-semibold leading-5 text-ink">
-                    {result.title}
-                  </span>
-                  <span className="shrink-0 text-[11px] font-semibold text-accent">Open chapter</span>
-                </div>
-                {plainSnippet(result.snippet) ? (
-                  <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-ink-muted">
-                    {plainSnippet(result.snippet)}
-                  </p>
-                ) : null}
-                {result.search_keywords?.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {result.search_keywords.slice(0, 4).map((keyword) => (
-                      <span
-                        key={keyword}
-                        className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-ink-muted"
-                      >
-                        {keyword}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </Link>
+              result.type === "operational_card" ? (
+                <OperationalDropdownItem
+                  key={`card-${result.id}`}
+                  result={result}
+                  onOpen={() => setOpen(false)}
+                />
+              ) : (
+                <ChapterDropdownItem
+                  key={`chapter-${result.id}`}
+                  result={result}
+                  onOpen={() => setOpen(false)}
+                />
+              )
             ))}
         </div>
       )}
@@ -201,7 +186,107 @@ export function SearchBar({
   );
 }
 
-function resultKind(result: OperationalSearchResult): ResultKind {
+function OperationalDropdownItem({
+  result,
+  onOpen,
+}: {
+  result: OperationalCardSearchResult;
+  onOpen: () => void;
+}) {
+  const timingLabel = timingLabelForCard(result);
+  const openLabel = isReferenceCard(result) ? "Open card" : "Open service";
+  const channels = readableJsonItems(result.channels).slice(0, 2);
+
+  return (
+    <Link
+      href={`/procedure/${result.slug}`}
+      onClick={onOpen}
+      className="block border-b border-border px-4 py-3 last:border-0 hover:bg-panel-hover focus:bg-panel-hover"
+    >
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <Badge tone="blue">Operational Card</Badge>
+        {result.service_code ? <Badge tone="orange">{result.service_code}</Badge> : null}
+        <Badge tone="neutral">{result.service_type || result.category}</Badge>
+      </div>
+      <div className="flex items-start justify-between gap-3">
+        <span className="font-display text-sm font-semibold leading-5 text-ink">
+          {result.title}
+        </span>
+        <span className="shrink-0 text-[11px] font-semibold text-accent">{openLabel}</span>
+      </div>
+      {result.cut_off_time ? (
+        <p className="mt-1.5 line-clamp-1 text-xs font-semibold leading-relaxed text-ink">
+          <span className="text-accent">{timingLabel}:</span> {plainSnippet(result.cut_off_time)}
+        </p>
+      ) : null}
+      {plainSnippet(result.snippet) ? (
+        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-ink-muted">
+          {plainSnippet(result.snippet)}
+        </p>
+      ) : null}
+      {channels.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {channels.map((channel) => (
+            <span
+              key={channel}
+              className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-ink-muted"
+            >
+              {channel}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </Link>
+  );
+}
+
+function ChapterDropdownItem({
+  result,
+  onOpen,
+}: {
+  result: ChapterSearchResult;
+  onOpen: () => void;
+}) {
+  return (
+    <Link
+      href={`/chapter/${result.slug}?section=${sectionForResult(result)}`}
+      onClick={onOpen}
+      className="block border-b border-border px-4 py-3 last:border-0 hover:bg-panel-hover focus:bg-panel-hover"
+    >
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <Badge tone="orange">Ch. {formatChapterNumber(result.chapter_number)}</Badge>
+        <Badge tone="blue">Chapter</Badge>
+        <Badge tone="neutral">{resultKind(result)}</Badge>
+        {sourceMeta(result) ? <Badge tone="neutral">{sourceMeta(result)}</Badge> : null}
+      </div>
+      <div className="flex items-start justify-between gap-3">
+        <span className="font-display text-sm font-semibold leading-5 text-ink">
+          {result.title}
+        </span>
+        <span className="shrink-0 text-[11px] font-semibold text-accent">Open chapter</span>
+      </div>
+      {plainSnippet(result.snippet) ? (
+        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-ink-muted">
+          {plainSnippet(result.snippet)}
+        </p>
+      ) : null}
+      {result.search_keywords?.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {result.search_keywords.slice(0, 4).map((keyword) => (
+            <span
+              key={keyword}
+              className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-ink-muted"
+            >
+              {keyword}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </Link>
+  );
+}
+
+function resultKind(result: ChapterSearchResult): ResultKind {
   const text = `${result.title} ${stripHtml(result.snippet)}`.toLowerCase();
   if (/\b(image|screenshot|screen|photo|picture)\b/.test(text)) return "Images";
   if (/\b(must|cannot|not allowed|only|eligible|valid|restriction|condition|exception|required|applicable)\b/.test(text)) {
@@ -210,7 +295,7 @@ function resultKind(result: OperationalSearchResult): ResultKind {
   return "Steps";
 }
 
-function sectionForResult(result: OperationalSearchResult) {
+function sectionForResult(result: ChapterSearchResult) {
   const kind = resultKind(result);
   if (kind === "Images") return "images";
   if (kind === "Rules") return "rules";
@@ -225,7 +310,7 @@ function formatChapterNumber(value?: number | null) {
   return String(value ?? "-").padStart(2, "0");
 }
 
-function sourceMeta(result: OperationalSearchResult) {
+function sourceMeta(result: ChapterSearchResult) {
   const pages = pageLabel(result.page_start, result.page_end);
   if (pages && result.source_version) return `${result.source_version} - ${pages}`;
   return result.source_version ?? pages;

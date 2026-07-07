@@ -4,15 +4,31 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SearchBar } from "@/components/SearchBar";
 import { SEARCH_EXAMPLES } from "@/lib/operational-content";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { buildSearchTerms, MIN_SEARCH_QUERY_LENGTH, plainSnippet, rankSearchResults } from "@/lib/search";
-import type { SearchResult } from "@/lib/types";
+import {
+  buildSearchTerms,
+  containsArabic,
+  isReferenceCard,
+  MIN_SEARCH_QUERY_LENGTH,
+  operationalCardPreview,
+  plainSnippet,
+  rankSearchResults,
+  readableJsonItems,
+  scoreOperationalCard,
+  timingLabelForCard,
+} from "@/lib/search";
+import type { ChapterSearchResult, OperationalCardSearchResult, SearchResult, UnifiedSearchResult } from "@/lib/types";
 
-type EnrichedSearchResult = SearchResult & {
-  page_start?: number | null;
-  page_end?: number | null;
-  search_keywords?: string[] | null;
-  source_version?: string | null;
-  body_text?: string | null;
+type ProcedureSearchRow = Parameters<typeof scoreOperationalCard>[0] & {
+  id: string;
+  title: string;
+  slug: string;
+  category: string;
+  channels: OperationalCardSearchResult["channels"] | null;
+  passenger_advice: OperationalCardSearchResult["passenger_advice"] | null;
+  system_steps: OperationalCardSearchResult["system_steps"] | null;
+  source_pages: number[] | null;
+  source_version: string | null;
+  summary: string | null;
 };
 
 export default async function SearchPage({
@@ -52,11 +68,21 @@ export default async function SearchPage({
         {query.length < MIN_SEARCH_QUERY_LENGTH ? (
           <EmptyState message="Type at least two characters to search by issue, SSR, process, or keyword." />
         ) : results.length === 0 ? (
-          <EmptyState message="No matching chapters found. Try a shorter keyword, process name, or SSR code." />
+          <EmptyState
+            message={
+              containsArabic(query)
+                ? "Search works best with English service names or SSR codes. Try EXST, CBBG, MCT, SPEQ, FDIS, WCHR."
+                : "No matching results found. Try a shorter keyword, process name, or SSR code."
+            }
+          />
         ) : (
           <div className="space-y-4">
             {results.map((result) => (
-              <SearchResultCard key={result.id} result={result} />
+              result.type === "operational_card" ? (
+                <OperationalCardResult key={`card-${result.id}`} result={result} />
+              ) : (
+                <SearchResultCard key={`chapter-${result.id}`} result={result} />
+              )
             ))}
           </div>
         )}
@@ -65,21 +91,22 @@ export default async function SearchPage({
   );
 }
 
-async function search(query: string): Promise<EnrichedSearchResult[]> {
+async function search(query: string): Promise<UnifiedSearchResult[]> {
   const supabase = await createServerSupabaseClient();
   const terms = buildSearchTerms(query);
 
   if (!terms) return [];
 
+  const cardResults = await searchOperationalCards(supabase, query);
   const { data, error } = await supabase.rpc("search_chapters", {
     query: terms,
   });
 
-  if (error || !data) return [];
+  if (error || !data) return cardResults;
 
   const results = data as SearchResult[];
   const ids = results.map((result) => result.id).filter(Boolean);
-  if (ids.length === 0) return results;
+  if (ids.length === 0) return cardResults;
 
   const { data: chapters } = await supabase
     .from("chapters")
@@ -99,13 +126,133 @@ async function search(query: string): Promise<EnrichedSearchResult[]> {
     ])
   );
 
-  return rankSearchResults(
+  const chapterResults = rankSearchResults(
     results.map((result) => ({ ...result, ...metadata.get(result.id) })),
     query
+  ).map((result) => {
+    const chapter = { ...result, type: "chapter" as const };
+    delete chapter.body_text;
+    return chapter;
+  });
+
+  return [...cardResults, ...chapterResults].slice(0, 24);
+}
+
+async function searchOperationalCards(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  query: string
+): Promise<OperationalCardSearchResult[]> {
+  const { data } = await supabase
+    .from("procedure_cards")
+    .select(
+      [
+        "id",
+        "title",
+        "slug",
+        "category",
+        "service_code",
+        "service_type",
+        "cut_off_time",
+        "channels",
+        "who_can_action",
+        "required_information",
+        "system_steps",
+        "passenger_advice",
+        "allowed",
+        "not_allowed",
+        "escalation_points",
+        "fees_charges",
+        "keywords",
+        "aliases",
+        "summary",
+        "when_to_use",
+        "source_pages",
+        "source_version",
+        "priority",
+      ].join(", ")
+    )
+    .eq("is_published", true)
+    .eq("review_status", "approved")
+    .limit(100);
+
+  return ((data ?? []) as unknown as ProcedureSearchRow[])
+    .map((card) => ({ card, score: scoreOperationalCard(card, query) }))
+    .filter(({ score }) => score >= 2500)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+    .map(({ card, score }) => ({
+      type: "operational_card" as const,
+      id: card.id,
+      title: card.title,
+      slug: card.slug,
+      rank: score,
+      service_code: card.service_code ?? null,
+      service_type: card.service_type ?? null,
+      category: card.category,
+      cut_off_time: card.cut_off_time ?? null,
+      channels: card.channels ?? [],
+      passenger_advice: card.passenger_advice ?? [],
+      system_steps: card.system_steps ?? [],
+      source_pages: card.source_pages ?? [],
+      source_version: card.source_version ?? null,
+      summary: card.summary ?? null,
+      snippet: operationalCardPreview(card),
+    }));
+}
+
+function OperationalCardResult({ result }: { result: OperationalCardSearchResult }) {
+  const channels = readableJsonItems(result.channels).slice(0, 3);
+  const pages = sourcePagesLabel(result.source_pages);
+  const timingLabel = timingLabelForCard(result);
+  const openLabel = isReferenceCard(result) ? "Open card" : "Open service";
+
+  return (
+    <article className="content-card border-blue-200 bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-accent sm:p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Badge tone="blue">Operational Card</Badge>
+            {result.service_code ? <Badge tone="orange">{result.service_code}</Badge> : null}
+            <Badge tone="neutral">{result.service_type || result.category}</Badge>
+            {pages ? <Badge tone="neutral">{pages}</Badge> : null}
+            {result.source_version ? <Badge tone="neutral">{result.source_version}</Badge> : null}
+          </div>
+          <h2 className="font-display text-xl font-semibold leading-snug text-ink">
+            {result.title}
+          </h2>
+          {result.cut_off_time ? (
+            <p className="mt-3 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-sm font-semibold text-ink">
+              <span className="text-accent">{timingLabel}:</span> {plainSnippet(result.cut_off_time).slice(0, 150)}
+            </p>
+          ) : null}
+          {result.snippet ? (
+            <p className="mt-3 max-w-4xl text-sm leading-6 text-ink-muted">{result.snippet}</p>
+          ) : null}
+          {channels.length ? (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {channels.map((channel) => (
+                <span
+                  key={channel}
+                  className="rounded-full border border-blue-200 bg-sky-soft px-2.5 py-1 text-[11px] font-semibold text-sky"
+                >
+                  {channel}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <Link
+          href={`/procedure/${result.slug}`}
+          className="inline-flex shrink-0 items-center justify-center rounded-full bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-accent-dim"
+        >
+          {openLabel}
+        </Link>
+      </div>
+    </article>
   );
 }
 
-function SearchResultCard({ result }: { result: EnrichedSearchResult }) {
+function SearchResultCard({ result }: { result: ChapterSearchResult }) {
   const snippet = plainSnippet(result.snippet);
   const pages = pageLabel(result.page_start, result.page_end);
 
@@ -192,4 +339,12 @@ function pageLabel(start?: number | null, end?: number | null) {
   if (!start && !end) return "";
   if (start && end && start !== end) return `Pages ${start}-${end}`;
   return `Page ${start ?? end}`;
+}
+
+function sourcePagesLabel(pages: number[]) {
+  if (!pages.length) return "";
+  const sorted = [...new Set(pages)].sort((a, b) => a - b);
+  if (sorted.length === 1) return `Page ${sorted[0]}`;
+  const contiguous = sorted.every((page, index) => index === 0 || page === sorted[index - 1] + 1);
+  return contiguous ? `Pages ${sorted[0]}-${sorted[sorted.length - 1]}` : `Pages ${sorted.join(", ")}`;
 }

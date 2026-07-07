@@ -45,6 +45,35 @@ export interface SearchResult {
   rank: number;
 }
 
+export type UnifiedSearchResult = ChapterSearchResult | OperationalCardSearchResult;
+
+export interface ChapterSearchResult extends SearchResult {
+  type: "chapter";
+  page_start?: number | null;
+  page_end?: number | null;
+  search_keywords?: string[] | null;
+  source_version?: string | null;
+}
+
+export interface OperationalCardSearchResult {
+  type: "operational_card";
+  id: string;
+  title: string;
+  slug: string;
+  rank: number;
+  service_code: string | null;
+  service_type: string | null;
+  category: string;
+  cut_off_time: string | null;
+  channels: JsonValue[];
+  passenger_advice: JsonValue[];
+  system_steps: JsonValue[];
+  source_pages: number[];
+  source_version: string | null;
+  summary: string | null;
+  snippet: string;
+}
+
 export type UserRole = "editor" | "admin" | "owner" | "quality" | "supervisor" | "agent";
 
 export type JsonPrimitive = string | number | boolean | null;

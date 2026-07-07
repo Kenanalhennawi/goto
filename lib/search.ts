@@ -12,6 +12,29 @@ export type RankableSearchResult = {
   body_text?: string | null;
 };
 
+export type RankableOperationalCard = {
+  title: string;
+  slug: string;
+  service_code?: string | null;
+  service_type?: string | null;
+  category?: string | null;
+  cut_off_time?: string | null;
+  channels?: unknown[] | null;
+  who_can_action?: unknown[] | null;
+  required_information?: unknown[] | null;
+  system_steps?: unknown[] | null;
+  passenger_advice?: unknown[] | null;
+  allowed?: unknown[] | null;
+  not_allowed?: unknown[] | null;
+  escalation_points?: unknown[] | null;
+  fees_charges?: string | null;
+  keywords?: string[] | null;
+  aliases?: string[] | null;
+  summary?: string | null;
+  when_to_use?: string | null;
+  priority?: number | null;
+};
+
 const CODE_ALIASES: Record<string, string[]> = {
   WCHR: ["wheelchair"],
   WCHS: ["wheelchair"],
@@ -192,6 +215,105 @@ export function rankSearchResults<T extends RankableSearchResult>(results: T[], 
   });
 }
 
+export function containsArabic(value: string) {
+  return /[\u0600-\u06FF]/.test(value);
+}
+
+export function scoreOperationalCard(card: RankableOperationalCard, query: string) {
+  const code = operationalCodeFromQuery(query);
+  const normalizedQuery = normalize(query);
+  const aliasPhrases = code ? phrasesForCode(code).slice(1) : findSearchAlias(query) ?? [];
+  const serviceCode = (card.service_code ?? "").toUpperCase();
+  const title = normalize(card.title);
+  const slug = normalize(card.slug);
+  const serviceType = normalize(card.service_type ?? "");
+  const category = normalize(card.category ?? "");
+  const keywords = (card.keywords ?? []).map((item) => normalize(item));
+  const aliases = (card.aliases ?? []).map((item) => normalize(item));
+  const cutOff = normalize(card.cut_off_time ?? "");
+  const fields = operationalCardSearchText(card);
+  let score = 1000 + (card.priority ?? 0);
+
+  if (code) {
+    if (serviceCode === code) score += 30000;
+    if (keywords.some((item) => item === normalize(code))) score += 22000;
+    if (aliases.some((item) => item === normalize(code))) score += 22000;
+    if (hasStandaloneToken(card.title, code)) score += 12000;
+    if (fields.includes(normalize(code))) score += 5000;
+  }
+
+  if (title === normalizedQuery || slug === normalizedQuery) score += 16000;
+  if (title.includes(normalizedQuery)) score += 10000;
+  if (keywords.some((item) => item === normalizedQuery || item.includes(normalizedQuery))) score += 10000;
+  if (aliases.some((item) => item === normalizedQuery || item.includes(normalizedQuery))) score += 10000;
+  if (fields.includes(normalizedQuery)) score += 2500;
+
+  for (const phrase of aliasPhrases) {
+    const normalizedPhrase = normalize(phrase);
+    if (!normalizedPhrase) continue;
+    if (title.includes(normalizedPhrase)) score += 6500;
+    if (keywords.some((item) => item.includes(normalizedPhrase))) score += 6500;
+    if (aliases.some((item) => item.includes(normalizedPhrase))) score += 6500;
+    if (fields.includes(normalizedPhrase)) score += 1800;
+  }
+
+  if (/\b(cut off|cutoff|deadline|time)\b/.test(normalizedQuery) && cutOff) score += 8500;
+  if (/\b(mct|timing rule|reference rule|connection time|minimum connection)\b/.test(normalizedQuery) && isReferenceCard(card)) {
+    score += 12000;
+  }
+  if (/\b(passenger advice|tell passenger|customer advice)\b/.test(normalizedQuery) && hasItems(card.passenger_advice)) {
+    score += 9000;
+  }
+  if (/\b(not allowed|cannot|restriction)\b/.test(normalizedQuery) && hasItems(card.not_allowed)) {
+    score += 9000;
+  }
+  if (/\b(who can action|contact centre add|add service|can contact centre)\b/.test(normalizedQuery) && hasItems(card.who_can_action)) {
+    score += 9000;
+  }
+  if (serviceType.includes("reference") || category.includes("reference")) score += 500;
+
+  return score;
+}
+
+export function isReferenceCard(card: Pick<RankableOperationalCard, "service_code" | "service_type" | "category">) {
+  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
+  return card.service_code?.toUpperCase() === "MCT" || type.includes("reference") || type.includes("rule");
+}
+
+export function timingLabelForCard(card: Pick<RankableOperationalCard, "service_code" | "service_type" | "category">) {
+  if (card.service_code?.toUpperCase() === "MCT") return "MCT rule";
+  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
+  if (type.includes("reference")) return "Reference rule";
+  if (type.includes("rule")) return "Timing rule";
+  return "Cut-off";
+}
+
+export function readableJsonItems(value: unknown[] | null | undefined) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (typeof item === "number" || typeof item === "boolean") return String(item);
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const record = item as Record<string, unknown>;
+        const text = record.label ?? record.text ?? record.value ?? record.title ?? record.description;
+        return typeof text === "string" ? text.trim() : "";
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
+export function operationalCardPreview(card: RankableOperationalCard) {
+  const candidates = [
+    ...readableJsonItems(card.passenger_advice).slice(0, 1),
+    ...readableJsonItems(card.system_steps).slice(0, 1),
+    card.summary ?? "",
+    card.when_to_use ?? "",
+  ];
+  return plainSnippet(candidates.find((item) => item.trim()) ?? "").slice(0, 220);
+}
+
 function scoreResult(
   result: RankableSearchResult,
   normalizedQuery: string,
@@ -228,6 +350,38 @@ function scoreResult(
   }
 
   return score;
+}
+
+function operationalCardSearchText(card: RankableOperationalCard) {
+  return normalize(
+    [
+      card.title,
+      card.slug,
+      card.service_code,
+      card.service_type,
+      card.category,
+      card.cut_off_time,
+      card.fees_charges,
+      card.summary,
+      card.when_to_use,
+      ...(card.keywords ?? []),
+      ...(card.aliases ?? []),
+      ...readableJsonItems(card.channels),
+      ...readableJsonItems(card.who_can_action),
+      ...readableJsonItems(card.required_information),
+      ...readableJsonItems(card.system_steps),
+      ...readableJsonItems(card.passenger_advice),
+      ...readableJsonItems(card.allowed),
+      ...readableJsonItems(card.not_allowed),
+      ...readableJsonItems(card.escalation_points),
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+}
+
+function hasItems(value: unknown[] | null | undefined) {
+  return readableJsonItems(value).length > 0;
 }
 
 function workAreaScore(result: RankableSearchResult, topic: string | null, code: string | null) {
