@@ -51,6 +51,7 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
 export type ProcedureReviewStatus = "draft" | "needs_review" | "approved" | "archived";
+export type SourceConfidence = "needs_review" | "source_backed" | "approved";
 
 export interface ProcedureCard {
   id: string;
@@ -58,8 +59,20 @@ export interface ProcedureCard {
   title: string;
   slug: string;
   category: string;
+  service_code: string | null;
+  service_type: string | null;
   summary: string | null;
   when_to_use: string | null;
+  channels: JsonValue[];
+  cut_off_time: string | null;
+  who_can_action: JsonValue[];
+  required_information: JsonValue[];
+  system_steps: JsonValue[];
+  passenger_advice: JsonValue[];
+  allowed: JsonValue[];
+  not_allowed: JsonValue[];
+  escalation_points: JsonValue[];
+  fees_charges: string | null;
   agent_action: JsonValue[];
   rules: JsonValue[];
   exceptions: JsonValue[];
@@ -75,6 +88,9 @@ export interface ProcedureCard {
   priority: number;
   review_status: ProcedureReviewStatus;
   is_published: boolean;
+  source_confidence: SourceConfidence;
+  last_reviewed_at: string | null;
+  last_reviewed_by: string | null;
   created_at: string;
   updated_at: string;
 }

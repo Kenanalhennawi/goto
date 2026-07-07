@@ -60,6 +60,16 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
                 Procedure
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
+                {procedure.service_code && (
+                  <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-accent">
+                    {procedure.service_code}
+                  </span>
+                )}
+                {procedure.service_type && (
+                  <span className="rounded-full border border-blue-200 bg-sky-soft px-3 py-1 text-xs font-semibold text-sky">
+                    {procedure.service_type}
+                  </span>
+                )}
                 <span className="rounded-full border border-blue-200 bg-sky-soft px-3 py-1 text-xs font-semibold text-sky">
                   {procedure.category}
                 </span>
@@ -116,6 +126,7 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
 
         <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
           <div className="space-y-5">
+            <ServiceCardSections procedure={procedure} />
             <TextSection title="Summary" value={procedure.summary} />
             <TextSection title="When to use" value={procedure.when_to_use} />
             <ListSection title="Agent action" items={procedure.agent_action} canShowFallback={canManage} />
@@ -139,6 +150,9 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
                   <Fact label="Source updated" value={safeDate(procedure.source_updated_at)} />
                 )}
                 {updatedAt && <Fact label="Procedure updated" value={updatedAt} />}
+                {procedure.source_confidence && (
+                  <Fact label="Confidence" value={procedure.source_confidence.replace("_", " ")} />
+                )}
               </dl>
             </section>
 
@@ -189,6 +203,82 @@ function TextSection({
       >
         {text}
       </p>
+    </section>
+  );
+}
+
+function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapter }) {
+  const listSections = [
+    { title: "Channels", items: procedure.channels },
+    { title: "Who can action", items: procedure.who_can_action },
+    { title: "Required information", items: procedure.required_information },
+    { title: "System steps", items: procedure.system_steps },
+    { title: "Passenger advice", items: procedure.passenger_advice },
+    { title: "Allowed", items: procedure.allowed },
+    { title: "Not allowed", items: procedure.not_allowed },
+    { title: "Escalation", items: procedure.escalation_points },
+  ];
+  const hasListContent = listSections.some((section) =>
+    section.items.some((item) => readableJsonItem(item))
+  );
+  const hasFacts = Boolean(procedure.cut_off_time?.trim() || procedure.fees_charges?.trim());
+
+  if (!hasListContent && !hasFacts) return null;
+
+  return (
+    <section className="content-card quick-card p-5 sm:p-6">
+      <div className="mb-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+          Service card
+        </p>
+        <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+          Operational handling
+        </h2>
+      </div>
+
+      {hasFacts && (
+        <dl className="mb-5 grid gap-3 sm:grid-cols-2">
+          {procedure.cut_off_time && (
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+              <dt className="text-xs font-semibold uppercase tracking-wider text-accent">
+                Cut-off time
+              </dt>
+              <dd className="mt-1 text-sm font-semibold text-ink">{procedure.cut_off_time}</dd>
+            </div>
+          )}
+          {procedure.fees_charges && (
+            <div className="rounded-xl border border-border bg-white p-4">
+              <dt className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                Fees / charges
+              </dt>
+              <dd className="mt-1 whitespace-pre-line text-sm font-semibold text-ink">
+                {procedure.fees_charges}
+              </dd>
+            </div>
+          )}
+        </dl>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {listSections.map((section) => {
+          const items = section.items.map(readableJsonItem).filter(Boolean);
+          if (items.length === 0) return null;
+
+          return (
+            <div key={section.title} className="rounded-xl border border-border bg-white p-4">
+              <h3 className="font-display text-base font-semibold text-ink">{section.title}</h3>
+              <ul className="mt-3 space-y-2 text-sm leading-6 text-ink-muted">
+                {items.map((item, index) => (
+                  <li key={`${section.title}-${index}`} className="flex gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }

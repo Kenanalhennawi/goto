@@ -46,6 +46,8 @@ export async function updateProcedureContent(formData: FormData) {
 
   const title = stringField(formData, "title");
   const category = stringField(formData, "category");
+  const serviceCode = nullableStringField(formData, "service_code");
+  const serviceType = nullableStringField(formData, "service_type");
   const priority = numberField(formData, "priority");
   const sourcePages = numberListField(formData, "source_pages");
 
@@ -74,8 +76,20 @@ export async function updateProcedureContent(formData: FormData) {
   const updatePayload = {
     title,
     category,
+    service_code: serviceCode,
+    service_type: serviceType,
     summary: nullableStringField(formData, "summary"),
     when_to_use: nullableStringField(formData, "when_to_use"),
+    channels: lineListField(formData, "channels"),
+    cut_off_time: nullableStringField(formData, "cut_off_time"),
+    who_can_action: lineListField(formData, "who_can_action"),
+    required_information: lineListField(formData, "required_information"),
+    system_steps: lineListField(formData, "system_steps"),
+    passenger_advice: lineListField(formData, "passenger_advice"),
+    allowed: lineListField(formData, "allowed"),
+    not_allowed: lineListField(formData, "not_allowed"),
+    escalation_points: lineListField(formData, "escalation_points"),
+    fees_charges: nullableStringField(formData, "fees_charges"),
     agent_action: lineListField(formData, "agent_action"),
     rules: lineListField(formData, "rules"),
     exceptions: lineListField(formData, "exceptions"),
@@ -89,6 +103,7 @@ export async function updateProcedureContent(formData: FormData) {
     priority: priority.value,
     review_status: previous.review_status === "archived" ? "archived" : "needs_review",
     is_published: false,
+    source_confidence: previous.review_status === "archived" ? previous.source_confidence : "needs_review",
   };
 
   const { data: updated, error: updateError } = await supabase
@@ -155,7 +170,7 @@ async function updateProcedureReviewState(formData: FormData, action: ProcedureA
     redirectWithStatus(slug, { error: fetchError?.message ?? "Procedure was not found." });
   }
 
-  const nextState = nextReviewState(action);
+  const nextState = nextReviewState(action, user.id);
   const { data: updated, error: updateError } = await supabase
     .from("procedure_cards")
     .update(nextState)
@@ -226,10 +241,16 @@ function numberField(formData: FormData, name: string) {
   return { value, error: "" };
 }
 
-function nextReviewState(action: ProcedureAction) {
+function nextReviewState(action: ProcedureAction, userId: string) {
   switch (action) {
     case "approve_publish":
-      return { review_status: "approved", is_published: true };
+      return {
+        review_status: "approved",
+        is_published: true,
+        source_confidence: "approved",
+        last_reviewed_at: new Date().toISOString(),
+        last_reviewed_by: userId,
+      };
     case "unpublish":
       return { is_published: false };
     case "needs_review":

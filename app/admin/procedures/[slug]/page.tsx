@@ -19,8 +19,20 @@ type ProcedureDetail = {
   title: string;
   slug: string;
   category: string;
+  service_code: string | null;
+  service_type: string | null;
   summary: string | null;
   when_to_use: string | null;
+  channels: JsonValue[];
+  cut_off_time: string | null;
+  who_can_action: JsonValue[];
+  required_information: JsonValue[];
+  system_steps: JsonValue[];
+  passenger_advice: JsonValue[];
+  allowed: JsonValue[];
+  not_allowed: JsonValue[];
+  escalation_points: JsonValue[];
+  fees_charges: string | null;
   agent_action: JsonValue[];
   rules: JsonValue[];
   exceptions: JsonValue[];
@@ -36,6 +48,9 @@ type ProcedureDetail = {
   priority: number;
   review_status: string;
   is_published: boolean;
+  source_confidence: string;
+  last_reviewed_at: string | null;
+  last_reviewed_by: string | null;
   updated_at: string;
   chapters:
     | {
@@ -99,8 +114,20 @@ export default async function AdminProcedureDetailPage({
         "title",
         "slug",
         "category",
+        "service_code",
+        "service_type",
         "summary",
         "when_to_use",
+        "channels",
+        "cut_off_time",
+        "who_can_action",
+        "required_information",
+        "system_steps",
+        "passenger_advice",
+        "allowed",
+        "not_allowed",
+        "escalation_points",
+        "fees_charges",
         "agent_action",
         "rules",
         "exceptions",
@@ -116,6 +143,9 @@ export default async function AdminProcedureDetailPage({
         "priority",
         "review_status",
         "is_published",
+        "source_confidence",
+        "last_reviewed_at",
+        "last_reviewed_by",
         "updated_at",
         "chapters(chapter_number, title, slug)",
       ].join(", ")
@@ -157,7 +187,10 @@ export default async function AdminProcedureDetailPage({
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Badge>{procedure.category}</Badge>
+                {procedure.service_code && <Badge>{procedure.service_code}</Badge>}
+                {procedure.service_type && <Badge>{procedure.service_type}</Badge>}
                 <Badge>{procedure.review_status.replace("_", " ")}</Badge>
+                <Badge>{procedure.source_confidence.replace("_", " ")}</Badge>
                 <Badge>{procedure.is_published ? "published" : "unpublished"}</Badge>
               </div>
               <h1 className="mt-4 font-display text-3xl font-semibold leading-tight tracking-tight text-ink sm:text-4xl">
@@ -204,6 +237,7 @@ export default async function AdminProcedureDetailPage({
           <div className="space-y-5">
             <TextSection title="Summary" value={procedure.summary} />
             <TextSection title="When to use" value={procedure.when_to_use} />
+            <ServicePreview procedure={procedure} />
             <ListSection title="Agent action" items={procedure.agent_action} />
             <ListSection title="Rules" items={procedure.rules} />
             <ListSection title="Exceptions" items={procedure.exceptions} />
@@ -229,6 +263,10 @@ export default async function AdminProcedureDetailPage({
                   <Fact label="Source updated" value={safeDate(procedure.source_updated_at)} />
                 )}
                 <Fact label="Updated" value={safeDate(procedure.updated_at)} />
+                <Fact label="Confidence" value={procedure.source_confidence.replace("_", " ")} />
+                {procedure.last_reviewed_at && (
+                  <Fact label="Last reviewed" value={safeDate(procedure.last_reviewed_at)} />
+                )}
                 <Fact label="Priority" value={String(procedure.priority)} />
               </dl>
             </section>
@@ -307,7 +345,83 @@ function EditProcedureForm({ procedure }: { procedure: ProcedureDetail }) {
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Title" name="title" defaultValue={procedure.title} required />
           <Field label="Category" name="category" defaultValue={procedure.category} required />
+          <Field label="Service code" name="service_code" defaultValue={procedure.service_code ?? ""} />
+          <Field label="Service type" name="service_type" defaultValue={procedure.service_type ?? ""} />
         </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextArea
+            label="Channels"
+            name="channels"
+            defaultValue={jsonListToLines(procedure.channels)}
+            rows={4}
+            hint="One line per channel."
+          />
+          <TextArea
+            label="Who can action"
+            name="who_can_action"
+            defaultValue={jsonListToLines(procedure.who_can_action)}
+            rows={4}
+            hint="One line per role/team."
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Cut-off time" name="cut_off_time" defaultValue={procedure.cut_off_time ?? ""} />
+          <TextArea
+            label="Required information"
+            name="required_information"
+            defaultValue={jsonListToLines(procedure.required_information)}
+            rows={4}
+            hint="One line per required item."
+          />
+        </div>
+
+        <TextArea
+          label="System steps"
+          name="system_steps"
+          defaultValue={jsonListToLines(procedure.system_steps)}
+          rows={6}
+          hint="One line per system/tool step."
+        />
+        <TextArea
+          label="Passenger advice"
+          name="passenger_advice"
+          defaultValue={jsonListToLines(procedure.passenger_advice)}
+          rows={5}
+          hint="One line per advice item."
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextArea
+            label="Allowed"
+            name="allowed"
+            defaultValue={jsonListToLines(procedure.allowed)}
+            rows={5}
+            hint="One line per allowed action/rule."
+          />
+          <TextArea
+            label="Not allowed"
+            name="not_allowed"
+            defaultValue={jsonListToLines(procedure.not_allowed)}
+            rows={5}
+            hint="One line per restriction."
+          />
+        </div>
+
+        <TextArea
+          label="Escalation points"
+          name="escalation_points"
+          defaultValue={jsonListToLines(procedure.escalation_points)}
+          rows={5}
+          hint="One line per escalation trigger/team."
+        />
+        <TextArea
+          label="Fees / charges"
+          name="fees_charges"
+          defaultValue={procedure.fees_charges}
+          rows={3}
+        />
 
         <TextArea label="Summary" name="summary" defaultValue={procedure.summary} rows={3} />
         <TextArea label="When to use" name="when_to_use" defaultValue={procedure.when_to_use} rows={3} />
@@ -398,6 +512,66 @@ function EditProcedureForm({ procedure }: { procedure: ProcedureDetail }) {
           </button>
         </div>
       </form>
+    </section>
+  );
+}
+
+function ServicePreview({ procedure }: { procedure: ProcedureDetail }) {
+  const serviceFacts = [
+    procedure.service_code ? { label: "Service code", value: procedure.service_code } : null,
+    procedure.service_type ? { label: "Service type", value: procedure.service_type } : null,
+    procedure.cut_off_time ? { label: "Cut-off time", value: procedure.cut_off_time } : null,
+    procedure.fees_charges ? { label: "Fees / charges", value: procedure.fees_charges } : null,
+  ].filter((item): item is { label: string; value: string } => Boolean(item));
+
+  const sections = [
+    { title: "Channels", items: procedure.channels },
+    { title: "Who can action", items: procedure.who_can_action },
+    { title: "Required information", items: procedure.required_information },
+    { title: "System steps", items: procedure.system_steps },
+    { title: "Passenger advice", items: procedure.passenger_advice },
+    { title: "Allowed", items: procedure.allowed },
+    { title: "Not allowed", items: procedure.not_allowed },
+    { title: "Escalation points", items: procedure.escalation_points },
+  ];
+
+  if (serviceFacts.length === 0 && sections.every((section) => section.items.length === 0)) {
+    return null;
+  }
+
+  return (
+    <section className="content-card quick-card p-5 sm:p-6">
+      <h2 className="font-display text-xl font-semibold text-ink">Service card fields</h2>
+      {serviceFacts.length > 0 && (
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+          {serviceFacts.map((fact) => (
+            <div key={fact.label} className="rounded-xl border border-border bg-white p-3">
+              <dt className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                {fact.label}
+              </dt>
+              <dd className="mt-1 text-sm font-semibold text-ink">{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {sections.map((section) => {
+          const items = section.items.map(readableJsonItem).filter(Boolean);
+          if (items.length === 0) return null;
+          return (
+            <div key={section.title} className="rounded-xl border border-border bg-white p-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                {section.title}
+              </h3>
+              <ul className="mt-2 space-y-1.5 text-sm leading-6 text-ink-muted">
+                {items.map((item, index) => (
+                  <li key={`${section.title}-${index}`}>- {item}</li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
