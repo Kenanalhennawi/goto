@@ -126,7 +126,6 @@ export default async function Home({
     .eq("review_status", "approved")
     .eq("show_on_homepage", true)
     .order("homepage_order", { ascending: true })
-    .order("priority", { ascending: false })
     .order("title", { ascending: true })
     .limit(2);
 

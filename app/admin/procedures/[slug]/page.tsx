@@ -358,11 +358,14 @@ function HomepageVisibilityForm({ procedure }: { procedure: ProcedureDetail }) {
           Show on homepage
         </label>
         <Field
-          label="Homepage order"
+          label="Homepage display order"
           name="homepage_order"
           defaultValue={String(procedure.homepage_order)}
           type="number"
         />
+        <p className="-mt-2 text-xs leading-5 text-ink-faint">
+          Lower number appears first. Use 1 for the first featured card, 2 for the second.
+        </p>
         <button
           type="submit"
           className="w-full rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent"
