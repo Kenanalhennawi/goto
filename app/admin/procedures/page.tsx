@@ -1,5 +1,6 @@
 import { SiteHeader } from "@/components/SiteHeader";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import type { JsonValue } from "@/lib/types";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { canReviewProcedures, normalizeRoleLabel } from "@/lib/permissions";
@@ -15,6 +16,12 @@ type ProcedureListRow = {
   title: string;
   slug: string;
   category: string;
+  service_code: string | null;
+  service_type: string | null;
+  cut_off_time: string | null;
+  passenger_advice: JsonValue[];
+  not_allowed: JsonValue[];
+  source_confidence: string | null;
   review_status: string;
   is_published: boolean;
   priority: number;
@@ -61,7 +68,7 @@ export default async function AdminProceduresPage({
   let query = supabase
     .from("procedure_cards")
     .select(
-      "id, title, slug, category, review_status, is_published, priority, updated_at, chapters(chapter_number, title, slug)"
+      "id, title, slug, category, service_code, service_type, cut_off_time, passenger_advice, not_allowed, source_confidence, review_status, is_published, priority, updated_at, chapters(chapter_number, title, slug)"
     )
     .order("priority", { ascending: false })
     .order("updated_at", { ascending: false });
@@ -154,6 +161,11 @@ export default async function AdminProceduresPage({
                     <div>
                       <p className="font-semibold text-ink">{procedure.title}</p>
                       <p className="mt-1 text-xs text-ink-faint">Updated {safeDate(procedure.updated_at)}</p>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {qualityBadges(procedure).slice(0, 3).map((badge) => (
+                          <QualityBadge key={badge} label={badge} />
+                        ))}
+                      </div>
                     </div>
                     <span className="hidden text-ink-muted sm:block">{procedure.category}</span>
                     <div className="hidden sm:block">
@@ -179,6 +191,19 @@ export default async function AdminProceduresPage({
         </section>
       </main>
     </div>
+  );
+}
+
+function QualityBadge({ label }: { label: string }) {
+  const critical = label.startsWith("Missing");
+  return (
+    <span
+      className={`rounded border px-2 py-0.5 text-[11px] ${
+        critical ? "border-warn/20 bg-warn/10 text-warn" : "border-good/20 bg-good/10 text-good"
+      }`}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -242,4 +267,48 @@ function safeDate(value: string | null) {
 
 function firstChapter(chapters: ProcedureListRow["chapters"]) {
   return Array.isArray(chapters) ? chapters[0] ?? null : chapters;
+}
+
+function qualityBadges(procedure: ProcedureListRow) {
+  const badges: string[] = [];
+  const isReference = isReferenceCard(procedure);
+  if (!isReference && !hasText(procedure.cut_off_time)) badges.push("Missing deadline");
+  if (!hasItems(procedure.passenger_advice)) badges.push("Missing passenger advice");
+  if (!hasItems(procedure.not_allowed)) badges.push("Missing restrictions");
+  if (!hasText(procedure.source_confidence)) badges.push("Missing source confidence");
+  if (badges.length === 0) badges.push("Ready-looking");
+  return badges;
+}
+
+function isReferenceCard(card: Pick<ProcedureListRow, "service_code" | "service_type" | "category">) {
+  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
+  return (
+    card.service_code?.toUpperCase() === "MCT" ||
+    type.includes("reference") ||
+    type.includes("rule") ||
+    type.includes("timing") ||
+    type.includes("connection reference")
+  );
+}
+
+function hasText(value: string | null | undefined) {
+  return Boolean(value?.trim());
+}
+
+function hasItems(items: JsonValue[] | null | undefined) {
+  return Array.isArray(items) && items.some((item) => readableJsonItem(item));
+}
+
+function readableJsonItem(item: JsonValue) {
+  if (typeof item === "string") return item.trim();
+  if (typeof item === "number" || typeof item === "boolean") return String(item);
+  if (!item || Array.isArray(item) || typeof item !== "object") return "";
+
+  const record = item as Record<string, JsonValue>;
+  for (const key of ["label", "text", "value", "title", "description"]) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  return "";
 }

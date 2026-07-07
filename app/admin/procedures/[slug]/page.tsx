@@ -164,6 +164,7 @@ export default async function AdminProcedureDetailPage({
   const chapter = firstChapter(procedure.chapters);
   const canArchive = canArchiveProcedures(role?.role);
   const canFeatureOnHomepage = canArchive;
+  const quality = evaluateProcedureQuality(procedure);
   const { data: sourceChapterData } = procedure.chapter_id
     ? await supabase
         .from("chapters")
@@ -227,6 +228,17 @@ export default async function AdminProcedureDetailPage({
               <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
                 Review actions
               </p>
+              {quality.level !== "ready" && (
+                <div
+                  className={`mt-4 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                    quality.level === "critical"
+                      ? "border-red-200 bg-red-50 text-red-700"
+                      : "border-warn/20 bg-warn/10 text-warn"
+                  }`}
+                >
+                  This card has missing operational fields. Review before publishing.
+                </div>
+              )}
               <div className="mt-4 space-y-2">
                 <ActionForm action={approveAndPublish} slug={procedure.slug} label="Approve & publish" tone="primary" />
                 <ActionForm action={unpublish} slug={procedure.slug} label="Unpublish" />
@@ -241,6 +253,7 @@ export default async function AdminProcedureDetailPage({
 
         <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
           <div className="space-y-5">
+            <QualityChecklist quality={quality} />
             <TextSection title="Summary" value={procedure.summary} />
             <TextSection title="When to use" value={procedure.when_to_use} />
             <ServicePreview procedure={procedure} />
@@ -300,6 +313,158 @@ export default async function AdminProcedureDetailPage({
       </main>
     </div>
   );
+}
+
+type QualityLevel = "ready" | "review" | "critical";
+
+type QualityItem = {
+  label: string;
+  ok: boolean;
+  severity: "green" | "amber" | "red";
+};
+
+type QualityResult = {
+  level: QualityLevel;
+  summary: string;
+  badges: string[];
+  items: QualityItem[];
+};
+
+function QualityChecklist({ quality }: { quality: QualityResult }) {
+  const styles: Record<QualityLevel, string> = {
+    ready: "border-good/20 bg-good/10 text-good",
+    review: "border-warn/20 bg-warn/10 text-warn",
+    critical: "border-red-200 bg-red-50 text-red-700",
+  };
+
+  return (
+    <section className="content-card quick-card p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+            Quality checklist
+          </p>
+          <h2 className="mt-2 font-display text-xl font-semibold text-ink">
+            Operational publish readiness
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-ink-muted">
+            Checks critical service-card fields before review actions.
+          </p>
+        </div>
+        <span className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${styles[quality.level]}`}>
+          {quality.summary}
+        </span>
+      </div>
+
+      {quality.badges.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {quality.badges.map((badge) => (
+            <span
+              key={badge}
+              className="rounded-full border border-border bg-slate-50 px-3 py-1 text-xs font-semibold text-ink-muted"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-5 grid gap-2 sm:grid-cols-2">
+        {quality.items.map((item) => (
+          <div
+            key={item.label}
+            className={`rounded-xl border px-3 py-2 text-sm ${
+              item.ok
+                ? "border-good/20 bg-good/10 text-good"
+                : item.severity === "red"
+                  ? "border-red-200 bg-red-50 text-red-700"
+                  : "border-warn/20 bg-warn/10 text-warn"
+            }`}
+          >
+            <span className="font-semibold">{item.ok ? "OK" : "Review"}</span> - {item.label}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function evaluateProcedureQuality(procedure: ProcedureDetail): QualityResult {
+  const isReference = isReferenceCard(procedure);
+  const items: QualityItem[] = [
+    check("Has service code or clear reference code", hasText(procedure.service_code), "red"),
+    check("Has service type", hasText(procedure.service_type), "red"),
+    check("Has who can action", hasItems(procedure.who_can_action), "red"),
+    check("Has required information", hasItems(procedure.required_information), "amber"),
+    check("Has system steps or handling steps", hasItems(procedure.system_steps) || hasItems(procedure.agent_action), "red"),
+    check("Has passenger advice", hasItems(procedure.passenger_advice), "red"),
+    check("Has allowed rules or applicability", hasItems(procedure.allowed), "amber"),
+    check("Has not allowed / restrictions", hasItems(procedure.not_allowed), "red"),
+    check("Has escalation guidance", hasItems(procedure.escalation_points), "amber"),
+    check("Has source confidence", hasText(procedure.source_confidence), "red"),
+  ];
+
+  if (isReference) {
+    items.push(
+      check("Has timing rule or reference rule", hasText(procedure.cut_off_time), "red"),
+      check("Has applicability / allowed conditions", hasItems(procedure.allowed), "amber"),
+      check("Has not allowed / exclusions if applicable", hasItems(procedure.not_allowed), "amber"),
+      check("Does not label timing as service cut-off", getTimingLabel(procedure) !== "Cut-off time", "amber")
+    );
+  } else {
+    const hasExceptions = hasItems(procedure.exceptions) || hasItems(procedure.not_allowed);
+    items.push(
+      check("Has deadline / cut-off captured", hasText(procedure.cut_off_time), "red"),
+      check("Has blocking conditions / not allowed", hasItems(procedure.not_allowed), "red"),
+      check("Has passenger advice", hasItems(procedure.passenger_advice), "red"),
+      check("Has escalation if exceptions exist", !hasExceptions || hasItems(procedure.escalation_points), "amber")
+    );
+  }
+
+  const redMissing = items.some((item) => !item.ok && item.severity === "red");
+  const amberMissing = items.some((item) => !item.ok && item.severity === "amber");
+  const level: QualityLevel = redMissing ? "critical" : amberMissing ? "review" : "ready";
+  const badges = qualityBadges(procedure, isReference);
+
+  return {
+    level,
+    summary: level === "ready" ? "Ready-looking" : level === "critical" ? "Critical missing fields" : "Needs review",
+    badges,
+    items,
+  };
+}
+
+function qualityBadges(procedure: ProcedureDetail, isReference: boolean) {
+  const badges: string[] = [];
+  if (!isReference && !hasText(procedure.cut_off_time)) badges.push("Missing deadline");
+  if (!hasItems(procedure.passenger_advice)) badges.push("Missing passenger advice");
+  if (!hasItems(procedure.not_allowed)) badges.push("Missing restrictions");
+  if (isReference && !hasText(procedure.cut_off_time)) badges.push("Missing timing rule");
+  if (badges.length === 0) badges.push("Ready-looking");
+  return badges;
+}
+
+function check(label: string, ok: boolean, severity: "amber" | "red"): QualityItem {
+  return { label, ok, severity: ok ? "green" : severity };
+}
+
+function isReferenceCard(card: Pick<ProcedureDetail, "service_code" | "service_type" | "category">) {
+  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
+  return (
+    card.service_code?.toUpperCase() === "MCT" ||
+    type.includes("reference") ||
+    type.includes("rule") ||
+    type.includes("timing") ||
+    type.includes("connection reference")
+  );
+}
+
+function hasText(value: string | null | undefined) {
+  return Boolean(value?.trim());
+}
+
+function hasItems(items: JsonValue[] | null | undefined) {
+  return Array.isArray(items) && items.some((item) => Boolean(readableJsonItem(item)));
 }
 
 function ActionStatusMessage({ status }: { status: Record<string, string | undefined> }) {
