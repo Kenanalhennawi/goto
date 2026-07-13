@@ -18,6 +18,9 @@ import {
   hasText,
   isReferenceCard,
   readableJsonItem,
+  sourceReviewStatus,
+  sourceReviewWarnings,
+  type SourceReviewWarning,
 } from "@/lib/admin-procedure-quality";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -68,11 +71,15 @@ type ProcedureDetail = {
         chapter_number: number;
         title: string;
         slug: string;
+        source_version: string | null;
+        updated_at: string | null;
       }
     | {
         chapter_number: number;
         title: string;
         slug: string;
+        source_version: string | null;
+        updated_at: string | null;
       }[]
     | null;
 };
@@ -160,7 +167,7 @@ export default async function AdminProcedureDetailPage({
         "last_reviewed_at",
         "last_reviewed_by",
         "updated_at",
-        "chapters(chapter_number, title, slug)",
+        "chapters(chapter_number, title, slug, source_version, updated_at)",
       ].join(", ")
     )
     .eq("slug", slug)
@@ -267,6 +274,11 @@ export default async function AdminProcedureDetailPage({
         <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
           <div className="space-y-5">
             <GenericFillerWarning fields={quality.fillerFields} />
+            <SourceReviewWarnings
+              warnings={quality.sourceWarnings}
+              cardSourceVersion={procedure.source_version}
+              chapterSourceVersion={chapter?.source_version ?? null}
+            />
             <QualityChecklist quality={quality} />
             <TextSection title="Summary" value={procedure.summary} />
             <TextSection title="When to use" value={procedure.when_to_use} />
@@ -288,7 +300,8 @@ export default async function AdminProcedureDetailPage({
             <section className="content-card quick-card p-5">
               <h2 className="font-display text-lg font-semibold text-ink">Source evidence</h2>
               <dl className="mt-4 space-y-3 text-sm">
-                {procedure.source_version && <Fact label="Source" value={procedure.source_version} />}
+                {procedure.source_version && <Fact label="Card source version" value={procedure.source_version} />}
+                {chapter?.source_version && <Fact label="Chapter source version" value={chapter.source_version} />}
                 {procedure.source_pages.length > 0 && (
                   <Fact label="Pages" value={formatSourcePages(procedure.source_pages)} />
                 )}
@@ -297,9 +310,9 @@ export default async function AdminProcedureDetailPage({
                 )}
                 <Fact label="Updated" value={safeDate(procedure.updated_at)} />
                 <Fact label="Confidence" value={procedure.source_confidence.replace("_", " ")} />
-                {procedure.last_reviewed_at && (
-                  <Fact label="Last reviewed" value={safeDate(procedure.last_reviewed_at)} />
-                )}
+                <Fact label="Last reviewed" value={safeDate(procedure.last_reviewed_at)} />
+                {chapter?.updated_at && <Fact label="Chapter updated" value={safeDate(chapter.updated_at)} />}
+                <Fact label="Review freshness" value={sourceReviewStatus(procedure)} />
                 <Fact label="Priority" value={String(procedure.priority)} />
               </dl>
             </section>
@@ -343,6 +356,7 @@ type QualityResult = {
   badges: string[];
   items: QualityItem[];
   fillerFields: string[];
+  sourceWarnings: SourceReviewWarning[];
 };
 
 function QualityChecklist({ quality }: { quality: QualityResult }) {
@@ -429,9 +443,52 @@ function GenericFillerWarning({ fields }: { fields: string[] }) {
   );
 }
 
+function SourceReviewWarnings({
+  warnings,
+  cardSourceVersion,
+  chapterSourceVersion,
+}: {
+  warnings: SourceReviewWarning[];
+  cardSourceVersion: string | null;
+  chapterSourceVersion: string | null;
+}) {
+  if (warnings.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-warn/30 bg-warn/10 p-5 text-ink sm:p-6">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-warn">Source review warning</p>
+      {warnings.includes("Source updated") && (
+        <div className="mt-3">
+          <h2 className="font-display text-xl font-semibold">Source updated after card review</h2>
+          <p className="mt-2 text-sm leading-6 text-ink-muted">
+            The linked manual chapter was updated after this operational card was last reviewed. Re-check the card
+            against the source before publishing or relying on it.
+          </p>
+        </div>
+      )}
+      {warnings.includes("Never reviewed against source") && (
+        <div className="mt-3">
+          <h2 className="font-display text-xl font-semibold">Source review not recorded</h2>
+          <p className="mt-2 text-sm leading-6 text-ink-muted">
+            This card has no recorded source-review date.
+          </p>
+        </div>
+      )}
+      {warnings.includes("Version mismatch") && (
+        <div className="mt-3 rounded-xl border border-warn/30 bg-white/70 p-3 text-sm">
+          <h2 className="font-semibold">Source version mismatch</h2>
+          <p className="mt-2 text-ink-muted">Card version: {cardSourceVersion ?? "Not recorded"}</p>
+          <p className="text-ink-muted">Linked chapter version: {chapterSourceVersion ?? "Not recorded"}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function evaluateProcedureQuality(procedure: ProcedureDetail): QualityResult {
   const isReference = isReferenceCard(procedure);
   const fillerFields = genericFillerFields(procedure);
+  const sourceWarnings = sourceReviewWarnings(procedure);
   const items: QualityItem[] = [
     check("No generic filler text", fillerFields.length === 0, "red"),
     check("Has service code or clear reference code", hasText(procedure.service_code), "red"),
@@ -463,6 +520,14 @@ function evaluateProcedureQuality(procedure: ProcedureDetail): QualityResult {
     );
   }
 
+  if (procedure.chapters) {
+    items.push(
+      check("Source review recorded", !sourceWarnings.includes("Never reviewed against source"), "amber"),
+      check("Linked source has not changed after review", !sourceWarnings.includes("Source updated"), "amber"),
+      check("Source versions match", !sourceWarnings.includes("Version mismatch"), "amber")
+    );
+  }
+
   const redMissing = items.some((item) => !item.ok && item.severity === "red");
   const amberMissing = items.some((item) => !item.ok && item.severity === "amber");
   const level: QualityLevel = redMissing ? "critical" : amberMissing ? "review" : "ready";
@@ -474,6 +539,7 @@ function evaluateProcedureQuality(procedure: ProcedureDetail): QualityResult {
     badges,
     items,
     fillerFields,
+    sourceWarnings,
   };
 }
 

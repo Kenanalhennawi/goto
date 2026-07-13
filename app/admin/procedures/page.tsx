@@ -35,6 +35,8 @@ type ProcedureListRow = {
   escalation_points: JsonValue[];
   fees_charges: string | null;
   source_confidence: string | null;
+  source_version: string | null;
+  last_reviewed_at: string | null;
   review_status: string;
   is_published: boolean;
   priority: number;
@@ -44,11 +46,15 @@ type ProcedureListRow = {
         chapter_number: number;
         title: string;
         slug: string;
+        source_version: string | null;
+        updated_at: string | null;
       }
     | {
         chapter_number: number;
         title: string;
         slug: string;
+        source_version: string | null;
+        updated_at: string | null;
       }[]
     | null;
 };
@@ -94,7 +100,7 @@ export default async function AdminProceduresPage({
   const { data: procedures } = await supabase
     .from("procedure_cards")
     .select(
-      "id, title, slug, category, service_code, service_type, summary, when_to_use, cut_off_time, required_information, system_steps, passenger_advice, allowed, not_allowed, escalation_points, fees_charges, source_confidence, review_status, is_published, priority, updated_at, chapters(chapter_number, title, slug)"
+      "id, title, slug, category, service_code, service_type, summary, when_to_use, cut_off_time, required_information, system_steps, passenger_advice, allowed, not_allowed, escalation_points, fees_charges, source_confidence, source_version, last_reviewed_at, review_status, is_published, priority, updated_at, chapters(chapter_number, title, slug, source_version, updated_at)"
     )
     .order("priority", { ascending: false })
     .order("updated_at", { ascending: false });
@@ -135,6 +141,9 @@ export default async function AdminProceduresPage({
           <SummaryTile label="Missing escalation" value={summary.missingEscalation} tone="warn" />
           <SummaryTile label="Missing source confidence" value={summary.missingSourceConfidence} tone="warn" />
           <SummaryTile label="Generic filler" value={summary.genericFiller} tone="warn" />
+          <SummaryTile label="Source updated" value={summary.sourceUpdated} tone="warn" />
+          <SummaryTile label="Never source-reviewed" value={summary.neverSourceReviewed} tone="warn" />
+          <SummaryTile label="Version mismatch" value={summary.versionMismatch} tone="warn" />
         </section>
 
         <section className="content-card mb-6 p-4">
@@ -159,6 +168,9 @@ export default async function AdminProceduresPage({
               <option value="missing_escalation">Missing escalation</option>
               <option value="missing_source_confidence">Missing source confidence</option>
               <option value="generic_filler">Generic filler</option>
+              <option value="source_updated">Source updated</option>
+              <option value="never_source_reviewed">Never source-reviewed</option>
+              <option value="version_mismatch">Version mismatch</option>
             </select>
             <select
               name="area"
@@ -198,6 +210,9 @@ export default async function AdminProceduresPage({
               ["missing_escalation", "Missing escalation"],
               ["missing_source_confidence", "Missing source confidence"],
               ["generic_filler", "Generic filler"],
+              ["source_updated", "Source updated"],
+              ["never_source_reviewed", "Never source-reviewed"],
+              ["version_mismatch", "Version mismatch"],
             ].map(([quality, label]) => (
               <FilterLink
                 key={quality}
@@ -332,11 +347,16 @@ function QualityBadge({ label }: { label: string }) {
     );
   }
 
-  const critical = label.startsWith("Missing") || label === "Draft";
+  const critical = label === "Generic filler" || label === "Source updated" || label === "Version mismatch";
+  const review = label.startsWith("Missing") || label === "Draft" || label === "Never reviewed against source";
   return (
     <span
       className={`rounded border px-2 py-0.5 text-[11px] ${
-        critical ? "border-warn/20 bg-warn/10 text-warn" : "border-good/20 bg-good/10 text-good"
+        critical
+          ? "border-red-200 bg-red-50 text-red-700"
+          : review
+            ? "border-warn/20 bg-warn/10 text-warn"
+            : "border-good/20 bg-good/10 text-good"
       }`}
     >
       {label}
@@ -417,6 +437,9 @@ function matchesQuality(row: ProcedureListRow, quality: string) {
   if (quality === "missing_escalation") return badges.includes("Missing escalation");
   if (quality === "missing_source_confidence") return badges.includes("Missing source confidence");
   if (quality === "generic_filler") return badges.includes("Generic filler");
+  if (quality === "source_updated") return badges.includes("Source updated");
+  if (quality === "never_source_reviewed") return badges.includes("Never reviewed against source");
+  if (quality === "version_mismatch") return badges.includes("Version mismatch");
   return true;
 }
 
@@ -434,6 +457,9 @@ function qualitySummary(rows: ProcedureListRow[]) {
       if (badges.includes("Missing escalation")) summary.missingEscalation += 1;
       if (badges.includes("Missing source confidence")) summary.missingSourceConfidence += 1;
       if (badges.includes("Generic filler")) summary.genericFiller += 1;
+      if (badges.includes("Source updated")) summary.sourceUpdated += 1;
+      if (badges.includes("Never reviewed against source")) summary.neverSourceReviewed += 1;
+      if (badges.includes("Version mismatch")) summary.versionMismatch += 1;
       return summary;
     },
     {
@@ -447,6 +473,9 @@ function qualitySummary(rows: ProcedureListRow[]) {
       missingEscalation: 0,
       missingSourceConfidence: 0,
       genericFiller: 0,
+      sourceUpdated: 0,
+      neverSourceReviewed: 0,
+      versionMismatch: 0,
     }
   );
 }

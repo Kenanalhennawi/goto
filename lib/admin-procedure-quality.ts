@@ -17,7 +17,20 @@ export type AdminQualityBaseProcedure = {
   source_confidence: string | null;
   review_status?: string;
   is_published?: boolean;
+  source_version?: string | null;
+  last_reviewed_at?: string | null;
+  chapters?: SourceReviewChapter | SourceReviewChapter[] | null;
 };
+
+export type SourceReviewChapter = {
+  source_version?: string | null;
+  updated_at?: string | null;
+};
+
+export type SourceReviewWarning =
+  | "Source updated"
+  | "Never reviewed against source"
+  | "Version mismatch";
 
 export const GENERIC_FILLER_PHRASES = [
   "source chapter",
@@ -100,6 +113,37 @@ export function jsonItemsToSearchText(items: JsonValue[] | null | undefined) {
   return items.map((item) => readableJsonItem(item)).filter(Boolean).join(" ");
 }
 
+export function sourceReviewWarnings(procedure: AdminQualityBaseProcedure): SourceReviewWarning[] {
+  const chapter = firstSourceReviewChapter(procedure.chapters);
+  if (!chapter) return [];
+
+  const warnings: SourceReviewWarning[] = [];
+  const reviewedAt = validDate(procedure.last_reviewed_at);
+  const chapterUpdatedAt = validDate(chapter.updated_at);
+
+  if (!reviewedAt) {
+    warnings.push("Never reviewed against source");
+  } else if (chapterUpdatedAt && chapterUpdatedAt > reviewedAt) {
+    warnings.push("Source updated");
+  }
+
+  if (
+    procedure.source_version?.trim() &&
+    chapter.source_version?.trim() &&
+    procedure.source_version.trim() !== chapter.source_version.trim()
+  ) {
+    warnings.push("Version mismatch");
+  }
+
+  return warnings;
+}
+
+export function sourceReviewStatus(procedure: AdminQualityBaseProcedure) {
+  const warnings = sourceReviewWarnings(procedure);
+  if (warnings.length > 0) return warnings.join("; ");
+  return firstSourceReviewChapter(procedure.chapters) ? "Current" : "No linked source chapter";
+}
+
 export function listQualityBadges(procedure: AdminQualityBaseProcedure) {
   const badges: string[] = [];
   const isReference = isReferenceCard(procedure);
@@ -115,6 +159,7 @@ export function listQualityBadges(procedure: AdminQualityBaseProcedure) {
   if (!hasItems(procedure.escalation_points)) badges.push("Missing escalation");
   if (!hasText(procedure.source_confidence)) badges.push("Missing source confidence");
   if (hasGenericFiller(procedure)) badges.push("Generic filler");
+  badges.push(...sourceReviewWarnings(procedure));
   if (badges.length === 1) badges.push("Ready-looking");
   return badges;
 }
@@ -126,6 +171,19 @@ export function detailQualityBadges(procedure: AdminQualityBaseProcedure, isRefe
   if (!hasItems(procedure.not_allowed)) badges.push("Missing restrictions");
   if (isReference && !hasText(procedure.cut_off_time)) badges.push("Missing timing rule");
   if (genericFillerFields(procedure).length > 0) badges.push("Generic filler");
+  badges.push(...sourceReviewWarnings(procedure));
   if (badges.length === 0) badges.push("Ready-looking");
   return badges;
+}
+
+function firstSourceReviewChapter(
+  chapters: SourceReviewChapter | SourceReviewChapter[] | null | undefined
+) {
+  return Array.isArray(chapters) ? chapters[0] ?? null : chapters ?? null;
+}
+
+function validDate(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
