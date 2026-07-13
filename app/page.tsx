@@ -143,12 +143,12 @@ export default async function Home({
       <SiteHeader />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
-        <section className="hero-panel relative z-20 mb-5 overflow-visible rounded-[18px]">
-          <div className="hero-main p-4 sm:p-5 lg:p-6">
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-start">
+        <section className="hero-panel relative z-20 mb-5 overflow-visible rounded-lg">
+          <div className="hero-main p-4 sm:p-5">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
                     Agent task console
                   </p>
                   <MetaStrip
@@ -157,17 +157,14 @@ export default async function Home({
                     lastUpdated={lastUpdated}
                   />
                 </div>
-                <h1 className="mt-3 font-display text-3xl font-semibold leading-tight tracking-tight text-ink sm:text-4xl">
+                <h1 className="mt-2 font-display text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-3xl">
                   GO TO Contact Centre Guide
                 </h1>
-                <p className="mt-2 font-display text-2xl font-semibold text-sky sm:text-3xl">
-                  What are you handling now?
-                </p>
-                <p className="hero-helper-text mt-2 max-w-2xl text-sm sm:text-base">
+                <p className="hero-helper-text mt-1 max-w-2xl text-sm">
                   Search by service, SSR code, passenger issue, cut-off time, or process.
                 </p>
 
-                <div className="hero-search relative z-30 mt-5 rounded-2xl p-3">
+                <div className="hero-search relative z-30 mt-4 rounded-lg p-2.5">
                   <SearchBar autoFocus />
                 </div>
 
@@ -178,19 +175,16 @@ export default async function Home({
                 </div>
               </div>
 
-              <aside className="answer-panel rounded-2xl border border-blue-100 bg-white/86 p-4 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+              <aside className="answer-panel rounded-lg border border-border bg-white p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
                   Answer fast
                 </p>
-                <h2 className="mt-1 font-display text-lg font-semibold text-ink">
-                  Answer the passenger fast
-                </h2>
-                <div className="mt-4 grid gap-2">
+                <div className="mt-3 grid gap-1.5">
                   {QUICK_CHECKS.map(([label, query]) => (
                     <Link
                       key={label}
                       href={`/search?q=${encodeURIComponent(query)}`}
-                      className="rounded-xl border border-border bg-white px-3 py-2 text-sm font-semibold text-ink transition-colors hover:border-accent hover:text-accent"
+                      className="rounded-md border border-border bg-white px-3 py-2 text-[13px] font-semibold text-ink transition-colors hover:border-accent hover:text-accent"
                     >
                       {label}
                     </Link>
@@ -209,15 +203,12 @@ export default async function Home({
               <div className="content-card service-console-panel p-4 sm:p-5">
                 <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                      Featured operational cards
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
+                      Quick access
                     </p>
-                    <h2 className="font-display text-2xl font-semibold text-ink">
+                    <h2 className="font-display text-lg font-semibold text-ink">
                       Featured Operational Cards
                     </h2>
-                    <p className="mt-1 text-sm text-ink-muted">
-                      Selected high-impact cards for quick access.
-                    </p>
                   </div>
                   <span className="text-xs font-semibold text-ink-faint">
                     Featured by admin
@@ -231,7 +222,7 @@ export default async function Home({
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-blue-200 bg-sky-soft/50 p-6 text-sm text-ink-muted">
+                  <div className="rounded-lg border border-dashed border-blue-200 bg-sky-soft/50 p-5 text-sm text-ink-muted">
                     <p className="font-semibold text-ink">No featured operational cards yet.</p>
                     <p className="mt-1">
                       Use search or direct procedure links while cards are selected for the homepage.
@@ -242,7 +233,7 @@ export default async function Home({
             </section>
 
             <section className="content-card p-4">
-              <h2 className="mb-3 font-display text-lg font-semibold text-ink">
+              <h2 className="mb-3 font-display text-base font-semibold text-ink">
                 Operational shortcuts
               </h2>
               <div className="flex flex-wrap gap-2">
@@ -253,22 +244,22 @@ export default async function Home({
             </section>
 
             <details className="content-card group overflow-hidden">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5">
                 <span>
-                  <span className="block font-display text-lg font-semibold text-ink">
+                  <span className="block font-display text-base font-semibold text-ink">
                     Manual / chapter browser
                   </span>
-                  <span className="mt-1 block text-xs text-ink-muted">
+                  <span className="mt-0.5 block text-xs text-ink-muted">
                     Last-resort manual browsing, work areas, and recent chapter updates.
                   </span>
                 </span>
-                <span className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold text-sky group-open:text-accent">
+                <span className="rounded border border-border bg-white px-3 py-1 text-xs font-semibold text-sky group-open:text-accent">
                   Open
                 </span>
               </summary>
               <div className="space-y-5 border-t border-border p-4">
-                <details className="rounded-2xl border border-border bg-white/70">
-                  <summary className="cursor-pointer px-4 py-3 font-display text-base font-semibold text-ink">
+                <details className="rounded-lg border border-border bg-white">
+                  <summary className="cursor-pointer px-4 py-3 font-display text-sm font-semibold text-ink">
                     Browse by work area
                   </summary>
                   <div className="grid grid-cols-1 gap-3 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -279,8 +270,8 @@ export default async function Home({
                 </details>
 
                 {recentlyUpdated.length > 0 && (
-                  <details className="rounded-2xl border border-border bg-white/70">
-                    <summary className="cursor-pointer px-4 py-3 font-display text-base font-semibold text-ink">
+                  <details className="rounded-lg border border-border bg-white">
+                    <summary className="cursor-pointer px-4 py-3 font-display text-sm font-semibold text-ink">
                       Recent chapter updates
                     </summary>
                     <div className="divide-y divide-border border-t border-border">
@@ -301,7 +292,7 @@ export default async function Home({
                   </details>
                 )}
 
-                <h2 className="font-display text-lg font-semibold text-ink">Browse all chapters</h2>
+                <h2 className="font-display text-base font-semibold text-ink">Browse all chapters</h2>
                 <ChapterDirectory chapters={list} activeGroupId={group} />
               </div>
             </details>
@@ -309,7 +300,7 @@ export default async function Home({
         )}
       </main>
 
-      <footer className="border-t border-border bg-white/70 py-5 backdrop-blur">
+      <footer className="border-t border-border bg-white py-4">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 text-xs text-ink-faint sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>Internal flydubai contact centre reference. Not for external distribution.</span>
           <span className="font-mono">{sourceVersion ?? "Source version shown per chapter"}</span>
@@ -328,27 +319,27 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
   const openLabel = isReferenceCard(service) ? "Open card" : "Open service";
 
   return (
-    <article className="service-card flex flex-col rounded-2xl border border-blue-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-md sm:p-5">
+    <article className="service-card flex flex-col rounded-lg border border-border bg-white p-4 transition-colors hover:border-accent">
       <span>
         <span className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="flex flex-wrap gap-2">
+          <span className="flex flex-wrap gap-1.5">
           {service.service_code && (
-            <span className="rounded-lg bg-accent-soft px-2.5 py-1 font-mono text-xs font-bold text-accent">
+            <span className="rounded-sm border border-orange-200 bg-orange-50 px-2 py-0.5 font-mono text-xs font-bold text-accent">
               {service.service_code}
             </span>
           )}
-            <span className="rounded-lg bg-sky-soft px-2.5 py-1 text-xs font-semibold text-sky">
+            <span className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-xs font-semibold text-sky">
               {serviceMeta}
             </span>
           </span>
           <Link
             href={`/procedure/${service.slug}`}
-            className="rounded-lg bg-accent px-3 py-1 text-xs font-bold text-white transition-colors hover:bg-accent-dim"
+            className="rounded bg-accent px-3 py-1 text-xs font-bold text-white transition-colors hover:bg-accent-dim"
           >
             {openLabel}
           </Link>
         </span>
-        <h3 className="font-display text-lg font-semibold leading-snug text-ink sm:text-xl">
+        <h3 className="font-display text-base font-semibold leading-snug text-ink sm:text-lg">
           {service.title}
         </h3>
         {service.cut_off_time && (
@@ -372,7 +363,7 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
           {channels.map((channel) => (
             <span
               key={channel}
-              className="rounded-full border border-blue-100 bg-sky-soft/70 px-2 py-0.5 text-[10px] font-semibold text-sky"
+              className="rounded-sm border border-blue-200 bg-sky-soft/70 px-1.5 py-0.5 text-[10px] font-semibold text-sky"
             >
               {channel}
             </span>
@@ -387,7 +378,7 @@ function TimingDisplay({ label, value }: { label: string; value: string }) {
   const isStructured = preview.lines.length > 1 || preview.isTruncated;
 
   return (
-    <div className="mt-3 max-h-36 overflow-hidden rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-sm text-orange-800">
+    <div className="mt-3 max-h-36 overflow-hidden rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800">
       <p className="font-bold">{label}:</p>
       {isStructured ? (
         <ul className="mt-1 space-y-1">
@@ -452,7 +443,7 @@ function combineHeadingWithNext(lines: string[], heading: string) {
 
 function QuickFact({ label, value }: { label: string; value: string }) {
   return (
-    <span className="rounded-xl border border-border bg-sky-soft/45 px-3 py-2">
+    <span className="rounded-md border border-border bg-sky-soft/40 px-2.5 py-1.5">
       <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">
         {label}
       </span>
@@ -481,7 +472,7 @@ function MetaStrip({
       {items.map(([label, value]) => (
         <div
           key={label}
-          className="rounded-full border border-border bg-white/80 px-3 py-1.5 shadow-sm"
+          className="rounded border border-border bg-white px-2.5 py-1"
         >
           <dt className="inline text-ink-faint">{label}: </dt>
           <dd className="inline font-semibold text-ink">{value}</dd>
@@ -531,7 +522,7 @@ function WorkModeCard({
         {mode.chips.slice(0, 3).map((chip) => (
           <span
             key={chip}
-            className="rounded-full border border-blue-200 bg-sky-soft px-2.5 py-1 text-[10px] font-semibold text-sky"
+            className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-[10px] font-semibold text-sky"
           >
             {chip}
           </span>
@@ -545,7 +536,7 @@ function ShortcutChip({ label, query }: { label: string; query: string }) {
   return (
     <Link
       href={`/search?q=${encodeURIComponent(query)}`}
-      className="rounded-full border border-blue-200 bg-white/90 px-3 py-1.5 text-xs font-semibold text-sky shadow-sm transition-colors hover:border-accent hover:text-accent"
+      className="rounded border border-border bg-white px-2.5 py-1 text-xs font-semibold text-sky transition-colors hover:border-accent hover:text-accent"
     >
       {label}
     </Link>

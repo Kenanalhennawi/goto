@@ -51,26 +51,26 @@ export default async function SearchPage({
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
         <Link
           href="/"
-          className="mb-6 inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink-muted shadow-sm ring-1 ring-border transition-colors hover:text-accent"
+          className="mb-5 inline-flex items-center gap-2 rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
         >
           &larr; Back to chapters
         </Link>
 
-        <section className="content-card mb-6 p-5 sm:p-6">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+        <section className="content-card mb-5 border-t-2 border-t-navy p-5">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
             Operational search
           </p>
-          <h1 className="mb-3 font-display text-3xl font-semibold tracking-tight text-ink">
+          <h1 className="mb-2 font-display text-2xl font-semibold tracking-tight text-ink">
             {query ? `Results for "${query}"` : "Search the GO TO guide"}
           </h1>
-          <p className="mb-5 max-w-2xl text-sm leading-6 text-ink-muted">
+          <p className="mb-4 max-w-2xl text-sm leading-6 text-ink-muted">
             Search by passenger issue, SSR code, process name, system keyword, or operational shorthand.
           </p>
           <SearchBar defaultValue={query} />
         </section>
 
         {fieldMessage && results.length > 0 ? (
-          <p className="mb-4 rounded-xl border border-blue-200 bg-sky-soft px-4 py-3 text-sm font-semibold text-sky">
+          <p className="mb-4 rounded-md border border-blue-200 bg-sky-soft px-4 py-2.5 text-sm font-semibold text-sky">
             {fieldMessage}
           </p>
         ) : null}
@@ -86,7 +86,7 @@ export default async function SearchPage({
             }
           />
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {results.map((result) => (
               result.type === "operational_card" ? (
                 <OperationalCardResult key={`card-${result.id}`} result={result} query={query} />
@@ -219,10 +219,10 @@ function OperationalCardResult({ result, query }: { result: OperationalCardSearc
   const matchLabel = operationalMatchLabel(result, query);
 
   return (
-    <article className="content-card border-blue-200 bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-accent sm:p-5">
+    <article className="content-card p-4 transition-colors hover:border-accent">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
             <Badge tone="blue">Operational Card</Badge>
             <Badge tone="neutral">{matchLabel}</Badge>
             {result.service_code ? <Badge tone="orange">{result.service_code}</Badge> : null}
@@ -230,11 +230,11 @@ function OperationalCardResult({ result, query }: { result: OperationalCardSearc
             {pages ? <Badge tone="neutral">{pages}</Badge> : null}
             {result.source_version ? <Badge tone="neutral">{result.source_version}</Badge> : null}
           </div>
-          <h2 className="font-display text-xl font-semibold leading-snug text-ink">
+          <h2 className="font-display text-lg font-semibold leading-snug text-ink">
             {result.title}
           </h2>
           {result.cut_off_time ? (
-            <div className="mt-3 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-sm font-semibold text-ink">
+            <div className="mt-3 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-ink">
               <p className="text-accent">{timingLabel}:</p>
               <ul className="mt-1 space-y-1">
                 {timingLines.map((line) => (
@@ -252,11 +252,11 @@ function OperationalCardResult({ result, query }: { result: OperationalCardSearc
             <p className="mt-3 max-w-4xl text-sm leading-6 text-ink-muted">{result.snippet}</p>
           ) : null}
           {channels.length ? (
-            <div className="mt-4 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {channels.map((channel) => (
                 <span
                   key={channel}
-                  className="rounded-full border border-blue-200 bg-sky-soft px-2.5 py-1 text-[11px] font-semibold text-sky"
+                  className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-[11px] font-semibold text-sky"
                 >
                   {channel}
                 </span>
@@ -266,7 +266,7 @@ function OperationalCardResult({ result, query }: { result: OperationalCardSearc
         </div>
         <Link
           href={`/procedure/${result.slug}`}
-          className="inline-flex shrink-0 items-center justify-center rounded-full bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-accent-dim"
+          className="inline-flex shrink-0 items-center justify-center rounded bg-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-dim"
         >
           {openLabel}
         </Link>
@@ -280,28 +280,28 @@ function SearchResultCard({ result }: { result: ChapterSearchResult }) {
   const pages = pageLabel(result.page_start, result.page_end);
 
   return (
-    <article className="content-card quick-card p-4 transition-all hover:-translate-y-0.5 hover:border-accent sm:p-5">
+    <article className="content-card quick-card p-4 transition-colors hover:border-accent">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
             <Badge tone="blue">Chapter</Badge>
             <Badge tone="neutral">Source chapter</Badge>
             <Badge tone="orange">Ch. {String(result.chapter_number).padStart(2, "0")}</Badge>
             {pages ? <Badge tone="neutral">{pages}</Badge> : null}
             {result.source_version ? <Badge tone="neutral">{result.source_version}</Badge> : null}
           </div>
-          <h2 className="font-display text-xl font-semibold leading-snug text-ink">
+          <h2 className="font-display text-lg font-semibold leading-snug text-ink">
             {result.title}
           </h2>
           {snippet ? (
             <p className="mt-3 max-w-4xl text-sm leading-6 text-ink-muted">{snippet}</p>
           ) : null}
           {result.search_keywords?.length ? (
-            <div className="mt-4 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {result.search_keywords.slice(0, 8).map((keyword) => (
                 <span
                   key={keyword}
-                  className="rounded-full border border-blue-200 bg-sky-soft px-2.5 py-1 text-[11px] font-semibold text-sky"
+                  className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-[11px] font-semibold text-sky"
                 >
                   {keyword}
                 </span>
@@ -311,7 +311,7 @@ function SearchResultCard({ result }: { result: ChapterSearchResult }) {
         </div>
         <Link
           href={`/chapter/${result.slug}`}
-          className="inline-flex shrink-0 items-center justify-center rounded-full bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-accent"
+          className="inline-flex shrink-0 items-center justify-center rounded bg-navy px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent"
         >
           Open chapter
         </Link>
@@ -330,7 +330,7 @@ function EmptyState({ message }: { message: string }) {
           <Link
             key={example}
             href={`/search?q=${encodeURIComponent(example)}`}
-            className="rounded-full border border-blue-200 bg-sky-soft px-3 py-1.5 text-xs font-semibold text-sky transition-colors hover:border-accent hover:text-accent"
+            className="rounded border border-border bg-white px-2.5 py-1 text-xs font-semibold text-sky transition-colors hover:border-accent hover:text-accent"
           >
             {example}
           </Link>
@@ -360,7 +360,7 @@ function Badge({
     neutral: "bg-slate-50 text-ink-muted border-border",
   };
   return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${tones[tone]}`}>
+    <span className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tones[tone]}`}>
       {children}
     </span>
   );

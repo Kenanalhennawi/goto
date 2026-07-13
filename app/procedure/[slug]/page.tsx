@@ -38,63 +38,63 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
       <SiteHeader />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
-        <div className="mb-6 flex flex-wrap items-center gap-2">
+        <div className="mb-5 flex flex-wrap items-center gap-2">
           <Link
             href="/search"
-            className="inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink-muted shadow-sm ring-1 ring-border transition-colors hover:text-accent"
+            className="inline-flex rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
           >
             &larr; Back to search
           </Link>
           <Link
             href="/"
-            className="inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink-muted shadow-sm ring-1 ring-border transition-colors hover:text-accent"
+            className="inline-flex rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
           >
             Back to guide
           </Link>
         </div>
 
-        <section className="hero-panel mb-6 overflow-hidden rounded-[22px]">
-          <div className="hero-main p-5 sm:p-7">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+        <section className="hero-panel mb-5 overflow-hidden rounded-lg">
+          <div className="hero-main p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
                 Agent operational card
               </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                 {procedure.service_code && (
-                  <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-accent">
+                  <span className="rounded-sm border border-orange-200 bg-orange-50 px-2 py-0.5 font-mono text-xs font-bold text-accent">
                     {procedure.service_code}
                   </span>
                 )}
                 {procedure.service_type && (
-                  <span className="rounded-full border border-blue-200 bg-sky-soft px-3 py-1 text-xs font-semibold text-sky">
+                  <span className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-xs font-semibold text-sky">
                     {procedure.service_type}
                   </span>
                 )}
-                <span className="rounded-full border border-blue-200 bg-sky-soft px-3 py-1 text-xs font-semibold text-sky">
+                <span className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-xs font-semibold text-sky">
                   {procedure.category}
                 </span>
                 {canManage && (
-                  <span className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold text-ink-muted">
+                  <span className="rounded-sm border border-border bg-white px-2 py-0.5 text-xs font-semibold text-ink-muted">
                     {procedure.review_status.replace("_", " ")}
                   </span>
                 )}
               </div>
 
-              <h1 className="mt-4 font-display text-3xl font-semibold leading-tight tracking-tight text-ink sm:text-4xl">
+              <h1 className="mt-3 font-display text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-3xl">
                 {procedure.title}
               </h1>
 
               {procedure.summary && (
-                <p className="mt-4 max-w-3xl text-sm leading-7 text-ink-muted">
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-ink-muted">
                   {procedure.summary}
                 </p>
               )}
 
-              <div className="mt-5 flex flex-wrap items-center gap-2">
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 <CopyLinkButton path={path} />
                 {procedure.chapters && (
                   <Link
                     href={`/chapter/${procedure.chapters.slug}`}
-                    className="inline-flex rounded-full bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-accent"
+                    className="inline-flex rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
                   >
                     Open source chapter
                   </Link>
@@ -102,11 +102,11 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
               </div>
 
               {(procedure.keywords.length > 0 || procedure.aliases.length > 0) && (
-                <div className="mt-5 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap gap-1.5">
                   {[...procedure.keywords, ...procedure.aliases].slice(0, 12).map((keyword) => (
                     <span
                       key={keyword}
-                      className="rounded-full border border-border bg-white/80 px-3 py-1 text-xs font-medium text-ink-muted"
+                      className="rounded-sm border border-border bg-white px-2 py-0.5 text-xs font-medium text-ink-muted"
                     >
                       {keyword}
                     </span>
@@ -165,11 +165,11 @@ function TextSection({
   if (!text) return null;
 
   return (
-    <section className="content-card quick-card p-5 sm:p-6">
-      <h2 className="font-display text-xl font-semibold text-ink">{title}</h2>
+    <section className="content-card quick-card p-5">
+      <h2 className="font-display text-base font-semibold text-ink">{title}</h2>
       <p
-        className={`mt-3 whitespace-pre-line text-sm leading-7 text-ink-muted ${
-          isScript ? "rounded-xl border border-blue-200 bg-sky-soft p-4 font-mono text-xs text-ink" : ""
+        className={`mt-2.5 whitespace-pre-line text-sm leading-6 text-ink-muted ${
+          isScript ? "rounded-md border border-blue-200 bg-sky-soft p-3.5 font-mono text-xs text-ink" : ""
         }`}
       >
         {text}
@@ -210,12 +210,12 @@ function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapte
   return (
     <div className="space-y-5">
       {hasDecisionData && (
-        <section className="content-card quick-card overflow-hidden">
-          <div className="border-b border-border bg-white p-5 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+        <section className="content-card quick-card overflow-hidden border-t-2 border-t-navy">
+          <div className="border-b border-border bg-white px-5 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
               Decision summary
             </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+            <h2 className="mt-1 font-display text-lg font-semibold text-ink">
               Can I action this?
             </h2>
           </div>
@@ -234,8 +234,8 @@ function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapte
       )}
 
       {procedure.cut_off_time && (
-        <section className="rounded-2xl border border-orange-200 bg-orange-50 p-5 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+        <section className="rounded-lg border border-orange-200 border-l-4 border-l-accent bg-orange-50 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
             {isReferenceTimingCard(procedure) ? "Operational Timing Rule" : "Operational Deadline"}
           </p>
           <div className="mt-3">
@@ -249,9 +249,9 @@ function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapte
           <ChecklistSection title="Required information" items={requiredInfo} />
           <OperationalPanel title="Eligibility / applicability" items={allowed} tone="plain" />
           {procedure.fees_charges && (
-            <section className="content-card quick-card p-5 sm:p-6">
-              <h2 className="font-display text-xl font-semibold text-sky">Fees / charges</h2>
-              <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-7 text-ink">
+            <section className="content-card quick-card p-5">
+              <h2 className="font-display text-base font-semibold text-sky">Fees / charges</h2>
+              <p className="mt-2.5 whitespace-pre-line text-sm font-semibold leading-6 text-ink">
                 {procedure.fees_charges}
               </p>
             </section>
@@ -273,9 +273,9 @@ function DecisionFact({ label, value }: { label: string; value: string | undefin
   if (!text) return null;
 
   return (
-    <div className="border-b border-r border-border bg-white px-4 py-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-sky">{label}</p>
-      <p className="mt-1 line-clamp-3 text-base font-semibold leading-6 text-ink">{text}</p>
+    <div className="border-b border-r border-border bg-white px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-sky">{label}</p>
+      <p className="mt-1 line-clamp-3 text-sm font-semibold leading-5 text-ink">{text}</p>
     </div>
   );
 }
@@ -284,17 +284,17 @@ function DecisionListFact({ label, items }: { label: string; items: string[] }) 
   if (items.length === 0) return null;
 
   return (
-    <div className="border-b border-r border-border bg-white px-4 py-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-sky">{label}</p>
-      <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="border-b border-r border-border bg-white px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-sky">{label}</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
         {items.slice(0, 4).map((item) => (
-          <span key={item} className="rounded-full border border-blue-200 bg-sky-soft px-2.5 py-1 text-xs font-semibold text-sky">
+          <span key={item} className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-xs font-semibold text-sky">
             {item}
           </span>
         ))}
         {items.length > 4 && (
           <span
-            className="rounded-full border border-border bg-white px-2.5 py-1 text-xs font-semibold text-ink-muted"
+            className="rounded-sm border border-border bg-white px-2 py-0.5 text-xs font-semibold text-ink-muted"
             aria-label={`${items.length - 4} more ${label.toLowerCase()}`}
           >
             +{items.length - 4} more
@@ -309,12 +309,12 @@ function ChecklistSection({ title, items }: { title: string; items: string[] }) 
   if (items.length === 0) return null;
 
   return (
-    <section className="content-card quick-card p-5 sm:p-6">
-      <h2 className="font-display text-xl font-semibold text-sky">{title}</h2>
-      <ul className="mt-4 space-y-3">
+    <section className="content-card quick-card p-5">
+      <h2 className="font-display text-base font-semibold text-sky">{title}</h2>
+      <ul className="mt-3 space-y-2.5">
         {items.map((item) => (
           <li key={item} className="flex gap-3 text-sm leading-6 text-ink">
-            <span className="mt-0.5 h-5 w-5 shrink-0 rounded border border-blue-300 bg-white" aria-hidden="true" />
+            <span className="mt-0.5 h-4.5 w-4.5 shrink-0 rounded-sm border border-blue-300 bg-white" aria-hidden="true" />
             <span>{item}</span>
           </li>
         ))}
@@ -327,15 +327,15 @@ function ActionTimeline({ items }: { items: string[] }) {
   if (items.length === 0) return null;
 
   return (
-    <section className="content-card quick-card p-5 sm:p-6">
-      <h2 className="font-display text-xl font-semibold text-sky">System Steps</h2>
-      <ol className="mt-4 space-y-4">
+    <section className="content-card quick-card p-5">
+      <h2 className="font-display text-base font-semibold text-sky">System Steps</h2>
+      <ol className="mt-3 space-y-3">
         {items.map((item, index) => (
-          <li key={`${item}-${index}`} className="grid grid-cols-[2rem_1fr] gap-3">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-bold text-white">
+          <li key={`${item}-${index}`} className="grid grid-cols-[1.75rem_1fr] gap-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded bg-navy text-xs font-bold text-white">
               {index + 1}
             </span>
-            <span className="pt-1 text-sm font-medium leading-6 text-ink">{item}</span>
+            <span className="pt-0.5 text-sm font-medium leading-6 text-ink">{item}</span>
           </li>
         ))}
       </ol>
@@ -368,11 +368,11 @@ function OperationalPanel({
   };
 
   return (
-    <section className={`rounded-2xl border p-5 sm:p-6 ${styles[tone]}`}>
-      <h2 className={`font-display text-xl font-semibold ${tone === "danger" ? "text-red-700" : "text-sky"}`}>
+    <section className={`rounded-lg border p-5 ${styles[tone]}`}>
+      <h2 className={`font-display text-base font-semibold ${tone === "danger" ? "text-red-700" : "text-sky"}`}>
         {title}
       </h2>
-      <ul className="mt-4 space-y-3">
+      <ul className="mt-3 space-y-2.5">
         {items.map((item, index) => (
           <li key={`${title}-${index}`} className="flex gap-3 text-sm font-medium leading-6">
             <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${marker[tone]}`} />
@@ -476,12 +476,12 @@ function ListSection({
   if (renderedItems.length === 0) return null;
 
   return (
-    <section className="content-card quick-card p-5 sm:p-6">
-      <h2 className="font-display text-xl font-semibold text-ink">{title}</h2>
-      <ol className="mt-4 space-y-3">
+    <section className="content-card quick-card p-5">
+      <h2 className="font-display text-base font-semibold text-ink">{title}</h2>
+      <ol className="mt-3 space-y-2.5">
         {renderedItems.map((item, index) => (
           <li key={`${title}-${index}`} className="flex gap-3 text-sm leading-6 text-ink-muted">
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-bold text-accent">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-accent-soft text-xs font-bold text-accent">
               {index + 1}
             </span>
             <span>{item}</span>
@@ -518,7 +518,7 @@ function ProcedureSourceAuditDetails({
               Source version, pages, confidence, and linked chapter.
             </p>
           </div>
-          <span className="rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted">
+          <span className="rounded border border-border bg-white px-3 py-1 text-xs font-semibold text-ink-muted">
             Show audit details
           </span>
         </div>
@@ -543,7 +543,7 @@ function ProcedureSourceAuditDetails({
             </p>
             <Link
               href={`/chapter/${procedure.chapters.slug}`}
-              className="mt-2 inline-flex rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-ink transition-colors hover:border-accent hover:text-accent"
+              className="mt-2 inline-flex rounded-md border border-border bg-white px-3.5 py-2 text-sm font-semibold text-ink transition-colors hover:border-accent hover:text-accent"
             >
               Chapter {String(procedure.chapters.chapter_number).padStart(2, "0")} - {procedure.chapters.title}
             </Link>

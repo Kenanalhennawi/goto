@@ -116,19 +116,19 @@ export function SearchBar({
           maxLength={MAX_SEARCH_QUERY_LENGTH}
           onFocus={() => query.trim().length >= MIN_SEARCH_QUERY_LENGTH && setOpen(true)}
           placeholder="Search by issue, SSR, process, keyword..."
-          className="w-full rounded-lg border border-border bg-white py-3.5 pl-12 pr-24 font-body text-[15px] text-ink transition-colors placeholder:text-ink-faint focus:border-sky focus:outline-none focus:ring-2 focus:ring-sky/15"
+          className="w-full rounded-md border border-border bg-white py-3 pl-12 pr-24 font-body text-[15px] text-ink transition-colors placeholder:text-ink-faint focus:border-sky focus:outline-none focus:ring-2 focus:ring-sky/15"
         />
         <button
           type="submit"
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-ink px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-navy px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
         >
           Search
         </button>
       </form>
 
       {open && query.trim().length >= MIN_SEARCH_QUERY_LENGTH && (
-        <div className="absolute left-0 right-0 top-full z-[90] mt-3 max-h-[min(32rem,calc(100vh-8rem))] w-full overflow-y-auto rounded-2xl border border-blue-100 bg-white p-2 shadow-2xl shadow-slate-900/20 ring-1 ring-sky/10">
-          <div className="sticky top-0 z-10 rounded-xl border border-border bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
+        <div className="absolute left-0 right-0 top-full z-[90] mt-2 max-h-[min(32rem,calc(100vh-8rem))] w-full overflow-y-auto rounded-lg border border-border bg-white p-2 shadow-xl shadow-slate-900/15">
+          <div className="sticky top-0 z-10 rounded-md border border-border bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
             <div className="flex gap-1 overflow-x-auto">
               {(["All", "Steps", "Rules", "Images"] as ResultKind[]).map((option) => (
                 <button
@@ -224,7 +224,7 @@ function OperationalDropdownItem({
     <Link
       href={`/procedure/${result.slug}`}
       onClick={onOpen}
-      className="my-2 block rounded-xl border border-border bg-white px-3 py-3 shadow-sm transition-colors hover:border-sky hover:bg-panel-hover focus:border-sky focus:bg-panel-hover"
+      className="my-1.5 block rounded-md border border-border bg-white px-3 py-2.5 transition-colors hover:border-sky hover:bg-panel-hover focus:border-sky focus:bg-panel-hover"
     >
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <Badge tone="blue">Operational Card</Badge>
@@ -284,7 +284,7 @@ function ChapterDropdownItem({
     <Link
       href={`/chapter/${result.slug}?section=${sectionForResult(result)}`}
       onClick={onOpen}
-      className="my-2 block rounded-xl border border-border bg-white px-3 py-3 shadow-sm transition-colors hover:border-sky hover:bg-panel-hover focus:border-sky focus:bg-panel-hover"
+      className="my-1.5 block rounded-md border border-border bg-white px-3 py-2.5 transition-colors hover:border-sky hover:bg-panel-hover focus:border-sky focus:bg-panel-hover"
     >
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <Badge tone="orange">Ch. {formatChapterNumber(result.chapter_number)}</Badge>
@@ -370,7 +370,7 @@ function Badge({
     neutral: "bg-slate-50 text-ink-muted border-border",
   };
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tones[tone]}`}>
+    <span className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tones[tone]}`}>
       {children}
     </span>
   );

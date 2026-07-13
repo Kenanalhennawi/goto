@@ -75,23 +75,23 @@ export default async function ServicesPage({
       <SiteHeader />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
-        <section className="hero-panel mb-6 overflow-hidden rounded-[22px]">
-          <div className="hero-main p-5 sm:p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+        <section className="hero-panel mb-5 overflow-hidden rounded-lg">
+          <div className="hero-main p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
               Agent services
             </p>
-            <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+            <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
               <div>
-                <h1 className="font-display text-3xl font-semibold leading-tight tracking-tight text-ink sm:text-4xl">
+                <h1 className="font-display text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-3xl">
                   Service Directory
                 </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-ink-muted">
+                <p className="mt-1.5 max-w-2xl text-sm leading-6 text-ink-muted">
                   Browse operational services by work area.
                 </p>
               </div>
               <Link
                 href="/"
-                className="rounded-full border border-border bg-white px-4 py-2 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+                className="rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
               >
                 Back to guide
               </Link>
@@ -99,8 +99,8 @@ export default async function ServicesPage({
           </div>
         </section>
 
-        <section className="content-card mb-6 p-4 sm:p-5">
-          <form action="/services" className="grid gap-3 lg:grid-cols-[1fr_220px_auto]">
+        <section className="content-card mb-5 p-4">
+          <form action="/services" className="grid gap-2.5 lg:grid-cols-[1fr_220px_auto]">
             <label className="sr-only" htmlFor="service-filter">
               Filter services
             </label>
@@ -110,12 +110,12 @@ export default async function ServicesPage({
               defaultValue={filters.q ?? ""}
               placeholder="Filter services..."
               autoComplete="off"
-              className="rounded-xl border border-border bg-white px-4 py-3 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-sky"
+              className="rounded-md border border-border bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-sky"
             />
             <select
               name="area"
               defaultValue={filters.area ?? ""}
-              className="rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-ink outline-none transition-colors focus:border-sky"
+              className="rounded-md border border-border bg-white px-3.5 py-2.5 text-sm font-semibold text-ink outline-none transition-colors focus:border-sky"
             >
               <option value="">All work areas</option>
               {WORK_AREAS.map((area) => (
@@ -126,13 +126,13 @@ export default async function ServicesPage({
             </select>
             <button
               type="submit"
-              className="rounded-xl bg-navy px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent"
+              className="rounded-md bg-navy px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent"
             >
               Filter
             </button>
           </form>
 
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
+          <div className="mt-3.5 flex flex-wrap gap-1.5 border-t border-border pt-3.5">
             <FilterChip href="/services" active={!filters.area && !filters.q}>
               All
             </FilterChip>
@@ -179,15 +179,10 @@ export default async function ServicesPage({
               if (areaCards.length === 0) return null;
 
               return (
-                <section key={area} className="section-band p-4 sm:p-5">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-                        Work area
-                      </p>
-                      <h2 className="mt-1 font-display text-2xl font-semibold text-ink">{area}</h2>
-                    </div>
-                    <span className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold text-ink-muted">
+                <section key={area} className="section-band p-4">
+                  <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+                    <h2 className="font-display text-lg font-semibold text-ink">{area}</h2>
+                    <span className="rounded border border-border bg-white px-2.5 py-0.5 text-xs font-semibold text-ink-muted">
                       {areaCards.length} card{areaCards.length === 1 ? "" : "s"}
                     </span>
                   </div>
@@ -213,39 +208,39 @@ function ServiceDirectoryCard({ card }: { card: ServiceCard }) {
   const channels = jsonItems(card.channels).slice(0, 3);
 
   return (
-    <article className="content-card quick-card flex min-h-64 flex-col p-4 transition-colors hover:border-accent">
-      <div className="flex flex-wrap gap-2">
+    <article className="content-card quick-card flex flex-col p-4 transition-colors hover:border-accent">
+      <div className="flex flex-wrap gap-1.5">
         {card.service_code && (
-          <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-accent">
+          <span className="rounded-sm border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-accent">
             {card.service_code}
           </span>
         )}
         {(card.service_type || card.category) && (
-          <span className="rounded-full border border-blue-200 bg-sky-soft px-2.5 py-1 text-[11px] font-semibold text-sky">
+          <span className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-[11px] font-semibold text-sky">
             {card.service_type ?? card.category}
           </span>
         )}
       </div>
 
-      <h3 className="mt-3 font-display text-xl font-semibold leading-snug text-ink">{card.title}</h3>
+      <h3 className="mt-2.5 font-display text-base font-semibold leading-snug text-ink">{card.title}</h3>
 
       {timing && (
-        <div className="mt-4 rounded-xl border border-border bg-slate-50 px-3 py-3">
+        <div className="mt-3 rounded-md border border-border bg-slate-50 px-3 py-2.5">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
             {timingLabel}
           </p>
-          <p className="mt-1 line-clamp-3 whitespace-pre-line text-sm font-semibold leading-6 text-ink">
+          <p className="mt-1 line-clamp-3 whitespace-pre-line text-[13px] font-semibold leading-5 text-ink">
             {timing}
           </p>
         </div>
       )}
 
       {channels.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {channels.map((channel) => (
             <span
               key={channel}
-              className="rounded-full border border-border bg-white px-2.5 py-1 text-[11px] font-semibold text-ink-muted"
+              className="rounded-sm border border-border bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-muted"
             >
               {channel}
             </span>
@@ -253,10 +248,10 @@ function ServiceDirectoryCard({ card }: { card: ServiceCard }) {
         </div>
       )}
 
-      <div className="mt-auto pt-5">
+      <div className="mt-auto pt-4">
         <Link
           href={`/procedure/${card.slug}`}
-          className="inline-flex rounded-full bg-navy px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent"
+          className="inline-flex rounded bg-navy px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
         >
           Open
         </Link>
@@ -277,9 +272,9 @@ function FilterChip({
   return (
     <Link
       href={href}
-      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+      className={`rounded border px-2.5 py-1 text-xs font-semibold transition-colors ${
         active
-          ? "border-accent bg-accent text-white"
+          ? "border-navy bg-navy text-white"
           : "border-border bg-white text-ink-muted hover:border-accent hover:text-accent"
       }`}
     >

@@ -68,43 +68,43 @@ export default async function ChapterPage({
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
         <Link
           href="/"
-          className="mb-6 inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink-muted shadow-sm ring-1 ring-border transition-colors hover:text-accent"
+          className="mb-5 inline-flex items-center gap-2 rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
         >
           &larr; Back to chapters
         </Link>
 
-        <section className="hero-panel mb-6 overflow-hidden rounded-[22px]">
-          <div className="hero-main p-5 sm:p-7">
+        <section className="hero-panel mb-5 overflow-hidden rounded-lg">
+          <div className="hero-main p-5">
               <div className="flex items-start gap-4">
               <div className="opacity-70">
                 <ChapterBadge number={ch.chapter_number} size="lg" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
                   Agent operational guide
                 </p>
-                <h1 className="mt-2 font-display text-3xl font-semibold leading-tight tracking-tight text-ink sm:text-4xl">
+                <h1 className="mt-1.5 font-display text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-3xl">
                   {ch.title}
                 </h1>
                 {ch.search_keywords?.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-1.5">
                     {ch.search_keywords.slice(0, 8).map((keyword) => (
                       <span
                         key={keyword}
-                        className="rounded-full border border-blue-200 bg-sky-soft px-3 py-1 text-xs font-medium text-sky"
+                        className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-xs font-medium text-sky"
                       >
                         {keyword}
                       </span>
                     ))}
                   </div>
                 )}
-                <div className="mt-5 flex flex-wrap items-center gap-2">
+                <div className="mt-4 flex flex-wrap items-center gap-2">
                   <CopyLinkButton path={chapterPath} />
                   <ReportIssueButton chapterId={ch.id} chapterSlug={ch.slug} />
                 {canEdit && (
                   <Link
                     href={`/admin/chapter/${ch.slug}`}
-                      className="inline-flex rounded-full bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-accent-dim"
+                      className="inline-flex rounded bg-accent px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent-dim"
                   >
                     Edit chapter
                   </Link>
@@ -115,33 +115,33 @@ export default async function ChapterPage({
           </div>
         </section>
 
-        <section className="section-band mb-6 p-4 sm:p-5 lg:p-6">
+        <section className="section-band mb-5 p-4">
           <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
             <div className="content-card quick-card p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
                 Operational overview
               </p>
-              <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+              <h2 className="mt-1.5 font-display text-lg font-semibold text-ink">
                 What this chapter is about
               </h2>
               {overview ? (
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-ink-muted">{overview}</p>
+                <p className="mt-2.5 max-w-3xl text-sm leading-6 text-ink-muted">{overview}</p>
               ) : (
-                <p className="mt-3 text-sm leading-7 text-ink-muted">
+                <p className="mt-2.5 text-sm leading-6 text-ink-muted">
                   Open the full manual content below for the extracted chapter details.
                 </p>
               )}
 
               {ch.search_keywords?.length > 0 && (
-                <div className="mt-5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                <div className="mt-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
                     Best used for
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     {ch.search_keywords.slice(0, 10).map((keyword) => (
                       <span
                         key={keyword}
-                        className="rounded-full border border-blue-200 bg-sky-soft px-3 py-1 text-xs font-semibold text-sky"
+                        className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-xs font-semibold text-sky"
                       >
                         {keyword}
                       </span>
@@ -152,18 +152,18 @@ export default async function ChapterPage({
 
               <a
                 href="#manual-content"
-                className="mt-5 inline-flex rounded-full bg-navy px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-accent"
+                className="mt-4 inline-flex rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
               >
                 Open full manual content
               </a>
             </div>
 
             <div className="content-card quick-card p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
                 Linked references
               </p>
               {references.length > 0 ? (
-                <div className="mt-3 space-y-2">
+                <div className="mt-3 space-y-1.5">
                   {references.map((reference) =>
                     reference.url ? (
                       <a
@@ -171,7 +171,7 @@ export default async function ChapterPage({
                         href={reference.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-sky-soft px-3 py-2 text-xs font-semibold text-sky transition-colors hover:border-sky hover:bg-white"
+                        className="flex items-center justify-between gap-3 rounded-md border border-blue-200 bg-sky-soft px-3 py-2 text-xs font-semibold text-sky transition-colors hover:border-sky hover:bg-white"
                       >
                         <span className="truncate">{reference.title}</span>
                         <span className="shrink-0">Open</span>
@@ -179,7 +179,7 @@ export default async function ChapterPage({
                     ) : (
                       <div
                         key={`${reference.kind}-${reference.title}`}
-                        className="rounded-lg border border-border bg-white px-3 py-2 text-xs text-ink-muted"
+                        className="rounded-md border border-border bg-white px-3 py-2 text-xs text-ink-muted"
                       >
                         <span className="font-semibold text-ink">{reference.kind}</span>:{" "}
                         {reference.title}
@@ -284,7 +284,7 @@ function SourceAuditDetails({
               PDF source information and extracted references.
             </p>
           </div>
-          <span className="rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted">
+          <span className="rounded border border-border bg-white px-3 py-1 text-xs font-semibold text-ink-muted">
             Show audit details
           </span>
         </div>
@@ -313,14 +313,14 @@ function SourceAuditDetails({
                     href={reference.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-full border border-blue-200 bg-sky-soft px-3 py-1.5 text-xs font-semibold text-sky hover:bg-white"
+                    className="rounded border border-blue-200 bg-sky-soft px-2.5 py-1 text-xs font-semibold text-sky hover:bg-white"
                   >
                     {reference.title}
                   </a>
                 ) : (
                   <span
                     key={`${reference.kind}-${reference.title}`}
-                    className="rounded-full border border-border bg-slate-50 px-3 py-1.5 text-xs font-semibold text-ink-muted"
+                    className="rounded border border-border bg-slate-50 px-2.5 py-1 text-xs font-semibold text-ink-muted"
                   >
                     {reference.kind}: {reference.title}
                   </span>
