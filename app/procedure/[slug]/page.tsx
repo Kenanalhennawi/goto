@@ -118,8 +118,6 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
 
         <div className="space-y-5">
           <ServiceCardSections procedure={procedure} />
-          <TextSection title="Summary" value={procedure.summary} />
-          <TextSection title="When to use" value={procedure.when_to_use} />
           <ListSection title="Agent action" items={procedure.agent_action} canShowFallback={canManage} />
           <ListSection title="Rules" items={procedure.rules} canShowFallback={canManage} />
           <ListSection title="Exceptions" items={procedure.exceptions} canShowFallback={canManage} />
@@ -167,94 +165,89 @@ function TextSection({
 
 function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapter }) {
   const timingLabel = getTimingLabel(procedure);
-  const whoCanAction = procedure.who_can_action.map(readableJsonItem).filter(Boolean);
   const passengerAdvice = procedure.passenger_advice.map(readableJsonItem).filter(Boolean);
   const requiredInfo = procedure.required_information.map(readableJsonItem).filter(Boolean);
   const channels = procedure.channels.map(readableJsonItem).filter(Boolean);
-  const listSections = [
-    { title: "Channels", items: procedure.channels },
-    { title: "Who can action", items: procedure.who_can_action },
-    { title: "Required information", items: procedure.required_information },
-    { title: "System steps", items: procedure.system_steps },
-    { title: "Passenger advice", items: procedure.passenger_advice },
-    { title: "Allowed", items: procedure.allowed },
-    { title: "Not allowed", items: procedure.not_allowed },
-    { title: "Escalation", items: procedure.escalation_points },
-  ];
-  const hasListContent = listSections.some((section) =>
-    section.items.some((item) => readableJsonItem(item))
+  const whoCanAction = procedure.who_can_action.map(readableJsonItem).filter(Boolean);
+  const allowed = procedure.allowed.map(readableJsonItem).filter(Boolean);
+  const restrictions = procedure.not_allowed.map(readableJsonItem).filter(Boolean);
+  const escalation = procedure.escalation_points.map(readableJsonItem).filter(Boolean);
+  const systemSteps = procedure.system_steps.map(readableJsonItem).filter(Boolean);
+  const hasDecisionData = Boolean(
+    procedure.is_published ||
+      procedure.service_code?.trim() ||
+      procedure.service_type?.trim() ||
+      procedure.cut_off_time?.trim() ||
+      channels.length ||
+      whoCanAction.length
   );
-  const hasFacts = Boolean(procedure.cut_off_time?.trim() || procedure.fees_charges?.trim());
+  const hasOperationalData = Boolean(
+    requiredInfo.length ||
+      allowed.length ||
+      restrictions.length ||
+      escalation.length ||
+      passengerAdvice.length ||
+      systemSteps.length ||
+      procedure.fees_charges?.trim()
+  );
 
-  if (!hasListContent && !hasFacts) return null;
+  if (!hasDecisionData && !hasOperationalData) return null;
 
   return (
-    <section className="content-card quick-card p-5 sm:p-6">
-      <div className="mb-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-          Service card
-        </p>
-        <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
-          Operational handling
-        </h2>
-      </div>
-
-      <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <DecisionFact
-          label={procedure.service_code?.toUpperCase() === "MCT" ? "Timing rule" : "Deadline / cut-off"}
-          value={procedure.cut_off_time}
-        />
-        <DecisionFact label="Who can action" value={whoCanAction[0] ?? channels[0]} />
-        <DecisionFact label="Required information" value={requiredInfo[0]} />
-        <DecisionFact label="What to tell passenger" value={passengerAdvice[0]} />
-      </div>
-
-      {hasFacts && (
-        <dl className="mb-5 grid gap-3 sm:grid-cols-2">
-          {procedure.cut_off_time && (
-            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
-              <dt className="text-xs font-semibold uppercase tracking-wider text-accent">
-                {timingLabel}
-              </dt>
-              <dd className="mt-2">
-                <StructuredText value={procedure.cut_off_time} />
-              </dd>
-            </div>
-          )}
-          {procedure.fees_charges && (
-            <div className="rounded-xl border border-border bg-white p-4">
-              <dt className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
-                Fees / charges
-              </dt>
-              <dd className="mt-1 whitespace-pre-line text-sm font-semibold text-ink">
-                {procedure.fees_charges}
-              </dd>
-            </div>
-          )}
-        </dl>
+    <div className="space-y-5">
+      {hasDecisionData && (
+        <section className="content-card quick-card overflow-hidden">
+          <div className="border-b border-border bg-white p-5 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+              Decision summary
+            </p>
+            <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+              Can I action this?
+            </h2>
+          </div>
+          <div className="grid gap-0 md:grid-cols-2 xl:grid-cols-3">
+            <DecisionFact label="Status" value={procedure.is_published ? "Published operational card" : ""} />
+            <DecisionFact label="Service code" value={procedure.service_code} />
+            <DecisionFact label="Service type" value={procedure.service_type} />
+            <DecisionFact label={timingLabel} value={procedure.cut_off_time} />
+            <DecisionListFact label="Channels" items={channels} />
+            <DecisionListFact label="Who can action" items={whoCanAction} />
+          </div>
+        </section>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {listSections.map((section) => {
-          const items = section.items.map(readableJsonItem).filter(Boolean);
-          if (items.length === 0) return null;
+      {procedure.cut_off_time && (
+        <section className="rounded-2xl border border-orange-200 bg-orange-50 p-5 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+            {isReferenceTimingCard(procedure) ? "Operational Timing Rule" : "Operational Deadline"}
+          </p>
+          <div className="mt-3">
+            <StructuredText value={procedure.cut_off_time} />
+          </div>
+        </section>
+      )}
 
-          return (
-            <div key={section.title} className="rounded-xl border border-border bg-white p-4">
-              <h3 className="font-display text-base font-semibold text-ink">{section.title}</h3>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-ink-muted">
-                {items.map((item, index) => (
-                  <li key={`${section.title}-${index}`} className="flex gap-2">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
+      <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="space-y-5">
+          <ChecklistSection title="Required information" items={requiredInfo} />
+          <OperationalPanel title="Requirements" items={allowed} tone="plain" />
+          {procedure.fees_charges && (
+            <section className="content-card quick-card p-5 sm:p-6">
+              <h2 className="font-display text-xl font-semibold text-sky">Fees / charges</h2>
+              <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-7 text-ink">
+                {procedure.fees_charges}
+              </p>
+            </section>
+          )}
+        </div>
+        <div className="space-y-5">
+          <ActionTimeline items={systemSteps} />
+          <OperationalPanel title="Restrictions" items={restrictions} tone="danger" />
+          <OperationalPanel title="Escalation required" items={escalation} tone="warning" />
+          <OperationalPanel title="Passenger Advice" items={passengerAdvice} tone="info" />
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -263,10 +256,108 @@ function DecisionFact({ label, value }: { label: string; value: string | undefin
   if (!text) return null;
 
   return (
-    <div className="rounded-xl border border-blue-100 bg-sky-soft/70 px-3 py-3">
+    <div className="border-b border-r border-border bg-white px-4 py-4">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-sky">{label}</p>
-      <p className="mt-1 line-clamp-3 text-sm font-semibold leading-6 text-ink">{text}</p>
+      <p className="mt-1 line-clamp-3 text-base font-semibold leading-6 text-ink">{text}</p>
     </div>
+  );
+}
+
+function DecisionListFact({ label, items }: { label: string; items: string[] }) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="border-b border-r border-border bg-white px-4 py-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-sky">{label}</p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {items.slice(0, 4).map((item) => (
+          <span key={item} className="rounded-full border border-blue-200 bg-sky-soft px-2.5 py-1 text-xs font-semibold text-sky">
+            {item}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChecklistSection({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+
+  return (
+    <section className="content-card quick-card p-5 sm:p-6">
+      <h2 className="font-display text-xl font-semibold text-sky">{title}</h2>
+      <ul className="mt-4 space-y-3">
+        {items.map((item) => (
+          <li key={item} className="flex gap-3 text-sm leading-6 text-ink">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-blue-300 bg-white text-[10px] font-bold text-sky">
+              □
+            </span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ActionTimeline({ items }: { items: string[] }) {
+  if (items.length === 0) return null;
+
+  return (
+    <section className="content-card quick-card p-5 sm:p-6">
+      <h2 className="font-display text-xl font-semibold text-sky">System Steps</h2>
+      <ol className="mt-4 space-y-4">
+        {items.map((item, index) => (
+          <li key={`${item}-${index}`} className="grid grid-cols-[2rem_1fr] gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-bold text-white">
+              {index + 1}
+            </span>
+            <span className="pt-1 text-sm font-medium leading-6 text-ink">{item}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function OperationalPanel({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  tone: "plain" | "danger" | "warning" | "info";
+}) {
+  if (items.length === 0) return null;
+
+  const styles = {
+    plain: "border-blue-100 bg-white text-ink",
+    danger: "border-red-200 bg-red-50 text-red-800",
+    warning: "border-warn/30 bg-warn/10 text-ink",
+    info: "border-blue-200 bg-sky-soft text-ink",
+  };
+  const marker = {
+    plain: "bg-sky",
+    danger: "bg-red-500",
+    warning: "bg-warn",
+    info: "bg-sky",
+  };
+
+  return (
+    <section className={`rounded-2xl border p-5 sm:p-6 ${styles[tone]}`}>
+      <h2 className={`font-display text-xl font-semibold ${tone === "danger" ? "text-red-700" : "text-sky"}`}>
+        {title}
+      </h2>
+      <ul className="mt-4 space-y-3">
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`} className="flex gap-3 text-sm font-medium leading-6">
+            <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${marker[tone]}`} />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -306,6 +397,10 @@ function getTimingLabel(card: Pick<ProcedureCardWithChapter, "service_code" | "s
   if (type.includes("reference")) return "Reference rule";
   if (type.includes("rule")) return "Timing rule";
   return "Cut-off time";
+}
+
+function isReferenceTimingCard(card: Pick<ProcedureCardWithChapter, "service_code" | "service_type" | "category">) {
+  return getTimingLabel(card) !== "Cut-off time";
 }
 
 function timingGroups(value: string) {
