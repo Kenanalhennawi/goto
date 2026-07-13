@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 const { normalizeExternalUrl } = await import("../lib/links.ts");
 const { buildSearchTerms, plainSnippet } = await import("../lib/search.ts");
+const { sourceReviewStatus, sourceReviewWarnings } = await import("../lib/admin-procedure-quality.ts");
 
 const sharePointUrl =
   "https://dubaiaviationcorp.sharepoint.com/sites/CCQualityandTraining/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FCCQualityandTraining%2FShared%20Documents%2FGO%20TO%20DOC%20FOLDER%2FWorldTracer%20Self%20Service%5FAn%20Overview%2Epdf&parent=%2Fsites%2FCCQualityandTraining%2FShared%20Documents%2FGO%20TO%20DOC%20FOLDER";
@@ -13,6 +14,33 @@ assert.equal(
 assert.equal(normalizeExternalUrl("javascript:alert(1)"), null);
 assert.equal(buildSearchTerms("wt bag"), "baggage:*");
 assert.equal(plainSnippet("<mark>WorldTracer</mark> file"), "WorldTracer file");
+
+const sourceReviewBase = {
+  source_version: "80.8",
+  last_reviewed_at: "2026-06-20T09:00:00.000Z",
+  chapters: {
+    source_version: "80.8",
+    updated_at: "2026-06-20T08:00:00.000Z",
+  },
+};
+
+assert.deepEqual(
+  sourceReviewWarnings({ ...sourceReviewBase, last_reviewed_at: null }),
+  ["Never reviewed against source"]
+);
+assert.deepEqual(
+  sourceReviewWarnings({
+    ...sourceReviewBase,
+    chapters: { ...sourceReviewBase.chapters, updated_at: "2026-06-21T08:00:00.000Z" },
+  }),
+  ["Source updated"]
+);
+assert.equal(sourceReviewStatus(sourceReviewBase), "Current");
+assert.deepEqual(
+  sourceReviewWarnings({ ...sourceReviewBase, source_version: "80.7" }),
+  ["Version mismatch"]
+);
+assert.equal(sourceReviewStatus({ ...sourceReviewBase, chapters: null }), "No linked source chapter");
 
 const timeRangePattern = /^([01]\d|2[0-3])[:.]?([0-5]\d)\s*[-–]\s*([01]\d|2[0-3])[:.]?([0-5]\d)$/;
 assert.equal(timeRangePattern.test("0800-1630"), true);

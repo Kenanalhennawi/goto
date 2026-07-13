@@ -246,7 +246,11 @@ async function updateProcedureReviewState(formData: FormData, action: ProcedureA
     redirectWithStatus(slug, { error: actionErrorCode(action) });
   }
 
-  const nextState = nextReviewState(action, user.id);
+  const sourceSnapshot =
+    action === "approve_publish" && previous.chapter_id
+      ? await readSourceSnapshot(supabase, previous.chapter_id, slug)
+      : null;
+  const nextState = nextReviewState(action, user.id, sourceSnapshot);
   const { data: updated, error: updateError } = await supabase
     .from("procedure_cards")
     .update(nextState)
@@ -318,7 +322,42 @@ function numberField(formData: FormData, name: string) {
   return { value, error: "" };
 }
 
-function nextReviewState(action: ProcedureAction, userId: string) {
+async function readSourceSnapshot(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  chapterId: string,
+  slug: string
+) {
+  const { data: chapter, error } = await supabase
+    .from("chapters")
+    .select("source_version, updated_at")
+    .eq("id", chapterId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Procedure source snapshot read failed", error);
+    redirectWithStatus(slug, { error: "publish_failed" });
+  }
+
+  if (!chapter) return null;
+
+  return {
+    source_version: chapter.source_version,
+    // source_updated_at is a date snapshot; keep the linked chapter's calendar date.
+    source_updated_at: sourceDateSnapshot(chapter.updated_at),
+  };
+}
+
+function sourceDateSnapshot(value: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+function nextReviewState(
+  action: ProcedureAction,
+  userId: string,
+  sourceSnapshot: { source_version: string | null; source_updated_at: string | null } | null
+) {
   switch (action) {
     case "approve_publish":
       return {
@@ -327,6 +366,7 @@ function nextReviewState(action: ProcedureAction, userId: string) {
         source_confidence: "approved",
         last_reviewed_at: new Date().toISOString(),
         last_reviewed_by: userId,
+        ...(sourceSnapshot ?? {}),
       };
     case "unpublish":
       return { is_published: false };
