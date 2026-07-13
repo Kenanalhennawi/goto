@@ -55,7 +55,7 @@ export function DecisionFlow({ areas }: { areas: DecisionFlowArea[] }) {
               key={area.name}
               type="button"
               onClick={() => setActiveArea(area.name)}
-              className="rounded-md border border-border bg-white px-3 py-2.5 text-left transition-colors hover:border-accent"
+              className="hover-lift rounded-md border border-border bg-white px-3 py-2.5 text-left hover:border-accent"
             >
               <span className="block text-[13px] font-semibold leading-5 text-ink">
                 {area.name}
@@ -72,7 +72,7 @@ export function DecisionFlow({ areas }: { areas: DecisionFlowArea[] }) {
             <Link
               key={card.id}
               href={`/procedure/${card.slug}`}
-              className="flex items-center justify-between gap-2 rounded-md border border-border bg-white px-3 py-2 transition-colors hover:border-accent"
+              className="hover-lift flex items-center justify-between gap-2 rounded-md border border-border bg-white px-3 py-2 hover:border-accent"
             >
               <span className="min-w-0">
                 <span className="block truncate text-[13px] font-semibold leading-5 text-ink">

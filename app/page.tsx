@@ -153,7 +153,7 @@ export default async function Home({
       <SiteHeader />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
-        <section className="hero-panel relative z-20 mb-5 overflow-visible rounded-lg">
+        <section className="hero-panel reveal relative z-20 mb-5 overflow-visible rounded-lg">
           <div className="hero-main p-4 sm:p-5">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
               <div>
@@ -208,7 +208,7 @@ export default async function Home({
         {list.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="space-y-6">
+          <div className="reveal-stagger space-y-6">
             <DecisionFlow areas={decisionAreas} />
 
             <section>
@@ -331,7 +331,7 @@ function ServiceCard({ service }: { service: HomeServiceCard }) {
   const openLabel = isReferenceCard(service) ? "Open card" : "Open service";
 
   return (
-    <article className="service-card flex flex-col rounded-lg border border-border bg-white p-4 transition-colors hover:border-accent">
+    <article className="service-card hover-lift flex flex-col rounded-lg border border-border bg-white p-4 hover:border-accent">
       <span>
         <span className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <span className="flex flex-wrap gap-1.5">
