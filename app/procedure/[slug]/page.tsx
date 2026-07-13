@@ -118,9 +118,24 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
 
         <div className="space-y-5">
           <ServiceCardSections procedure={procedure} />
-          <ListSection title="Agent action" items={procedure.agent_action} canShowFallback={canManage} />
-          <ListSection title="Rules" items={procedure.rules} canShowFallback={canManage} />
-          <ListSection title="Exceptions" items={procedure.exceptions} canShowFallback={canManage} />
+          <ListSection
+            title="Agent action"
+            items={procedure.agent_action}
+            canShowFallback={canManage}
+            hiddenItems={structuredOperationalItems(procedure)}
+          />
+          <ListSection
+            title="Rules"
+            items={procedure.rules}
+            canShowFallback={canManage}
+            hiddenItems={structuredOperationalItems(procedure)}
+          />
+          <ListSection
+            title="Exceptions"
+            items={procedure.exceptions}
+            canShowFallback={canManage}
+            hiddenItems={structuredOperationalItems(procedure)}
+          />
           <TextSection title="Required approval" value={procedure.required_approval} />
           <TextSection title="Customer script" value={procedure.customer_script} isScript />
           <TextSection title="SPRINT comment template" value={procedure.sprint_comment_template} isScript />
@@ -174,8 +189,7 @@ function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapte
   const escalation = procedure.escalation_points.map(readableJsonItem).filter(Boolean);
   const systemSteps = procedure.system_steps.map(readableJsonItem).filter(Boolean);
   const hasDecisionData = Boolean(
-    procedure.is_published ||
-      procedure.service_code?.trim() ||
+    procedure.service_code?.trim() ||
       procedure.service_type?.trim() ||
       procedure.cut_off_time?.trim() ||
       channels.length ||
@@ -206,7 +220,10 @@ function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapte
             </h2>
           </div>
           <div className="grid gap-0 md:grid-cols-2 xl:grid-cols-3">
-            <DecisionFact label="Status" value={procedure.is_published ? "Published operational card" : ""} />
+            <DecisionFact
+              label="Status"
+              value={procedure.is_published ? "Operational guidance available" : "Draft guidance - not public"}
+            />
             <DecisionFact label="Service code" value={procedure.service_code} />
             <DecisionFact label="Service type" value={procedure.service_type} />
             <DecisionFact label={timingLabel} value={procedure.cut_off_time} />
@@ -230,7 +247,7 @@ function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapte
       <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-5">
           <ChecklistSection title="Required information" items={requiredInfo} />
-          <OperationalPanel title="Requirements" items={allowed} tone="plain" />
+          <OperationalPanel title="Eligibility / applicability" items={allowed} tone="plain" />
           {procedure.fees_charges && (
             <section className="content-card quick-card p-5 sm:p-6">
               <h2 className="font-display text-xl font-semibold text-sky">Fees / charges</h2>
@@ -275,6 +292,14 @@ function DecisionListFact({ label, items }: { label: string; items: string[] }) 
             {item}
           </span>
         ))}
+        {items.length > 4 && (
+          <span
+            className="rounded-full border border-border bg-white px-2.5 py-1 text-xs font-semibold text-ink-muted"
+            aria-label={`${items.length - 4} more ${label.toLowerCase()}`}
+          >
+            +{items.length - 4} more
+          </span>
+        )}
       </div>
     </div>
   );
@@ -289,9 +314,7 @@ function ChecklistSection({ title, items }: { title: string; items: string[] }) 
       <ul className="mt-4 space-y-3">
         {items.map((item) => (
           <li key={item} className="flex gap-3 text-sm leading-6 text-ink">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-blue-300 bg-white text-[10px] font-bold text-sky">
-              □
-            </span>
+            <span className="mt-0.5 h-5 w-5 shrink-0 rounded border border-blue-300 bg-white" aria-hidden="true" />
             <span>{item}</span>
           </li>
         ))}
@@ -423,7 +446,7 @@ function timingGroups(value: string) {
       continue;
     }
 
-    const isHeading = !line.includes(":") && current.items.length === 0;
+    const isHeading = isTimingHeading(line) && current.items.length === 0;
     if (isHeading) {
       current.heading = line;
     } else {
@@ -439,12 +462,17 @@ function ListSection({
   title,
   items,
   canShowFallback,
+  hiddenItems,
 }: {
   title: string;
   items: JsonValue[];
   canShowFallback: boolean;
+  hiddenItems: Set<string>;
 }) {
-  const renderedItems = items.map((item) => readableJsonItem(item)).filter(Boolean);
+  const readableItems = items
+    .map((item) => readableJsonItem(item))
+    .filter(Boolean)
+  const renderedItems = readableItems.filter((item) => !hiddenItems.has(normalizeOperationalText(item)));
   if (renderedItems.length === 0) return null;
 
   return (
@@ -460,7 +488,7 @@ function ListSection({
           </li>
         ))}
       </ol>
-      {canShowFallback && renderedItems.length !== items.length && (
+      {canShowFallback && readableItems.length !== items.length && (
         <p className="mt-4 text-xs text-ink-faint">
           Some structured items use an unsupported shape and are hidden from the public view.
         </p>
@@ -480,7 +508,7 @@ function ProcedureSourceAuditDetails({
 }) {
   return (
     <details className="content-card overflow-hidden">
-      <summary className="cursor-pointer list-none px-5 py-4 marker:hidden">
+      <summary className="cursor-pointer list-none px-5 py-4 marker:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-faint">
@@ -536,17 +564,40 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function readableJsonItem(item: JsonValue) {
-  if (typeof item === "string") return item.trim();
-  if (typeof item === "number" || typeof item === "boolean") return String(item);
+  if (typeof item === "string") return meaningfulText(item);
+  if (typeof item === "number" || typeof item === "boolean") return meaningfulText(String(item));
   if (!item || Array.isArray(item)) return "";
 
   const record = item as Record<string, JsonValue>;
   for (const key of ["label", "text", "value", "title", "description"]) {
     const value = record[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "string") return meaningfulText(value);
   }
 
   return "";
+}
+
+function structuredOperationalItems(procedure: ProcedureCardWithChapter) {
+  return new Set(
+    [...procedure.system_steps, ...procedure.allowed, ...procedure.not_allowed]
+      .map((item) => readableJsonItem(item))
+      .filter(Boolean)
+      .map(normalizeOperationalText)
+  );
+}
+
+function normalizeOperationalText(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function meaningfulText(value: string) {
+  const text = value.trim();
+  if (!text) return "";
+  return ["n/a", "none", "no data", "null", "undefined"].includes(text.toLowerCase()) ? "" : text;
+}
+
+function isTimingHeading(value: string) {
+  return /^\s*[a-z0-9/]+\s*(?:->|→)\s*[a-z0-9/]+\s*$/i.test(value);
 }
 
 function formatSourcePages(pages: number[]) {
