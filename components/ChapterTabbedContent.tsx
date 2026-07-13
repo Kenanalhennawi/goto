@@ -324,10 +324,8 @@ function buildGuideSections(blocks: ContentBlock[]): GuideSection[] {
 }
 
 function FormattedText({ text }: { text: string }) {
-  const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
-  const bulletLines = lines.filter((line) => BULLET_PATTERN.test(line) || STEP_LINE_PATTERN.test(line));
   const shortKeywordList =
-    lines.length === 1 &&
+    !text.includes("\n") &&
     text.length < 180 &&
     text.includes(",") &&
     !/[.!?]\s/.test(text);
@@ -352,42 +350,92 @@ function FormattedText({ text }: { text: string }) {
     );
   }
 
-  if (lines.length >= 2 && bulletLines.length / lines.length > 0.45) {
+  // Display-only repair of PDF extraction artifacts: orphan bullet markers
+  // are attached to the line they introduce, and wrapped sentence fragments
+  // are joined back together. Original wording is never changed.
+  const items = repairPdfLines(text.split("\n"));
+  const bulletItems = items.filter((item) => item.bullet);
+
+  if (items.length >= 2 && bulletItems.length / items.length > 0.45) {
     return (
       <ul className="grid gap-2">
-        {lines.map((line, index) => (
+        {items.map((item, index) => (
           <li
-            key={`${line}-${index}`}
-            className="rounded-md border border-border/80 bg-sky-soft/45 px-3 py-2 text-[15px] leading-7 text-ink"
+            key={`${item.text.slice(0, 24)}-${index}`}
+            className={`flex gap-2.5 rounded-md border px-3 py-2 text-[15px] leading-7 ${
+              isImportantText(item.text)
+                ? "border-orange-200 bg-orange-50 text-ink"
+                : "border-border/80 bg-sky-soft/45 text-ink"
+            }`}
           >
-            <span className="mr-2 font-semibold text-accent">{index + 1}.</span>
-            <span>{stripListMarker(line)}</span>
+            <span className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky" aria-hidden="true" />
+            <span>{item.text}</span>
           </li>
         ))}
       </ul>
     );
   }
 
-  if (isImportantText(text)) {
-    return (
-      <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-[15px] leading-7 text-ink">
-        {lines.map((line, index) => (
-          <p key={`${line}-${index}`}>
-            <span className="font-semibold text-accent">Important: </span>
-            {cleanDisplayText(line).replace(/^important\s*(note)?\s*[:.-]?\s*/i, "")}
-          </p>
-        ))}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-3 text-[15px] leading-7 text-ink">
-      {lines.map((line, index) => (
-        <p key={`${line}-${index}`}>{cleanDisplayText(line)}</p>
-      ))}
+      {items.map((item, index) =>
+        isImportantText(item.text) ? (
+          <p
+            key={`${item.text.slice(0, 24)}-${index}`}
+            className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3"
+          >
+            <span className="font-semibold text-accent">Important: </span>
+            {item.text.replace(/^important\s*(note|points?)?\s*[:.-]?\s*/i, "")}
+          </p>
+        ) : (
+          <p key={`${item.text.slice(0, 24)}-${index}`}>{item.text}</p>
+        )
+      )}
     </div>
   );
+}
+
+type RepairedLine = { bullet: boolean; text: string };
+
+const ORPHAN_MARKER_PATTERN = /^[•▪●·*-]$/;
+const SENTENCE_END_PATTERN = /[.!?:;]["')\]]?$/;
+
+// Rejoin PDF-wrapped lines without altering any wording.
+function repairPdfLines(rawLines: string[]): RepairedLine[] {
+  const items: RepairedLine[] = [];
+  let pendingBullet = false;
+
+  for (const raw of rawLines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    if (ORPHAN_MARKER_PATTERN.test(line)) {
+      pendingBullet = true;
+      continue;
+    }
+
+    const startsBullet = pendingBullet || BULLET_PATTERN.test(line) || STEP_LINE_PATTERN.test(line);
+    const cleaned = cleanDisplayText(stripListMarker(line));
+    pendingBullet = false;
+    if (!cleaned) continue;
+
+    if (startsBullet) {
+      items.push({ bullet: true, text: cleaned });
+      continue;
+    }
+
+    const previous = items[items.length - 1];
+    const startsLower = /^[a-z(0-9]/.test(cleaned);
+    const previousUnfinished = previous ? !SENTENCE_END_PATTERN.test(previous.text) : false;
+
+    if (previous && (startsLower || previousUnfinished)) {
+      previous.text = `${previous.text} ${cleaned}`;
+    } else {
+      items.push({ bullet: false, text: cleaned });
+    }
+  }
+
+  return items;
 }
 
 const STEP_PATTERN =
@@ -544,7 +592,7 @@ function sectionPreview(section: GuideSection) {
 
   return text
     .replace(/\s+/g, " ")
-    .replace(/^[-*\u2022]\s*/, "")
+    .replace(/^[-*•]\s*/, "")
     .slice(0, 180);
 }
 
@@ -553,7 +601,7 @@ function stripListMarker(text: string) {
 }
 
 function isImportantText(text: string) {
-  return /^important\s*(note)?\s*[:.-]?/i.test(text.trim());
+  return /^important\s*(note|points?)?\s*[:.-]?/i.test(text.trim());
 }
 
 function isSafeImageUrl(url: string) {
