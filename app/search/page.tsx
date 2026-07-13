@@ -28,9 +28,27 @@ type ProcedureSearchRow = Parameters<typeof scoreOperationalCard>[0] & {
   channels: OperationalCardSearchResult["channels"] | null;
   passenger_advice: OperationalCardSearchResult["passenger_advice"] | null;
   system_steps: OperationalCardSearchResult["system_steps"] | null;
+  required_approval: string | null;
   source_pages: number[] | null;
   source_version: string | null;
   summary: string | null;
+};
+
+type InstantAnswerSection = {
+  label: string;
+  text?: string;
+  items?: string[];
+};
+
+type InstantAnswerData = {
+  title: string;
+  slug: string;
+  service_code: string | null;
+  service_type: string | null;
+  category: string;
+  source_version: string | null;
+  source_pages: number[];
+  sections: InstantAnswerSection[];
 };
 const EMPTY_SUGGESTIONS = ["MCT", "EXST", "CBBG", "SPEQ", "Falcon", "OLCI Lounge", "FDIS", "WCHR"];
 
@@ -41,7 +59,10 @@ export default async function SearchPage({
 }) {
   const { q } = await searchParams;
   const query = (q ?? "").trim();
-  const results = query.length >= MIN_SEARCH_QUERY_LENGTH ? await search(query) : [];
+  const { results, answer } =
+    query.length >= MIN_SEARCH_QUERY_LENGTH
+      ? await search(query)
+      : { results: [], answer: null };
   const fieldMessage = fieldQueryMessage(detectFieldQuery(query));
 
   return (
@@ -68,6 +89,8 @@ export default async function SearchPage({
           </p>
           <SearchBar defaultValue={query} />
         </section>
+
+        {answer ? <InstantAnswerPanel answer={answer} /> : null}
 
         {fieldMessage && results.length > 0 ? (
           <p className="mb-4 rounded-md border border-blue-200 bg-sky-soft px-4 py-2.5 text-sm font-semibold text-sky">
@@ -101,22 +124,24 @@ export default async function SearchPage({
   );
 }
 
-async function search(query: string): Promise<UnifiedSearchResult[]> {
+async function search(
+  query: string
+): Promise<{ results: UnifiedSearchResult[]; answer: InstantAnswerData | null }> {
   const supabase = await createServerSupabaseClient();
   const terms = buildSearchTerms(query);
 
-  if (!terms) return [];
+  if (!terms) return { results: [], answer: null };
 
-  const cardResults = await searchOperationalCards(supabase, query);
+  const { results: cardResults, answer } = await searchOperationalCards(supabase, query);
   const { data, error } = await supabase.rpc("search_chapters", {
     query: terms,
   });
 
-  if (error || !data) return cardResults;
+  if (error || !data) return { results: cardResults, answer };
 
   const results = data as SearchResult[];
   const ids = results.map((result) => result.id).filter(Boolean);
-  if (ids.length === 0) return cardResults;
+  if (ids.length === 0) return { results: cardResults, answer };
 
   const { data: chapters } = await supabase
     .from("chapters")
@@ -145,13 +170,13 @@ async function search(query: string): Promise<UnifiedSearchResult[]> {
     return chapter;
   });
 
-  return [...cardResults, ...chapterResults].slice(0, 24);
+  return { results: [...cardResults, ...chapterResults].slice(0, 24), answer };
 }
 
 async function searchOperationalCards(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   query: string
-): Promise<OperationalCardSearchResult[]> {
+): Promise<{ results: OperationalCardSearchResult[]; answer: InstantAnswerData | null }> {
   const { data } = await supabase
     .from("procedure_cards")
     .select(
@@ -172,6 +197,7 @@ async function searchOperationalCards(
         "not_allowed",
         "escalation_points",
         "fees_charges",
+        "required_approval",
         "keywords",
         "aliases",
         "summary",
@@ -185,12 +211,15 @@ async function searchOperationalCards(
     .eq("review_status", "approved")
     .limit(100);
 
-  return ((data ?? []) as unknown as ProcedureSearchRow[])
+  const scored = ((data ?? []) as unknown as ProcedureSearchRow[])
     .map((card) => ({ card, score: scoreOperationalCard(card, query) }))
     .filter(({ score }) => score >= 2500)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 10)
-    .map(({ card, score }) => ({
+    .slice(0, 10);
+
+  const answer = scored.length > 0 ? buildInstantAnswer(scored[0].card, query) : null;
+
+  const results = scored.map(({ card, score }) => ({
       type: "operational_card" as const,
       id: card.id,
       title: card.title,
@@ -208,6 +237,123 @@ async function searchOperationalCards(
       summary: card.summary ?? null,
       snippet: operationalCardPreview(card),
     }));
+
+  return { results, answer };
+}
+
+// Instant answer: shows the exact card field the agent asked about, or a
+// compact decision summary for exact service-code queries. Values are taken
+// verbatim from approved+published card fields; sections with no data are
+// omitted entirely.
+function buildInstantAnswer(card: ProcedureSearchRow, query: string): InstantAnswerData | null {
+  const fieldKind = detectFieldQuery(query);
+  const compactQuery = query.trim().replace(/\s+/g, "").toUpperCase();
+  const isExactCode = Boolean(card.service_code && card.service_code.toUpperCase() === compactQuery);
+
+  if (!fieldKind && !isExactCode) return null;
+
+  const sections: InstantAnswerSection[] = [];
+  const timingLabel = timingLabelForCard(card);
+  const channels = readableJsonItems(card.channels);
+  const whoCanAction = readableJsonItems(card.who_can_action);
+
+  if (fieldKind === "cut_off" && card.cut_off_time?.trim()) {
+    sections.push({ label: timingLabel, text: card.cut_off_time.trim() });
+  } else if (fieldKind === "restrictions") {
+    const items = readableJsonItems(card.not_allowed);
+    if (items.length) sections.push({ label: "Restrictions / not allowed", items });
+  } else if (fieldKind === "passenger_advice") {
+    const items = readableJsonItems(card.passenger_advice);
+    if (items.length) sections.push({ label: "Passenger advice", items });
+  } else if (fieldKind === "who_can_action") {
+    if (whoCanAction.length) sections.push({ label: "Who can action", items: whoCanAction });
+  } else if (fieldKind === "channel") {
+    if (channels.length) sections.push({ label: "Channels", items: channels });
+  } else if (fieldKind === "approval" && card.required_approval?.trim()) {
+    sections.push({ label: "Required approval", text: card.required_approval.trim() });
+  } else if (isExactCode) {
+    if (card.cut_off_time?.trim()) sections.push({ label: timingLabel, text: card.cut_off_time.trim() });
+    if (whoCanAction.length) sections.push({ label: "Who can action", items: whoCanAction.slice(0, 4) });
+    if (channels.length) sections.push({ label: "Channels", items: channels.slice(0, 4) });
+  }
+
+  if (sections.length === 0) return null;
+
+  return {
+    title: card.title,
+    slug: card.slug,
+    service_code: card.service_code ?? null,
+    service_type: card.service_type ?? null,
+    category: card.category,
+    source_version: card.source_version ?? null,
+    source_pages: card.source_pages ?? [],
+    sections,
+  };
+}
+
+function InstantAnswerPanel({ answer }: { answer: InstantAnswerData }) {
+  const pages = sourcePagesLabel(answer.source_pages);
+
+  return (
+    <section className="content-card mb-5 border-t-2 border-t-accent p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
+            Instant answer
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {answer.service_code && (
+              <span className="rounded-sm border border-orange-200 bg-orange-50 px-2 py-0.5 font-mono text-xs font-bold text-accent">
+                {answer.service_code}
+              </span>
+            )}
+            <h2 className="font-display text-lg font-semibold leading-snug text-ink">
+              {answer.title}
+            </h2>
+          </div>
+        </div>
+        <Link
+          href={`/procedure/${answer.slug}`}
+          className="inline-flex shrink-0 items-center justify-center rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
+        >
+          Open full card
+        </Link>
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        {answer.sections.map((section) => (
+          <div
+            key={section.label}
+            className="rounded-md border border-border bg-slate-50/60 px-3.5 py-3"
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-sky">
+              {section.label}
+            </p>
+            {section.text ? (
+              <p className="mt-1.5 whitespace-pre-line text-sm font-semibold leading-6 text-ink">
+                {section.text}
+              </p>
+            ) : (
+              <ul className="mt-1.5 space-y-1.5">
+                {(section.items ?? []).map((item) => (
+                  <li key={item} className="flex gap-2 text-sm font-medium leading-5 text-ink">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky" aria-hidden="true" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {(answer.source_version || pages) && (
+        <p className="mt-3 text-[11px] font-medium text-ink-faint">
+          Source: {[answer.source_version, pages].filter(Boolean).join(" · ")} — always verify on the full card.
+        </p>
+      )}
+    </section>
+  );
 }
 
 function OperationalCardResult({ result, query }: { result: OperationalCardSearchResult; query: string }) {

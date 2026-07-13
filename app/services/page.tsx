@@ -1,6 +1,7 @@
 import { SiteHeader } from "@/components/SiteHeader";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { canReviewProcedures } from "@/lib/permissions";
+import { WORK_AREAS, groupForCard, type WorkArea } from "@/lib/work-areas";
 import type { JsonValue } from "@/lib/types";
 import Link from "next/link";
 
@@ -23,20 +24,6 @@ type ServiceCard = {
   channels: JsonValue[];
   priority: number;
 };
-
-const WORK_AREAS = [
-  "Booking Changes",
-  "Baggage",
-  "Special Assistance",
-  "Airport / Check-in",
-  "Disruption",
-  "Payment / Refund",
-  "Interline / Connections",
-  "Visa / OKTB",
-  "Other References",
-] as const;
-
-type WorkArea = (typeof WORK_AREAS)[number];
 
 export default async function ServicesPage({
   searchParams,
@@ -320,20 +307,6 @@ function groupCards(cards: ServiceCard[]) {
   return groups;
 }
 
-function groupForCard(card: ServiceCard): WorkArea {
-  const text = normalize(`${card.service_type ?? ""} ${card.category} ${card.service_code ?? ""} ${card.title}`);
-
-  if (matches(text, ["payment", "refund", "voucher", "insurance"])) return "Payment / Refund";
-  if (matches(text, ["fdis", "disruption", "delay", "schedule"])) return "Disruption";
-  if (matches(text, ["mct", "connection", "transfer", "interline", "codeshare"])) return "Interline / Connections";
-  if (matches(text, ["visa", "oktb", "ok to board"])) return "Visa / OKTB";
-  if (matches(text, ["wheelchair", "wchr", "wchs", "wchc", "meda", "dpna", "pregnancy"])) return "Special Assistance";
-  if (matches(text, ["check in", "check-in", "olci", "lounge", "boarding", "airport"])) return "Airport / Check-in";
-  if (matches(text, ["baggage", "speq", "spex", "falcon", "petc"])) return "Baggage";
-  if (matches(text, ["booking", "name", "seat", "cbbg", "exst", "stopover", "government"])) return "Booking Changes";
-  return "Other References";
-}
-
 function getTimingLabel(card: ServiceCard) {
   const type = normalize(`${card.service_type ?? ""} ${card.category}`);
   if (card.service_code?.toUpperCase() === "MCT") return "Timing rule";
@@ -374,10 +347,6 @@ function readableJsonItem(item: JsonValue) {
   }
 
   return "";
-}
-
-function matches(value: string, terms: string[]) {
-  return terms.some((term) => value.includes(normalize(term)));
 }
 
 function normalize(value: string) {

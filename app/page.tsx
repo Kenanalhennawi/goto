@@ -3,6 +3,8 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SearchBar } from "@/components/SearchBar";
 import { ChapterDirectory } from "@/components/ChapterDirectory";
+import { DecisionFlow, type DecisionFlowArea } from "@/components/DecisionFlow";
+import { WORK_AREAS, groupForCard } from "@/lib/work-areas";
 import type { Chapter, JsonValue } from "@/lib/types";
 
 export const revalidate = 60;
@@ -128,6 +130,13 @@ export default async function Home({
     .order("homepage_order", { ascending: true })
     .order("title", { ascending: true })
     .limit(2);
+  const { data: directoryCards } = await supabase
+    .from("procedure_cards")
+    .select("id, title, slug, category, service_code, service_type, priority")
+    .eq("is_published", true)
+    .eq("review_status", "approved")
+    .order("priority", { ascending: false })
+    .order("title", { ascending: true });
 
   const list = ((chapters ?? []) as HomeChapter[]).filter(Boolean);
   const services = ((serviceCards ?? []) as HomeServiceCard[]).filter(Boolean);
@@ -137,6 +146,7 @@ export default async function Home({
     .slice(0, 5);
   const sourceVersion = latestSourceVersion(list);
   const lastUpdated = recentlyUpdated[0]?.updated_at;
+  const decisionAreas = buildDecisionAreas(directoryCards ?? []);
 
   return (
     <div className="dashboard-shell flex min-h-full flex-col">
@@ -199,6 +209,8 @@ export default async function Home({
           <EmptyState />
         ) : (
           <div className="space-y-6">
+            <DecisionFlow areas={decisionAreas} />
+
             <section>
               <div className="content-card service-console-panel p-4 sm:p-5">
                 <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -552,6 +564,33 @@ function EmptyState() {
       </p>
     </div>
   );
+}
+
+type DirectoryCardRow = {
+  id: string;
+  title: string;
+  slug: string;
+  category: string;
+  service_code: string | null;
+  service_type: string | null;
+  priority: number | null;
+};
+
+function buildDecisionAreas(cards: DirectoryCardRow[]): DecisionFlowArea[] {
+  const groups = new Map<string, DirectoryCardRow[]>(WORK_AREAS.map((area) => [area, []]));
+  for (const card of cards) {
+    groups.get(groupForCard(card))?.push(card);
+  }
+  return WORK_AREAS.map((area) => ({
+    name: area,
+    cards: (groups.get(area) ?? []).map((card) => ({
+      id: card.id,
+      title: card.title,
+      slug: card.slug,
+      service_code: card.service_code,
+      service_type: card.service_type,
+    })),
+  }));
 }
 
 function latestSourceVersion(chapters: HomeChapter[]) {
