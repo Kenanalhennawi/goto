@@ -1,9 +1,12 @@
 import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { PinButton } from "@/components/PinButton";
 import { CopyTextButton } from "@/components/CopyTextButton";
 import { InteractiveChecklist } from "@/components/InteractiveChecklist";
 import { RecentTracker } from "@/components/RecentTracker";
 import { SiteHeader } from "@/components/SiteHeader";
 import { getProcedureBySlug, type ProcedureCardWithChapter } from "@/lib/procedures";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { groupForCard } from "@/lib/work-areas";
 import type { JsonValue } from "@/lib/types";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -35,6 +38,7 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
   const sourcePages = formatSourcePages(procedure.source_pages);
   const updatedAt = safeDate(procedure.updated_at);
   const path = `/procedure/${procedure.slug}`;
+  const related = await fetchRelatedProcedures(procedure);
 
   return (
     <div className="dashboard-shell flex min-h-full flex-col">
@@ -129,6 +133,11 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <CopyLinkButton path={path} />
+                <PinButton
+                  slug={procedure.slug}
+                  title={procedure.title}
+                  code={procedure.service_code}
+                />
                 {procedure.chapters && (
                   <Link
                     href={`/chapter/${procedure.chapters.slug}`}
@@ -179,6 +188,39 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
           <TextSection title="SPRINT comment template" value={procedure.sprint_comment_template} isScript />
           <TextSection title="Salesforce classification" value={procedure.salesforce_classification} />
 
+          {related.length > 0 && (
+            <section className="content-card quick-card p-5">
+              <h2 className="font-display text-base font-semibold text-ink">
+                Frequently used together
+              </h2>
+              <div className="mt-3 grid gap-1.5 sm:grid-cols-2">
+                {related.map((card) => (
+                  <Link
+                    key={card.slug}
+                    href={`/procedure/${card.slug}`}
+                    className="hover-lift flex items-center justify-between gap-2 rounded-md border border-border bg-white px-3 py-2 hover:border-accent"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-semibold text-ink">
+                        {card.title}
+                      </span>
+                      {card.service_type && (
+                        <span className="block truncate text-[11px] font-medium text-ink-faint">
+                          {card.service_type}
+                        </span>
+                      )}
+                    </span>
+                    {card.service_code && (
+                      <span className="shrink-0 rounded-sm border border-orange-200 bg-orange-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-accent">
+                        {card.service_code}
+                      </span>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
           <ProcedureSourceAuditDetails
             procedure={procedure}
             sourcePages={sourcePages}
@@ -188,6 +230,35 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
       </main>
     </div>
   );
+}
+
+type RelatedProcedure = {
+  title: string;
+  slug: string;
+  category: string;
+  service_code: string | null;
+  service_type: string | null;
+};
+
+// Related procedures: published cards from the same operational work
+// area (visibility rules identical to every public card fetch).
+async function fetchRelatedProcedures(
+  procedure: ProcedureCardWithChapter
+): Promise<RelatedProcedure[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("procedure_cards")
+    .select("title, slug, category, service_code, service_type")
+    .eq("is_published", true)
+    .eq("review_status", "approved")
+    .neq("slug", procedure.slug)
+    .order("priority", { ascending: false })
+    .limit(60);
+
+  const area = groupForCard(procedure);
+  return ((data ?? []) as RelatedProcedure[])
+    .filter((card) => groupForCard(card) === area)
+    .slice(0, 4);
 }
 
 function TextSection({
