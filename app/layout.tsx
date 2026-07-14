@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { CommandPalette } from "@/components/CommandPalette";
 
 const display = Space_Grotesk({
   variable: "--font-display",
@@ -35,7 +36,10 @@ export default function RootLayout({
       lang="en"
       className={`${display.variable} ${body.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-base text-ink">{children}</body>
+      <body className="min-h-full flex flex-col bg-base text-ink">
+        {children}
+        <CommandPalette />
+      </body>
     </html>
   );
 }

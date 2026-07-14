@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SignOutButton } from "@/components/SignOutButton";
 import type { UserRole } from "@/lib/types";
 import { canAccessAdmin, normalizeRoleLabel } from "@/lib/permissions";
+import { SearchTrigger } from "@/components/SearchTrigger";
 
 export async function SiteHeader() {
   const supabase = await createServerSupabaseClient();
@@ -39,15 +40,7 @@ export async function SiteHeader() {
           </div>
         </Link>
 
-        <Link
-          href="/search"
-          className="hidden min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 text-[13px] text-white/60 transition-colors hover:border-white/30 hover:bg-white/15 hover:text-white/85 md:flex md:max-w-xs"
-        >
-          <span className="truncate">Search services, SSR codes, processes...</span>
-          <kbd className="shrink-0 rounded border border-white/20 bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white/70">
-            /
-          </kbd>
-        </Link>
+        <SearchTrigger />
 
         <nav className="flex items-center gap-1 text-sm">
           <Link
