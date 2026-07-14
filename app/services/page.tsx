@@ -61,7 +61,7 @@ export default async function ServicesPage({
     <div className="dashboard-shell flex min-h-full flex-col">
       <SiteHeader />
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
+      <main id="main" className="reveal mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
         <section className="hero-panel mb-5 overflow-hidden rounded-lg">
           <div className="hero-main p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
@@ -195,7 +195,7 @@ function ServiceDirectoryCard({ card }: { card: ServiceCard }) {
   const channels = jsonItems(card.channels).slice(0, 3);
 
   return (
-    <article className="content-card quick-card flex flex-col p-4 transition-colors hover:border-accent">
+    <article className="content-card quick-card hover-lift flex flex-col p-4 hover:border-accent">
       <div className="flex flex-wrap gap-1.5">
         {card.service_code && (
           <span className="rounded-sm border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-accent">

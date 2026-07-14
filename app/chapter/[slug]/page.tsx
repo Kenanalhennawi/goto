@@ -91,7 +91,7 @@ export default async function ChapterPage({
         </div>
       </div>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
+      <main id="main" className="reveal mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
         <Link
           href="/"
           className="mb-5 inline-flex items-center gap-2 rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"

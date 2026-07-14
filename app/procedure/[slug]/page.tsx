@@ -75,7 +75,7 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
         </div>
       </div>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
+      <main id="main" className="reveal mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <Link
             href="/search"

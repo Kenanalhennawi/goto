@@ -153,7 +153,7 @@ export default async function Home({
     <div className="dashboard-shell flex min-h-full flex-col">
       <SiteHeader />
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
+      <main id="main" className="reveal mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
         <section className="hero-panel reveal relative z-20 mb-5 overflow-visible rounded-lg">
           <div className="hero-main p-4 sm:p-5">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">

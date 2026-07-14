@@ -37,6 +37,9 @@ export default function RootLayout({
       className={`${display.variable} ${body.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-base text-ink">
+        <a href="#main" className="skip-link">
+          Skip to content
+        </a>
         {children}
         <CommandPalette />
       </body>

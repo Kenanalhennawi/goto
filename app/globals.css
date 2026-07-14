@@ -78,13 +78,18 @@ html {
   background: var(--color-base);
 }
 
+@media (min-width: 1024px) {
+  body {
+    background-attachment: fixed;
+  }
+}
+
 body {
   /* Calm ambient field: barely-there brand tint, no visual noise */
   background:
     radial-gradient(1200px 480px at 85% -180px, rgba(7, 95, 174, 0.045), transparent 60%),
     radial-gradient(900px 420px at 8% -160px, rgba(240, 90, 40, 0.035), transparent 55%),
     var(--color-base);
-  background-attachment: fixed;
   color: var(--color-ink);
   font-family: var(--font-body), system-ui, sans-serif;
   text-rendering: optimizeLegibility;
@@ -248,7 +253,6 @@ body {
     transform var(--dur-base) var(--ease-swift),
     box-shadow var(--dur-base) var(--ease-swift),
     border-color var(--dur-base) var(--ease-swift);
-  will-change: transform;
 }
 
 .hover-lift:hover {
@@ -359,4 +363,25 @@ body {
   body {
     padding-left: 232px;
   }
+}
+
+/* ============================================================
+   Accessibility
+   ============================================================ */
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  z-index: 200;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--color-navy);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.skip-link:focus-visible {
+  left: 8px;
 }
