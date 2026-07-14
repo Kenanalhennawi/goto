@@ -33,6 +33,7 @@ export async function SiteHeader() {
   const adminItems: SidebarNavItem[] = showAdmin
     ? [
         { label: "Procedures", href: "/admin/procedures", icon: "list" },
+        { label: "Quality", href: "/admin/quality", icon: "book" },
         { label: "Admin", href: "/admin", icon: "shield" },
       ]
     : [];
