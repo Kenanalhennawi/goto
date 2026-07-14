@@ -1,3 +1,5 @@
+import { resolveOperationalQuery } from "./search-intel.ts";
+
 export const MIN_SEARCH_QUERY_LENGTH = 2;
 export const MAX_SEARCH_QUERY_LENGTH = 120;
 const MAX_SEARCH_TERMS = 12;
@@ -200,8 +202,13 @@ const WORK_AREA_RELEVANCE: Record<
 };
 
 export function buildSearchTerms(query: string) {
-  const trimmed = query.trim().slice(0, MAX_SEARCH_QUERY_LENGTH);
+  const resolved = resolveOperationalQuery(query.trim().slice(0, MAX_SEARCH_QUERY_LENGTH));
+  const trimmed = resolved.query.slice(0, MAX_SEARCH_QUERY_LENGTH);
   if (trimmed.length < MIN_SEARCH_QUERY_LENGTH) return "";
+
+  const expansionTs = resolved.expansions
+    .map((expansion) => phraseToTsQuery(expansion.term))
+    .filter(Boolean);
 
   const code = operationalCodeFromQuery(trimmed);
   if (code) {
@@ -213,21 +220,25 @@ export function buildSearchTerms(query: string) {
 
   const aliasPhrases = findSearchAlias(trimmed);
   if (aliasPhrases) {
-    return aliasPhrases
-      .slice(0, 5)
-      .map((phrase) => phraseToTsQuery(phrase))
-      .filter(Boolean)
-      .join(" | ");
+    return dedupeJoin([
+      ...aliasPhrases.slice(0, 5).map((phrase) => phraseToTsQuery(phrase)),
+      ...expansionTs.slice(0, 3),
+    ]);
   }
 
-  return phraseToTsQuery(trimmed);
+  return dedupeJoin([phraseToTsQuery(trimmed), ...expansionTs.slice(0, 3)]);
+}
+
+function dedupeJoin(parts: string[]) {
+  return [...new Set(parts.filter(Boolean))].join(" | ");
 }
 
 export function isOperationalCodeQuery(query: string) {
   return Boolean(operationalCodeFromQuery(query));
 }
 
-export function rankSearchResults<T extends RankableSearchResult>(results: T[], query: string) {
+export function rankSearchResults<T extends RankableSearchResult>(results: T[], rawQuery: string) {
+  const query = resolveOperationalQuery(rawQuery).query;
   const code = operationalCodeFromQuery(query);
   const topic = searchTopicFromQuery(query, code);
   const normalizedQuery = normalize(query);
@@ -279,11 +290,16 @@ export function fieldQueryMessage(kind: FieldQueryKind | null) {
   }
 }
 
-export function scoreOperationalCard(card: RankableOperationalCard, query: string) {
+export function scoreOperationalCard(card: RankableOperationalCard, rawQuery: string) {
+  const resolved = resolveOperationalQuery(rawQuery);
+  const query = resolved.query;
   const code = operationalCodeFromQuery(query);
   const normalizedQuery = normalize(query);
   const fieldKind = detectFieldQuery(query);
-  const aliasPhrases = code ? phrasesForCode(code).slice(1) : findSearchAlias(query) ?? [];
+  const aliasPhrases = [
+    ...(code ? phrasesForCode(code).slice(1) : findSearchAlias(query) ?? []),
+    ...resolved.expansions.map((expansion) => expansion.term),
+  ];
   const serviceCode = (card.service_code ?? "").toUpperCase();
   const title = normalize(card.title);
   const slug = normalize(card.slug);
@@ -595,3 +611,5 @@ function normalize(value: string) {
 export function plainSnippet(value?: string | null) {
   return (value ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
+
+export { resolveOperationalQuery } from "./search-intel.ts";

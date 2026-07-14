@@ -15,6 +15,7 @@ import {
   plainSnippet,
   rankSearchResults,
   readableJsonItems,
+  resolveOperationalQuery,
   scoreOperationalCard,
   timingLabelForCard,
 } from "@/lib/search";
@@ -64,6 +65,7 @@ export default async function SearchPage({
       ? await search(query)
       : { results: [], answer: null };
   const fieldMessage = fieldQueryMessage(detectFieldQuery(query));
+  const resolution = query ? resolveOperationalQuery(query) : null;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -89,6 +91,31 @@ export default async function SearchPage({
           </p>
           <SearchBar defaultValue={query} />
         </section>
+
+        {resolution && (resolution.corrected || resolution.expansions.length > 0) ? (
+          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-white px-4 py-2.5 text-xs">
+            <span className="font-semibold uppercase tracking-wider text-ink-faint">
+              Understanding
+            </span>
+            {resolution.corrections.map((correction) => (
+              <span key={correction.from} className="font-medium text-ink">
+                &ldquo;{correction.from}&rdquo; &rarr;{" "}
+                <span className="font-semibold text-sky">{correction.to}</span>
+              </span>
+            ))}
+            {resolution.expansions.length > 0 && (
+              <span className="font-medium text-ink-muted">
+                also matching:{" "}
+                {resolution.expansions.map((expansion, index) => (
+                  <span key={expansion.term}>
+                    {index > 0 ? ", " : ""}
+                    <span className="font-semibold text-sky">{expansion.term}</span>
+                  </span>
+                ))}
+              </span>
+            )}
+          </div>
+        ) : null}
 
         {answer ? <InstantAnswerPanel answer={answer} /> : null}
 
