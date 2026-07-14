@@ -1,4 +1,6 @@
 import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { CopyTextButton } from "@/components/CopyTextButton";
+import { InteractiveChecklist } from "@/components/InteractiveChecklist";
 import { RecentTracker } from "@/components/RecentTracker";
 import { SiteHeader } from "@/components/SiteHeader";
 import { getProcedureBySlug, type ProcedureCardWithChapter } from "@/lib/procedures";
@@ -44,7 +46,36 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
         code={procedure.service_code}
       />
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
+      <div className="glass-light sticky top-[3.25rem] z-30 border-b border-border lg:top-0">
+        <div className="mx-auto flex h-11 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+          {procedure.service_code && (
+            <span className="shrink-0 rounded-sm border border-orange-200 bg-orange-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-accent">
+              {procedure.service_code}
+            </span>
+          )}
+          <span className="truncate text-sm font-semibold text-ink">{procedure.title}</span>
+          {procedure.cut_off_time && (
+            <span className="hidden min-w-0 items-baseline gap-1.5 md:flex">
+              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-accent">
+                {getTimingLabel(procedure)}
+              </span>
+              <span className="truncate text-xs font-medium text-ink-muted">
+                {firstTimingLine(procedure.cut_off_time)}
+              </span>
+            </span>
+          )}
+          {procedure.chapters && (
+            <Link
+              href={`/chapter/${procedure.chapters.slug}`}
+              className="ml-auto shrink-0 text-xs font-semibold text-sky transition-colors hover:text-accent"
+            >
+              Source chapter &rarr;
+            </Link>
+          )}
+        </div>
+      </div>
+
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <Link
             href="/search"
@@ -173,7 +204,10 @@ function TextSection({
 
   return (
     <section className="content-card quick-card p-5">
-      <h2 className="font-display text-base font-semibold text-ink">{title}</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-display text-base font-semibold text-ink">{title}</h2>
+        {isScript && <CopyTextButton text={text} />}
+      </div>
       <p
         className={`mt-2.5 whitespace-pre-line text-sm leading-6 text-ink-muted ${
           isScript ? "rounded-md border border-blue-200 bg-sky-soft p-3.5 font-mono text-xs text-ink" : ""
@@ -253,7 +287,7 @@ function ServiceCardSections({ procedure }: { procedure: ProcedureCardWithChapte
 
       <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-5">
-          <ChecklistSection title="Required information" items={requiredInfo} />
+          <InteractiveChecklist title="Required information" items={requiredInfo} />
           <OperationalPanel title="Eligibility / applicability" items={allowed} tone="plain" />
           {procedure.fees_charges && (
             <section className="content-card quick-card p-5">
@@ -312,34 +346,16 @@ function DecisionListFact({ label, items }: { label: string; items: string[] }) 
   );
 }
 
-function ChecklistSection({ title, items }: { title: string; items: string[] }) {
-  if (items.length === 0) return null;
-
-  return (
-    <section className="content-card quick-card p-5">
-      <h2 className="font-display text-base font-semibold text-sky">{title}</h2>
-      <ul className="mt-3 space-y-2.5">
-        {items.map((item) => (
-          <li key={item} className="flex gap-3 text-sm leading-6 text-ink">
-            <span className="mt-0.5 h-4.5 w-4.5 shrink-0 rounded-sm border border-blue-300 bg-white" aria-hidden="true" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 function ActionTimeline({ items }: { items: string[] }) {
   if (items.length === 0) return null;
 
   return (
     <section className="content-card quick-card p-5">
       <h2 className="font-display text-base font-semibold text-sky">System Steps</h2>
-      <ol className="mt-3 space-y-3">
+      <ol className="relative mt-3 space-y-3 before:absolute before:bottom-3 before:left-[0.84rem] before:top-3 before:w-px before:bg-border">
         {items.map((item, index) => (
-          <li key={`${item}-${index}`} className="grid grid-cols-[1.75rem_1fr] gap-3">
-            <span className="flex h-7 w-7 items-center justify-center rounded bg-navy text-xs font-bold text-white">
+          <li key={`${item}-${index}`} className="relative grid grid-cols-[1.75rem_1fr] gap-3">
+            <span className="z-10 flex h-7 w-7 items-center justify-center rounded-full bg-navy text-xs font-bold text-white ring-4 ring-white">
               {index + 1}
             </span>
             <span className="pt-0.5 text-sm font-medium leading-6 text-ink">{item}</span>
@@ -363,8 +379,8 @@ function OperationalPanel({
 
   const styles = {
     plain: "border-blue-100 bg-white text-ink",
-    danger: "border-red-200 bg-red-50 text-red-800",
-    warning: "border-warn/30 bg-warn/10 text-ink",
+    danger: "border-red-200 border-l-4 border-l-red-500 bg-red-50 text-red-800",
+    warning: "border-warn/30 border-l-4 border-l-warn bg-warn/10 text-ink",
     info: "border-blue-200 bg-sky-soft text-ink",
   };
   const marker = {
@@ -419,6 +435,12 @@ function StructuredText({ value }: { value: string }) {
       ))}
     </div>
   );
+}
+
+function firstTimingLine(value: string) {
+  const text = value.trim();
+  const lines = text.includes("\n") ? text.split(/\r?\n/) : text.includes(";") ? text.split(";") : [text];
+  return lines.map((line) => line.trim()).filter(Boolean)[0] ?? "";
 }
 
 function getTimingLabel(card: Pick<ProcedureCardWithChapter, "service_code" | "service_type" | "category">) {
