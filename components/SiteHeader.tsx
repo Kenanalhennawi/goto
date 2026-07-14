@@ -27,6 +27,7 @@ export async function SiteHeader() {
 
   const navItems: SidebarNavItem[] = [
     { label: "Command center", href: "/", icon: "home" },
+    { label: "Decision", href: "/decision", icon: "shield" },
     { label: "Services", href: "/services", icon: "grid" },
     { label: "Files", href: "/files", icon: "folder" },
   ];
