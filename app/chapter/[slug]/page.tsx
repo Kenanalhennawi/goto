@@ -5,6 +5,7 @@ import { ChapterTabbedContent } from "@/components/ChapterTabbedContent";
 import { CollapsibleManualContent } from "@/components/chapter/CollapsibleManualContent";
 import { OperationalSummary } from "@/components/chapter/OperationalSummary";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { RecentTracker } from "@/components/RecentTracker";
 import { ReportIssueButton } from "@/components/ReportIssueButton";
 import { fetchRelatedCards } from "@/lib/fetch-related-cards";
 import { normalizeExternalUrl } from "@/lib/links";
@@ -64,6 +65,7 @@ export default async function ChapterPage({
   return (
     <div className="dashboard-shell flex min-h-full flex-col">
       <SiteHeader />
+      <RecentTracker kind="chapter" slug={ch.slug} title={ch.title} />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
         <Link

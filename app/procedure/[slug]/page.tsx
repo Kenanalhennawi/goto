@@ -1,4 +1,5 @@
 import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { RecentTracker } from "@/components/RecentTracker";
 import { SiteHeader } from "@/components/SiteHeader";
 import { getProcedureBySlug, type ProcedureCardWithChapter } from "@/lib/procedures";
 import type { JsonValue } from "@/lib/types";
@@ -36,6 +37,12 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
   return (
     <div className="dashboard-shell flex min-h-full flex-col">
       <SiteHeader />
+      <RecentTracker
+        kind="procedure"
+        slug={procedure.slug}
+        title={procedure.title}
+        code={procedure.service_code}
+      />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
         <div className="mb-5 flex flex-wrap items-center gap-2">

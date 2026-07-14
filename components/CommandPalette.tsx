@@ -113,15 +113,11 @@ export function CommandPalette() {
   useEffect(() => {
     if (!open) return;
     const trimmed = query.trim();
-    if (trimmed.length < MIN_SEARCH_QUERY_LENGTH) {
-      setResults([]);
-      setLoading(false);
-      return;
-    }
+    if (trimmed.length < MIN_SEARCH_QUERY_LENGTH) return;
 
     const controller = new AbortController();
-    setLoading(true);
     const timer = window.setTimeout(async () => {
+      setLoading(true);
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
           signal: controller.signal,
@@ -226,7 +222,15 @@ export function CommandPalette() {
             autoCorrect="off"
             spellCheck={false}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value;
+              setQuery(value);
+              if (value.trim().length < MIN_SEARCH_QUERY_LENGTH) {
+                setResults([]);
+                setLoading(false);
+                setActiveIndex(0);
+              }
+            }}
             onKeyDown={onInputKeyDown}
             placeholder="Search services, SSR codes, passenger issues..."
             className="min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-faint"

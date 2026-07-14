@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
-import { SearchBar } from "@/components/SearchBar";
+import { SearchTrigger } from "@/components/SearchTrigger";
+import { WorkspaceStrip } from "@/components/WorkspaceStrip";
 import { ChapterDirectory } from "@/components/ChapterDirectory";
 import { DecisionFlow, type DecisionFlowArea } from "@/components/DecisionFlow";
 import { WORK_AREAS, groupForCard } from "@/lib/work-areas";
@@ -174,8 +175,8 @@ export default async function Home({
                   Search by service, SSR code, passenger issue, cut-off time, or process.
                 </p>
 
-                <div className="hero-search relative z-30 mt-4 rounded-lg p-2.5">
-                  <SearchBar autoFocus />
+                <div className="relative z-30 mt-4">
+                  <SearchTrigger variant="hero" />
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -209,6 +210,8 @@ export default async function Home({
           <EmptyState />
         ) : (
           <div className="reveal-stagger space-y-6">
+            <WorkspaceStrip />
+
             <DecisionFlow areas={decisionAreas} />
 
             <section>
