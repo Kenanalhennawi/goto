@@ -60,4 +60,22 @@ const wheelchairResult = routeIntent("passenger cannot walk", cards);
 assert.equal(wheelchairResult.confidence, "High confidence");
 assert.ok(wheelchairResult.matchedConcepts.some((c) => c.intent === "wheelchair"));
 
+// ---- Phase B: question framework checks ----
+const { QUESTION_SETS } = await import("../lib/decision-engine/questions.ts");
+const { nextQuestion, missingRequired, validateAnswer } = await import("../lib/decision-engine/session.ts");
+
+const pregnancyQs = QUESTION_SETS["pregnancy"];
+assert.equal(nextQuestion(pregnancyQs, {}).id, "pregnancy_type");
+assert.equal(nextQuestion(pregnancyQs, { pregnancy_type: "Single" }).id, "pregnancy_week");
+assert.equal(nextQuestion(pregnancyQs, { pregnancy_type: "Single", pregnancy_week: 28, certificate_available: true }), null);
+assert.equal(missingRequired(pregnancyQs, { pregnancy_type: "Single" }).length, 1);
+
+const weekQ = pregnancyQs.find((q) => q.id === "pregnancy_week");
+assert.equal(validateAnswer(weekQ, 28), null);
+assert.ok(validateAnswer(weekQ, 99));
+assert.ok(validateAnswer(weekQ, "not a number"));
+const typeQ = pregnancyQs.find((q) => q.id === "pregnancy_type");
+assert.equal(validateAnswer(typeQ, "Single"), null);
+assert.ok(validateAnswer(typeQ, "Quadruple"));
+
 console.log("Decision router checks passed.");

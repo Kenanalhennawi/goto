@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { routeIntent } from "@/lib/decision-engine/router";
+import { QUESTION_SETS } from "@/lib/decision-engine/questions";
+import { QuestionFlow } from "@/components/decision/QuestionFlow";
 import type { RoutableCard } from "@/lib/decision-engine/types";
 
 // Phase A intake: routes an operational question to verified procedures.
@@ -11,6 +13,7 @@ import type { RoutableCard } from "@/lib/decision-engine/types";
 export function DecisionIntake({ cards }: { cards: RoutableCard[] }) {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
+  const [activeFlow, setActiveFlow] = useState<{ slug: string; title: string } | null>(null);
 
   const result = useMemo(
     () => (submitted.trim().length >= 3 ? routeIntent(submitted, cards) : null),
@@ -104,7 +107,27 @@ export function DecisionIntake({ cards }: { cards: RoutableCard[] }) {
             </div>
           ) : (
             <>
-              <ProcedureMatch card={result.primary} primary />
+              <ProcedureMatch
+                card={result.primary}
+                primary
+                onStartFlow={
+                  QUESTION_SETS[result.primary.slug]
+                    ? () =>
+                        setActiveFlow({
+                          slug: result.primary!.slug,
+                          title: result.primary!.title,
+                        })
+                    : undefined
+                }
+              />
+              {activeFlow && QUESTION_SETS[activeFlow.slug] && (
+                <QuestionFlow
+                  procedureSlug={activeFlow.slug}
+                  procedureTitle={activeFlow.title}
+                  questions={QUESTION_SETS[activeFlow.slug]}
+                  onClose={() => setActiveFlow(null)}
+                />
+              )}
               {result.related.length > 0 && (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {result.related.map((card) => (
@@ -123,9 +146,11 @@ export function DecisionIntake({ cards }: { cards: RoutableCard[] }) {
 function ProcedureMatch({
   card,
   primary = false,
+  onStartFlow,
 }: {
   card: RoutableCard & { viaIntent: boolean };
   primary?: boolean;
+  onStartFlow?: () => void;
 }) {
   return (
     <article
@@ -164,9 +189,19 @@ function ProcedureMatch({
         >
           Open procedure
         </Link>
-        <span className="rounded border border-dashed border-border px-2.5 py-1 text-[11px] font-medium text-ink-faint">
-          Guided decision coming soon
-        </span>
+        {onStartFlow ? (
+          <button
+            type="button"
+            onClick={onStartFlow}
+            className="press inline-flex rounded border border-sky bg-sky-soft px-3.5 py-1.5 text-xs font-semibold text-sky transition-colors hover:bg-white"
+          >
+            Start guided decision
+          </button>
+        ) : (
+          <span className="rounded border border-dashed border-border px-2.5 py-1 text-[11px] font-medium text-ink-faint">
+            Guided decision coming soon
+          </span>
+        )}
       </div>
     </article>
   );

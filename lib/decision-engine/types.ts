@@ -32,3 +32,31 @@ export type IntentRouteResult = {
   confidence: ConfidenceLabel;
   needsClarification: boolean;
 };
+
+// ---------- Phase B: clarifying-question framework ----------
+
+export type AnswerType = "yes_no" | "single_choice" | "number";
+
+export type DecisionQuestion = {
+  id: string;
+  label: string;
+  answerType: AnswerType;
+  /** Allowed values for single_choice. */
+  options?: string[];
+  required: boolean;
+  /** Why the question is asked (shown to the agent). */
+  reason: string;
+  /** Bounds for number answers. */
+  min?: number;
+  max?: number;
+};
+
+export type AnswerValue = string | number | boolean;
+
+export type DecisionAnswers = Record<string, AnswerValue>;
+
+export type DecisionSessionState = {
+  procedureSlug: string;
+  startedAt: number;
+  answers: DecisionAnswers;
+};
