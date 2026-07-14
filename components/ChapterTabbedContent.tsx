@@ -365,10 +365,17 @@ function FormattedText({ text }: { text: string }) {
             className={`flex gap-2.5 rounded-md border px-3 py-2 text-[15px] leading-7 ${
               isImportantText(item.text)
                 ? "border-orange-200 bg-orange-50 text-ink"
-                : "border-border/80 bg-sky-soft/45 text-ink"
+                : isRestrictionText(item.text)
+                  ? "border-red-200 bg-red-50/70 text-ink"
+                  : "border-border/80 bg-sky-soft/45 text-ink"
             }`}
           >
-            <span className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky" aria-hidden="true" />
+            <span
+              className={`mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                isRestrictionText(item.text) ? "bg-red-500" : "bg-sky"
+              }`}
+              aria-hidden="true"
+            />
             <span>{item.text}</span>
           </li>
         ))}
@@ -598,6 +605,12 @@ function sectionPreview(section: GuideSection) {
 
 function stripListMarker(text: string) {
   return text.replace(BULLET_PATTERN, "").replace(/^step\s*#?\s*\d+\s*[:.-]?\s*/i, "").trim();
+}
+
+function isRestrictionText(text: string) {
+  return /\b(must not|not allowed|cannot|can't|do not|don't|prohibited|not permitted|will not be accepted|not eligible|no refund)\b/i.test(
+    text
+  );
 }
 
 function isImportantText(text: string) {

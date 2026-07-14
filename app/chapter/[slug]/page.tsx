@@ -67,6 +67,30 @@ export default async function ChapterPage({
       <SiteHeader />
       <RecentTracker kind="chapter" slug={ch.slug} title={ch.title} />
 
+      <div className="glass-light sticky top-[3.25rem] z-30 border-b border-border lg:top-0">
+        <div className="mx-auto flex h-11 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+          <span className="shrink-0 rounded-sm border border-orange-200 bg-orange-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-accent">
+            Ch. {String(ch.chapter_number).padStart(2, "0")}
+          </span>
+          <span className="truncate text-sm font-semibold text-ink">{ch.title}</span>
+          <nav className="ml-auto flex shrink-0 items-center gap-0.5" aria-label="Chapter sections">
+            {["guide", "steps", "rules", "images"].map((tab) => (
+              <Link
+                key={tab}
+                href={`/chapter/${ch.slug}?section=${tab}`}
+                className={`rounded px-2 py-1 text-xs font-semibold capitalize transition-colors ${
+                  (section ?? "guide") === tab
+                    ? "bg-navy text-white"
+                    : "text-ink-muted hover:bg-sky-soft hover:text-sky"
+                }`}
+              >
+                {tab}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </div>
+
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
         <Link
           href="/"
