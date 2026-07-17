@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { answeredCount, nextQuestion, validateAnswer } from "@/lib/decision-engine/session";
+import { evaluate } from "@/lib/decision-engine/evaluator";
+import { DECISION_DEFINITIONS } from "@/lib/decision-engine/definitions/pregnancy";
 import type { AnswerValue, DecisionAnswers, DecisionQuestion } from "@/lib/decision-engine/types";
 
 const SESSION_KEY = "goto.decision.session.v1";
@@ -199,6 +201,12 @@ export function QuestionFlow({
             </div>
             {error && <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>}
           </div>
+        ) : DECISION_DEFINITIONS[procedureSlug] ? (
+          <OutcomePanel
+            definition={DECISION_DEFINITIONS[procedureSlug]}
+            answers={answers}
+            procedureSlug={procedureSlug}
+          />
         ) : (
           <div className="rounded-md border border-blue-200 bg-sky-soft px-4 py-3">
             <p className="text-sm font-bold text-ink">Context captured</p>
@@ -216,6 +224,69 @@ export function QuestionFlow({
         )}
       </div>
     </section>
+  );
+}
+
+function OutcomePanel({
+  definition,
+  answers,
+  procedureSlug,
+}: {
+  definition: (typeof DECISION_DEFINITIONS)[string];
+  answers: DecisionAnswers;
+  procedureSlug: string;
+}) {
+  const result = evaluate(definition, answers);
+  const tone =
+    result.outcome === "Not permitted"
+      ? "border-red-200 border-l-4 border-l-red-500 bg-red-50"
+      : result.outcome === "Can proceed"
+        ? "border-good/30 border-l-4 border-l-good bg-mint-soft"
+        : result.outcome === "Insufficient information"
+          ? "border-amber-200 border-l-4 border-l-warn bg-amber-soft"
+          : "border-blue-200 border-l-4 border-l-sky bg-sky-soft";
+
+  return (
+    <div className={`rounded-md border px-4 py-3.5 ${tone}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="font-display text-base font-bold text-ink">{result.outcome}</p>
+        <span className="rounded-sm border border-border bg-white px-1.5 py-0.5 text-[10px] font-bold text-ink-muted">
+          {result.confidence}
+        </span>
+      </div>
+      <p className="mt-1.5 text-sm leading-6 text-ink">{result.explanation}</p>
+      {result.nextAction && (
+        <p className="mt-1.5 text-sm font-semibold leading-6 text-ink">
+          Next: {result.nextAction}
+        </p>
+      )}
+      {result.missing.length > 0 && (
+        <p className="mt-1.5 text-xs font-medium text-ink-muted">
+          Missing: {result.missing.join(" · ")}
+        </p>
+      )}
+      {definition.notes.length > 0 && result.outcome !== "Insufficient information" && (
+        <ul className="mt-2 space-y-1">
+          {definition.notes.map((note) => (
+            <li key={note.slice(0, 24)} className="text-xs leading-5 text-ink-muted">
+              {note}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2.5 border-t border-ink/10 pt-2 text-[11px] font-medium text-ink-muted">
+        Source: GO TO v{definition.sourceVersion} · {definition.sourceChapter} · Page{" "}
+        {definition.sourcePages.join(", ")}
+        {result.matchedRuleId ? ` · Rule ${result.matchedRuleId}` : ""} — always verify on the
+        procedure card.
+      </p>
+      <Link
+        href={`/procedure/${procedureSlug}`}
+        className="mt-2 inline-flex rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
+      >
+        Open procedure card
+      </Link>
+    </div>
   );
 }
 

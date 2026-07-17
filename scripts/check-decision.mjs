@@ -78,4 +78,24 @@ const typeQ = pregnancyQs.find((q) => q.id === "pregnancy_type");
 assert.equal(validateAnswer(typeQ, "Single"), null);
 assert.ok(validateAnswer(typeQ, "Quadruple"));
 
+// ---- Phase C: pregnancy tree fixtures (verified: GO TO v80.8 ch.42 p.259) ----
+const { evaluate } = await import("../lib/decision-engine/evaluator.ts");
+const { PREGNANCY_DEFINITION } = await import("../lib/decision-engine/definitions/pregnancy.ts");
+
+function preg(type, week) {
+  return evaluate(PREGNANCY_DEFINITION, { pregnancy_type: type, pregnancy_week: week, certificate_available: true });
+}
+assert.equal(preg("Single", 28).outcome, "Can proceed");
+assert.equal(preg("Single", 29).outcome, "Requires document");
+assert.equal(preg("Single", 36).outcome, "Requires document");
+assert.equal(preg("Single", 37).outcome, "Not permitted");
+assert.equal(preg("Multiple", 28).outcome, "Can proceed");
+assert.equal(preg("Multiple", 32).outcome, "Requires document");
+assert.equal(preg("Multiple", 33).outcome, "Not permitted");
+assert.equal(preg("Single", 29).confidence, "Conditional");
+assert.equal(preg("Single", 28).confidence, "High confidence");
+const incomplete = evaluate(PREGNANCY_DEFINITION, { pregnancy_type: "Single" });
+assert.equal(incomplete.outcome, "Insufficient information");
+assert.ok(incomplete.missing.length > 0);
+
 console.log("Decision router checks passed.");
