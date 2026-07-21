@@ -297,4 +297,70 @@ assert.equal(planEmpty.ok, true);
 assert.equal(planEmpty.operations.length, 0);
 assert.equal(planEmpty.totalApproved, 0);
 
+// Cross-batch collision: a shifted chapter's final number is held by an
+// existing neighbour that was NOT included in the batch -> abort before writes.
+const exNeighbour = [
+  { id: "dup", slug: "duplicate-booking", title: "Duplicate Booking", chapter_number: 46, body_text: "d", source_version: "80.8" },
+  { id: "visa", slug: "visa", title: "Visa", chapter_number: 47, body_text: "v", source_version: "80.8" },
+];
+const planConflict = buildPublishPlan(
+  [
+    { chapter_number: 46, title: "MEDA", new_body_text: "meda" },       // insert at 46
+    { chapter_number: 47, title: "Duplicate Booking", new_body_text: "d2" }, // 46 -> 47, but Visa still at 47
+  ],
+  exNeighbour,
+  V
+);
+assert.equal(planConflict.ok, false);
+assert.ok(planConflict.failed.some((f) => /still used by "visa"/i.test(f.safeMessage)));
+
+// Same batch WITH the neighbour included resolves cleanly (Visa also shifts).
+const planResolved = buildPublishPlan(
+  [
+    { chapter_number: 46, title: "MEDA", new_body_text: "meda" },
+    { chapter_number: 47, title: "Duplicate Booking", new_body_text: "d2" },
+    { chapter_number: 48, title: "Visa", new_body_text: "v2" },
+  ],
+  exNeighbour,
+  V
+);
+assert.equal(planResolved.ok, true);
+assert.equal(planResolved.operations.filter((o) => o.op === "insert").length, 1);
+assert.equal(planResolved.operations.filter((o) => o.op === "update").length, 2);
+
+// Production-shape fixture: MEDA insert at 46, a run of shifted updates through
+// Partner Inquiries at 79, with content_blocks JSON, keyword arrays and null
+// page fields. All existing rows are in the batch, so the plan is valid.
+const prodExisting = [];
+const prodIncoming = [];
+// chapters 43..45 unchanged number, updated content (already in batch)
+for (let n = 43; n <= 45; n++) {
+  prodExisting.push({ id: `id-${n}`, slug: `ch-${n}`, title: `Ch ${n}`, chapter_number: n, body_text: `old-${n}`, source_version: "80.8" });
+  prodIncoming.push({ chapter_number: n, title: `Ch ${n}`, new_body_text: `new-${n}`, new_content_blocks: [{ type: "text", text: `t-${n}` }], new_keywords: [`k${n}`] });
+}
+// MEDA inserted at 46
+prodIncoming.push({ chapter_number: 46, title: "MEDA", new_body_text: "meda body", new_content_blocks: [{ type: "text", text: "meda" }], new_keywords: ["meda"] });
+// existing 46..78 shift to 47..79 (Partner Inquiries lands at 79)
+for (let n = 46; n <= 78; n++) {
+  const title = n === 78 ? "flydubai Partner Inquiries – Travel Agencies" : `Existing ${n}`;
+  prodExisting.push({ id: `id-${n}`, slug: n === 78 ? "flydubai-partner-inquiries-travel-agencies" : `ex-${n}`, title, chapter_number: n, body_text: `old-${n}`, source_version: "80.8" });
+  prodIncoming.push({ chapter_number: n + 1, title, new_body_text: `new-${n}`, new_content_blocks: null, new_keywords: null });
+}
+const prodPlan = buildPublishPlan(prodIncoming, prodExisting, V);
+assert.equal(prodPlan.ok, true);
+const medaOp = prodPlan.operations.find((o) => o.slug === "meda");
+assert.equal(medaOp.op, "insert");
+assert.equal(medaOp.finalNumber, 46);
+const partnerOp = prodPlan.operations.find((o) => o.slug === "flydubai-partner-inquiries-travel-agencies");
+assert.equal(partnerOp.op, "update");
+assert.equal(partnerOp.finalNumber, 79);
+assert.equal(partnerOp.numberChanges, true);
+// unique final numbers / slugs across the whole plan
+const pFinals = prodPlan.operations.map((o) => o.finalNumber);
+assert.equal(new Set(pFinals).size, pFinals.length);
+const pSlugs = prodPlan.operations.map((o) => o.slug);
+assert.equal(new Set(pSlugs).size, pSlugs.length);
+// null page/content fields survive as null contentBlocks (RPC keeps existing)
+assert.equal(partnerOp.contentBlocks, null);
+
 console.log("Logic checks passed.");

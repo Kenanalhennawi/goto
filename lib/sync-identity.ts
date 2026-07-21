@@ -323,6 +323,30 @@ export function buildPublishPlan(
     }
   }
 
+  // Cross-batch collision guard: a final number must not be permanently held
+  // by an existing chapter that this publish does NOT move. This happens when a
+  // shifted chapter's neighbour was not approved/included — the atomic write
+  // would then roll back on chapters_chapter_number_key. Detect it up front and
+  // report exactly which chapter blocks the number.
+  const movedIds = new Set(tempRenumberIds);
+  const conflicts: PublishFailure[] = [];
+  for (const operation of operations) {
+    const blocker = existing.find(
+      (c) => c.chapter_number === operation.finalNumber && !movedIds.has(c.id)
+    );
+    if (blocker) {
+      conflicts.push({
+        chapterNumber: operation.finalNumber,
+        slug: operation.slug,
+        safeMessage: `Chapter number ${operation.finalNumber} is still used by "${blocker.slug}", which is not part of this publish. Approve that chapter too, then retry.`,
+      });
+    }
+  }
+
+  if (conflicts.length > 0) {
+    return { ok: false, failed: conflicts };
+  }
+
   return {
     ok: true,
     operations,

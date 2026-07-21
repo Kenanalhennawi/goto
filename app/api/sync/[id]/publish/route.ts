@@ -69,6 +69,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: "Publish aborted: the approved changes are inconsistent.",
+        errorCode: "SYNC_VALIDATION_FAILED",
         published: 0,
         alreadyApplied: 0,
         failed: plan.failed,
@@ -97,20 +98,44 @@ export async function POST(
   });
 
   if (rpcError) {
-    // Log the full database error server-side; return a safe summary.
-    console.error("publish_sync_chapters failed", { syncRunId: id, error: rpcError });
+    // Log the COMPLETE database error server-side (Vercel logs) so the exact
+    // PostgreSQL cause is recoverable, while the browser only gets a safe code.
+    console.error("Atomic chapter publish failed", {
+      syncRunId: id,
+      code: rpcError.code,
+      message: rpcError.message,
+      details: rpcError.details,
+      hint: rpcError.hint,
+      operationCount: plan.operations.length,
+      operationSummary: plan.operations.map((op) => ({
+        id: op.chapterId,
+        slug: op.slug,
+        chapterNumber: op.finalNumber,
+        operation: op.op,
+      })),
+    });
+
+    // Distinguish "function not deployed" from a genuine transaction rollback so
+    // the operator knows whether to apply the migration or investigate data.
+    const functionMissing =
+      rpcError.code === "PGRST202" ||
+      /publish_sync_chapters/.test(rpcError.message ?? "") ||
+      /Could not find the function/i.test(rpcError.message ?? "");
+    const errorCode = functionMissing
+      ? "ATOMIC_CHAPTER_RPC_MISSING"
+      : "ATOMIC_CHAPTER_WRITE_FAILED";
+    const safeMessage = functionMissing
+      ? "The atomic publish function is not deployed. Apply the latest migration, then retry."
+      : "The chapter batch was rolled back. See server logs for the exact cause.";
+
     return NextResponse.json(
       {
         error: "Publish failed while writing chapters. No changes were applied.",
+        errorCode,
         published: 0,
         alreadyApplied: plan.alreadyApplied,
-        failed: [
-          {
-            chapterNumber: 0,
-            slug: "",
-            safeMessage: "The atomic chapter write was rolled back. Try again.",
-          },
-        ],
+        // Batch-level failure — no single chapter number/slug is to blame.
+        failed: [{ chapterNumber: null, slug: null, safeMessage }],
       },
       { status: 500 }
     );
