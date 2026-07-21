@@ -9,6 +9,9 @@ import { CHECK_IN_OLCI_DEFINITION } from "./check-in-olci.ts";
 import { FLIGHT_DISRUPTION_DEFINITION } from "./flight-disruption.ts";
 import { EXTRA_SEAT_CBBG_DEFINITION } from "./extra-seat-cbbg.ts";
 import { MINIMUM_CONNECTION_TIME_DEFINITION } from "./minimum-connection-time.ts";
+import { WHEELCHAIR_DEFINITION } from "./wheelchair.ts";
+import { NAME_CORRECTION_DEFINITION } from "./name-correction.ts";
+import { FALCON_HANDLING_DEFINITION } from "./falcon-handling.ts";
 
 export const DECISION_DEFINITIONS: Record<string, DecisionDefinition> = {
   pregnancy: PREGNANCY_DEFINITION,
@@ -17,6 +20,9 @@ export const DECISION_DEFINITIONS: Record<string, DecisionDefinition> = {
   "flight-disruption": FLIGHT_DISRUPTION_DEFINITION,
   "extra-seat-cbbg": EXTRA_SEAT_CBBG_DEFINITION,
   "minimum-connection-time": MINIMUM_CONNECTION_TIME_DEFINITION,
+  wheelchair: WHEELCHAIR_DEFINITION,
+  "name-correction": NAME_CORRECTION_DEFINITION,
+  "falcon-handling": FALCON_HANDLING_DEFINITION,
 };
 
 /**

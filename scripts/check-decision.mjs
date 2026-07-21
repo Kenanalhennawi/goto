@@ -596,7 +596,7 @@ assert.equal(availStale.adminReason, "Source updated after review");
 
 // Unsupported procedure slug (no deterministic tree): no entry point at all.
 const availNoTree = getWorkflowAvailability({
-  slug: "wheelchair",
+  slug: "ok-to-board",
   is_published: true,
   review_status: "approved",
   source_version: "81.2",
@@ -623,15 +623,183 @@ assert.equal(preselectNoCard.available, false);
 assert.equal(preselectNoCard.status, "unavailable_unpublished");
 assert.equal(preselectNoCard.hasTree, true);
 assert.ok(preselectNoCard.safeMessage.length > 0); // safe message shown, no internal detail leaked
-const preselectNoTree = getWorkflowAvailability({ slug: "wheelchair" });
+const preselectNoTree = getWorkflowAvailability({ slug: "ok-to-board" });
 assert.equal(preselectNoTree.hasTree, false);
 assert.equal(preselectNoTree.status, "unavailable_no_tree");
 
-// hasDecisionTree only true for the six real trees.
+// hasDecisionTree true for the nine real trees; false for concept-only slugs.
 assert.equal(hasDecisionTree("pregnancy"), true);
 assert.equal(hasDecisionTree("minimum-connection-time"), true);
-assert.equal(hasDecisionTree("wheelchair"), false);
-assert.equal(hasDecisionTree("name-correction"), false);
+assert.equal(hasDecisionTree("wheelchair"), true);
+assert.equal(hasDecisionTree("name-correction"), true);
+assert.equal(hasDecisionTree("falcon-handling"), true);
+assert.equal(hasDecisionTree("ok-to-board"), false);
 assert.equal(hasDecisionTree("nonexistent-slug"), false);
+
+// ---- Phase H: wheelchair, name-correction, falcon-handling ----
+const WCHAIR = DECISION_DEFINITIONS["wheelchair"];
+const wchairBase = {
+  assistance_type: "WCHR",
+  hours_before_departure: 20,
+  battery_powered: false,
+  battery_type: "Not battery-powered",
+  battery_damaged: false,
+  companion_available: false,
+  medical_certificate_available: false,
+};
+expectRule(WCHAIR, wchairBase, "wchr-ok", "Can proceed", "High confidence");
+expectRule(WCHAIR, { ...wchairBase, hours_before_departure: 8 }, "wchr-late", "Requires supervisor", "Conditional");
+expectRule(
+  WCHAIR,
+  { ...wchairBase, assistance_type: "WCHS", hours_before_departure: 20 },
+  "wchs-late",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  WCHAIR,
+  { ...wchairBase, assistance_type: "WCHC", hours_before_departure: 30, companion_available: false },
+  "wchc-no-companion",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  WCHAIR,
+  {
+    ...wchairBase,
+    assistance_type: "WCHC",
+    hours_before_departure: 30,
+    companion_available: true,
+    medical_certificate_available: false,
+  },
+  "wchc-no-certificate",
+  "Requires document",
+  "Conditional"
+);
+expectRule(
+  WCHAIR,
+  {
+    ...wchairBase,
+    assistance_type: "WCHC",
+    hours_before_departure: 30,
+    companion_available: true,
+    medical_certificate_available: true,
+  },
+  "wchc-ok",
+  "Can proceed with conditions",
+  "Conditional"
+);
+expectRule(
+  WCHAIR,
+  { ...wchairBase, battery_powered: true, battery_type: "WCLB (lithium)", hours_before_departure: 30 },
+  "wchr-battery-late",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  WCHAIR,
+  { ...wchairBase, battery_powered: true, battery_type: "WCLB (lithium)", battery_damaged: true, hours_before_departure: 60 },
+  "wchr-battery-damaged",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  WCHAIR,
+  { ...wchairBase, battery_powered: true, battery_type: "WCLB (lithium)", battery_damaged: false, hours_before_departure: 60 },
+  "wchr-battery-ok",
+  "Requires document",
+  "Conditional"
+);
+
+const NAMEC = DECISION_DEFINITIONS["name-correction"];
+const nameBase = {
+  correction_type: "Title, space, or up to 3 characters",
+  hours_before_departure: 48,
+  no_show: false,
+  checkin_state: "Not checked in",
+  booking_channel: "Direct (FZ)",
+};
+expectRule(NAMEC, nameBase, "nc-foc", "Can proceed with conditions", "Conditional");
+expectRule(
+  NAMEC,
+  { ...nameBase, correction_type: "Name swap (no spelling change)" },
+  "nc-swap",
+  "Can proceed with conditions",
+  "Conditional"
+);
+expectRule(
+  NAMEC,
+  { ...nameBase, correction_type: "More than 3 characters / full name / add or delete / maiden-to-married" },
+  "nc-major",
+  "Requires document",
+  "Conditional"
+);
+expectRule(NAMEC, { ...nameBase, hours_before_departure: 4 }, "nc-within-6h", "Not permitted", "High confidence");
+expectRule(NAMEC, { ...nameBase, no_show: true }, "nc-no-show", "Not permitted", "High confidence");
+expectRule(
+  NAMEC,
+  { ...nameBase, checkin_state: "Online checked in" },
+  "nc-olci-checkin",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  NAMEC,
+  { ...nameBase, checkin_state: "Airport checked in" },
+  "nc-airport-checkin",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(NAMEC, { ...nameBase, booking_channel: "GDS" }, "nc-gds", "Not permitted", "High confidence");
+expectRule(NAMEC, { ...nameBase, booking_channel: "Interline" }, "nc-interline", "Requires supervisor", "Conditional");
+
+const FALCON = DECISION_DEFINITIONS["falcon-handling"];
+const falconBase = {
+  hours_before_departure: 72,
+  falcon_count: 2,
+  cabin_class: "Economy",
+  destination_restriction: "None / standard",
+  journey_type: "flydubai only (FZ)",
+  approval_obtained: true,
+  required_details_available: true,
+};
+expectRule(FALCON, falconBase, "falcon-approved", "Can proceed with conditions", "Conditional");
+expectRule(FALCON, { ...falconBase, hours_before_departure: 20 }, "falcon-under-48h", "Not permitted", "High confidence");
+expectRule(FALCON, { ...falconBase, falcon_count: 20 }, "falcon-over-15", "Requires supervisor", "Conditional");
+expectRule(FALCON, { ...falconBase, cabin_class: "Business" }, "falcon-business", "Not permitted", "High confidence");
+expectRule(FALCON, { ...falconBase, destination_restriction: "DMM" }, "falcon-dmm", "Not permitted", "High confidence");
+expectRule(
+  FALCON,
+  { ...falconBase, journey_type: "Interline or codeshare" },
+  "falcon-interline",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  FALCON,
+  { ...falconBase, required_details_available: false },
+  "falcon-missing-details",
+  "Requires document",
+  "Conditional"
+);
+expectRule(
+  FALCON,
+  { ...falconBase, approval_obtained: false },
+  "falcon-not-approved",
+  "Requires supervisor",
+  "Conditional"
+);
+
+// Every Phase H tree is registered, versioned and has source-cited rules.
+for (const slug of ["wheelchair", "name-correction", "falcon-handling"]) {
+  assert.ok(DECISION_DEFINITIONS[slug], `definition registered for ${slug}`);
+  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.2 (10-Jul-2026)");
+  assert.ok(DECISION_DEFINITIONS[slug].sourcePages.length > 0, `source pages for ${slug}`);
+}
+
+// Unsupported / incomplete input never invents a fallback.
+const wchairIncomplete = evaluate(WCHAIR, { assistance_type: "WCHR" });
+assert.equal(wchairIncomplete.outcome, "Insufficient information");
+assert.ok(wchairIncomplete.missing.length > 0);
 
 console.log("Decision router checks passed.");
