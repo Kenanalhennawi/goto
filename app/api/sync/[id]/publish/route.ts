@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 import { canManageUsers } from "@/lib/permissions";
-import { resolveChapterIdentity, type ExistingChapter } from "@/lib/sync-identity";
+import { buildPublishPlan, type ExistingChapterContent } from "@/lib/sync-identity";
 
 export async function POST(
   request: Request,
@@ -48,144 +48,107 @@ export async function POST(
     return NextResponse.json({ error: "No approved changes to publish." }, { status: 400 });
   }
 
-  // Load all existing chapters once so identity can be resolved by stable
-  // attributes (slug / title / id) rather than by the volatile chapter_number.
+  // Load existing chapters (with content) so identity can be resolved by stable
+  // attributes (slug / title / id) and already-applied rows can be detected.
   const { data: existingChapters, error: existingListError } = await supabase
     .from("chapters")
-    .select("id, slug, title, chapter_number");
+    .select("id, slug, title, chapter_number, body_text, source_version");
 
   if (existingListError) {
     return NextResponse.json({ error: "Couldn't load existing chapters." }, { status: 500 });
   }
 
-  const existingRefs: ExistingChapter[] = existingChapters ?? [];
+  const existingRefs: ExistingChapterContent[] = existingChapters ?? [];
+  const sourceVersion = syncRun?.source_version ?? null;
 
-  let publishedCount = 0;
-  const failures: string[] = [];
+  // Build the two-phase plan. This validates the whole batch (unique slugs,
+  // unique final numbers, positive numbers) before any write is attempted.
+  const plan = buildPublishPlan(approvedChanges, existingRefs, sourceVersion);
 
-  for (const change of approvedChanges) {
-    // Resolve identity by slug -> title -> id. chapter_number is used only in
-    // diagnostic messages, never to decide insert vs update.
-    const identity = resolveChapterIdentity(
-      { title: change.title, chapter_number: change.chapter_number },
-      existingRefs
-    );
-    const label = `Ch. ${change.chapter_number} (${identity.slug})`;
-    const wordCount = (change.new_body_text ?? "").split(/\s+/).filter(Boolean).length;
-
-    // INSERT only when no existing chapter matches. This guarantees we never
-    // violate chapters_slug_key by inserting a slug that already exists.
-    if (identity.operation === "insert") {
-      const { data: inserted, error: insertError } = await supabase
-        .from("chapters")
-        .insert({
-          chapter_number: change.chapter_number,
-          title: change.title,
-          slug: identity.slug,
-          search_keywords: change.new_keywords ?? [],
-          body_text: change.new_body_text,
-          content_blocks: change.new_content_blocks ?? [],
-          word_count: wordCount,
-          source_version: syncRun?.source_version ?? null,
-          updated_by: user.id,
-        })
-        .select("id")
-        .single();
-      if (insertError) {
-        failures.push(`${label}: ${insertError.message}`);
-      } else {
-        publishedCount++;
-        // Keep the in-memory list current so a later change with the same slug
-        // resolves to this new row instead of attempting a second insert.
-        if (inserted) {
-          existingRefs.push({
-            id: inserted.id,
-            slug: identity.slug,
-            title: change.title,
-            chapter_number: change.chapter_number,
-          });
-        }
-      }
-      continue;
-    }
-
-    // UPDATE the matched chapter by its stable id. Fetch its current content so
-    // existing content_blocks/keywords are preserved and edit_history is logged.
-    const { data: existingChapter, error: existingError } = await supabase
-      .from("chapters")
-      .select("id, body_text, search_keywords, content_blocks")
-      .eq("id", identity.existingId)
-      .single();
-
-    if (existingError || !existingChapter) {
-      failures.push(`${label}: existing chapter not found`);
-      continue;
-    }
-
-    // Log to edit_history before applying, same as manual edits
-    const { error: historyError } = await supabase.from("edit_history").insert({
-      chapter_id: existingChapter.id,
-      edited_by: user.id,
-      edited_by_email: user.email,
-      change_type: "pdf_sync",
-      previous_body_text: existingChapter.body_text,
-      new_body_text: change.new_body_text,
-      previous_keywords: existingChapter.search_keywords,
-      new_keywords: change.new_keywords,
-      source_version: syncRun?.source_version ?? null,
-    });
-
-    if (historyError) {
-      failures.push(`${label}: edit history was not saved`);
-      continue;
-    }
-
-    const { error: updateError } = await supabase
-      .from("chapters")
-      .update({
-        // chapter_number may shift when a chapter is inserted earlier; keep it
-        // in sync while identity itself stays anchored to the stable id/slug.
-        chapter_number: change.chapter_number,
-        title: change.title,
-        body_text: change.new_body_text,
-        content_blocks: change.new_content_blocks ?? existingChapter.content_blocks ?? [],
-        search_keywords: change.new_keywords ?? existingChapter.search_keywords,
-        word_count: wordCount,
-        source_version: syncRun?.source_version ?? null,
-        updated_at: new Date().toISOString(),
-        updated_by: user.id,
-      })
-      .eq("id", existingChapter.id);
-
-    if (updateError) {
-      failures.push(`${label}: ${updateError.message}`);
-    } else {
-      publishedCount++;
-    }
-  }
-
-  if (failures.length > 0) {
+  if (!plan.ok) {
     return NextResponse.json(
       {
-        error: "Publish stopped because one or more approved changes failed.",
-        published: publishedCount,
-        failures,
+        error: "Publish aborted: the approved changes are inconsistent.",
+        published: 0,
+        alreadyApplied: 0,
+        failed: plan.failed,
+      },
+      { status: 400 }
+    );
+  }
+
+  // Everything already matches the target — mark the run published, write nothing.
+  if (plan.operations.length === 0) {
+    await markRunPublished(supabase, id);
+    return NextResponse.json({
+      success: true,
+      published: 0,
+      alreadyApplied: plan.alreadyApplied,
+      failed: [],
+    });
+  }
+
+  // Apply all writes atomically (temp renumber -> final) inside one transaction.
+  const { data: rpcResult, error: rpcError } = await supabase.rpc("publish_sync_chapters", {
+    p_operations: plan.operations,
+    p_editor: user.id,
+    p_editor_email: user.email ?? null,
+    p_source_version: sourceVersion,
+  });
+
+  if (rpcError) {
+    // Log the full database error server-side; return a safe summary.
+    console.error("publish_sync_chapters failed", { syncRunId: id, error: rpcError });
+    return NextResponse.json(
+      {
+        error: "Publish failed while writing chapters. No changes were applied.",
+        published: 0,
+        alreadyApplied: plan.alreadyApplied,
+        failed: [
+          {
+            chapterNumber: 0,
+            slug: "",
+            safeMessage: "The atomic chapter write was rolled back. Try again.",
+          },
+        ],
       },
       { status: 500 }
     );
   }
 
-  const { error: runUpdateError } = await supabase
-    .from("sync_runs")
-    .update({ status: "published", published_at: new Date().toISOString() })
-    .eq("id", id);
+  const published =
+    (rpcResult && typeof rpcResult.published === "number"
+      ? rpcResult.published
+      : plan.operations.length) ?? plan.operations.length;
+
+  const { error: runUpdateError } = await markRunPublished(supabase, id);
 
   if (runUpdateError) {
     return NextResponse.json(
-      { error: "Changes were published, but the sync run status could not be updated." },
+      {
+        error: "Changes were published, but the sync run status could not be updated.",
+        published,
+        alreadyApplied: plan.alreadyApplied,
+        failed: [],
+      },
       { status: 500 }
     );
   }
 
-  return NextResponse.json({ success: true, published: publishedCount });
+  return NextResponse.json({
+    success: true,
+    published,
+    alreadyApplied: plan.alreadyApplied,
+    failed: [],
+  });
+}
+
+async function markRunPublished(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  id: string
+) {
+  return supabase
+    .from("sync_runs")
+    .update({ status: "published", published_at: new Date().toISOString() })
+    .eq("id", id);
 }

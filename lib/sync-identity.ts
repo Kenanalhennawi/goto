@@ -126,3 +126,208 @@ export function resolveChapterIdentity(
     chapterNumberChanged: false,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Publish planning: turn approved staged changes + existing chapters into a
+// safe, atomic operation plan. Inserting a chapter in the middle shifts later
+// chapter_numbers; because chapter_number is UNIQUE, the plan is executed in
+// two phases (temp renumber, then final) by the publish_sync_chapters RPC.
+// This builder is pure so it can be unit-tested without a database.
+// ---------------------------------------------------------------------------
+
+/** Existing chapter with the content needed to detect already-applied rows. */
+export type ExistingChapterContent = ExistingChapter & {
+  body_text?: string | null;
+  source_version?: string | null;
+};
+
+/** An approved staged change coming from the sync run. */
+export type IncomingStagedChange = {
+  chapter_number: number;
+  title: string;
+  new_body_text: string | null;
+  new_content_blocks?: unknown[] | null;
+  new_keywords?: string[] | null;
+  /** Optional explicit slug / id, if the generator ever provides them. */
+  slug?: string | null;
+  chapter_id?: string | null;
+};
+
+/** A single write the RPC will perform, with the final (post-shift) number. */
+export type PublishOperation = {
+  op: "update" | "insert";
+  chapterId: string | null;
+  slug: string;
+  finalNumber: number;
+  title: string;
+  bodyText: string;
+  contentBlocks: unknown[] | null;
+  keywords: string[] | null;
+  wordCount: number;
+  /** Diagnostic: final number differs from the current stored number. */
+  numberChanges: boolean;
+};
+
+export type PublishFailure = {
+  chapterNumber: number;
+  slug: string;
+  safeMessage: string;
+};
+
+export type PublishPlan =
+  | { ok: false; failed: PublishFailure[] }
+  | {
+      ok: true;
+      /** Operations that must be written (already-applied rows are excluded). */
+      operations: PublishOperation[];
+      /** Count of approved rows whose content already matches the target. */
+      alreadyApplied: number;
+      /** Count of approved rows considered. */
+      totalApproved: number;
+      /** Chapter ids the RPC will move to a temporary number first. */
+      tempRenumberIds: string[];
+    };
+
+export function countWords(text: string | null | undefined): number {
+  return (text ?? "").split(/\s+/).filter(Boolean).length;
+}
+
+/**
+ * Build the two-phase publish plan. Validation errors (duplicate slug,
+ * duplicate final number, non-positive number) abort the whole batch before
+ * any write is attempted. Rows whose stored content already equals the target
+ * (body_text + source_version) are classified as already-applied and skipped,
+ * so retrying a partial publish is idempotent.
+ */
+export function buildPublishPlan(
+  approved: IncomingStagedChange[],
+  existing: ExistingChapterContent[],
+  targetSourceVersion: string | null
+): PublishPlan {
+  const failures: PublishFailure[] = [];
+  const seenSlugs = new Set<string>();
+  const seenNumbers = new Set<number>();
+
+  // --- Validation pass: never touch the database if the batch is inconsistent.
+  for (const change of approved) {
+    const identity = resolveChapterIdentity(
+      {
+        title: change.title,
+        slug: change.slug ?? null,
+        chapter_id: change.chapter_id ?? null,
+        chapter_number: change.chapter_number,
+      },
+      existing
+    );
+    const slug = identity.slug;
+    const finalNumber = change.chapter_number;
+
+    if (!Number.isInteger(finalNumber) || finalNumber < 1) {
+      failures.push({
+        chapterNumber: finalNumber,
+        slug,
+        safeMessage: "Chapter number must be a positive integer.",
+      });
+    }
+    if (seenSlugs.has(slug)) {
+      failures.push({
+        chapterNumber: finalNumber,
+        slug,
+        safeMessage: `Duplicate chapter slug in this sync: ${slug}.`,
+      });
+    } else {
+      seenSlugs.add(slug);
+    }
+    if (seenNumbers.has(finalNumber)) {
+      failures.push({
+        chapterNumber: finalNumber,
+        slug,
+        safeMessage: `Duplicate final chapter number in this sync: ${finalNumber}.`,
+      });
+    } else {
+      seenNumbers.add(finalNumber);
+    }
+  }
+
+  if (failures.length > 0) {
+    return { ok: false, failed: failures };
+  }
+
+  // --- Build pass: classify already-applied and assemble write operations.
+  const operations: PublishOperation[] = [];
+  const tempRenumberIds: string[] = [];
+  let alreadyApplied = 0;
+
+  for (const change of approved) {
+    const identity = resolveChapterIdentity(
+      {
+        title: change.title,
+        slug: change.slug ?? null,
+        chapter_id: change.chapter_id ?? null,
+        chapter_number: change.chapter_number,
+      },
+      existing
+    );
+    const slug = identity.slug;
+    const finalNumber = change.chapter_number;
+    const bodyText = change.new_body_text ?? "";
+    const wordCount = countWords(bodyText);
+    const contentBlocks = change.new_content_blocks ?? null;
+    const keywords = change.new_keywords ?? null;
+
+    if (identity.operation === "update") {
+      const current = existing.find((c) => c.id === identity.existingId);
+      const currentNumber = current?.chapter_number ?? null;
+      const numberChanges = currentNumber == null ? true : currentNumber !== finalNumber;
+
+      // Already applied: stored body + source version already equal the target.
+      const alreadyMatches =
+        current != null &&
+        current.body_text != null &&
+        current.body_text === bodyText &&
+        (current.source_version ?? null) === (targetSourceVersion ?? null);
+
+      if (alreadyMatches) {
+        alreadyApplied++;
+        continue;
+      }
+
+      operations.push({
+        op: "update",
+        chapterId: identity.existingId,
+        slug,
+        finalNumber,
+        title: change.title,
+        bodyText,
+        contentBlocks,
+        keywords,
+        wordCount,
+        numberChanges,
+      });
+      // Every written update is moved to a temp number first so its old number
+      // can be reused by another shifted chapter without a collision.
+      tempRenumberIds.push(identity.existingId);
+    } else {
+      operations.push({
+        op: "insert",
+        chapterId: null,
+        slug,
+        finalNumber,
+        title: change.title,
+        bodyText,
+        contentBlocks,
+        keywords,
+        wordCount,
+        numberChanges: false,
+      });
+    }
+  }
+
+  return {
+    ok: true,
+    operations,
+    alreadyApplied,
+    totalApproved: approved.length,
+    tempRenumberIds,
+  };
+}
