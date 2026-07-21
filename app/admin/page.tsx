@@ -147,6 +147,19 @@ export default async function AdminDashboard() {
                   <div className="flex items-center gap-3">
                     <span className="text-ink-muted text-xs">{s.chapters_changed} changed</span>
                     <StatusBadge status={s.status} />
+                    {s.id ? (
+                      <Link
+                        href={`/admin/sync/${s.id}`}
+                        aria-label={`${syncActionLabel(s.status)} for ${s.source_filename} version ${s.source_version}`}
+                        className="rounded border border-border bg-white px-2.5 py-1 text-xs font-semibold text-ink transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+                      >
+                        {syncActionLabel(s.status)}
+                      </Link>
+                    ) : (
+                      <span className="text-xs font-medium text-warn" role="status">
+                        Sync ID unavailable
+                      </span>
+                    )}
                     {canManageUsers(activeRole.role) && (
                       <DeleteButton
                         endpoint={`/api/sync-runs/${s.id}`}
@@ -221,6 +234,22 @@ function SummaryCard({
   );
 
   return href ? <Link href={href}>{content}</Link> : content;
+}
+
+// Label for the "open this sync run" link, by sync-run status.
+// Pending/reviewed runs are still reviewable; published runs are read-only;
+// failed runs surface their error detail. Unknown statuses default to View.
+function syncActionLabel(status: string): string {
+  switch (status) {
+    case "pending":
+    case "reviewing":
+    case "reviewed":
+      return "Review changes";
+    case "failed":
+      return "View details";
+    default:
+      return "View sync";
+  }
 }
 
 function StatusBadge({ status }: { status: string }) {
