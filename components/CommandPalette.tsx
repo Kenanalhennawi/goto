@@ -8,6 +8,7 @@ import {
   plainSnippet,
   readableJsonItems,
 } from "@/lib/search";
+import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
 import type { UnifiedSearchResult } from "@/lib/types";
 
 const RECENT_KEY = "goto.palette.recent.v1";
@@ -16,7 +17,7 @@ const SUGGESTIONS = ["MCT", "EXST", "WCHR", "FDIS", "Dubai Stopover", "Name Corr
 
 type PaletteItem = {
   key: string;
-  group: "Operational cards" | "Source chapters";
+  group: "Guided decisions" | "Operational cards" | "Source chapters";
   title: string;
   href: string;
   badge: string | null;
@@ -243,6 +244,19 @@ export function CommandPalette() {
         <div ref={listRef} id="palette-results" role="listbox" className="max-h-[52vh] overflow-y-auto p-2">
           {showEmptyHints ? (
             <div className="px-2 py-2">
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  router.push("/decision");
+                }}
+                className="mb-3 flex w-full items-center justify-between gap-3 rounded-md border border-sky/40 bg-sky-soft px-3 py-2 text-left transition-colors hover:border-sky"
+              >
+                <span className="text-sm font-semibold text-sky">Open Decision Assistant</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-sky/80">
+                  Guided
+                </span>
+              </button>
               {recent.length > 0 && (
                 <>
                   <p className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
@@ -363,6 +377,7 @@ export function CommandPalette() {
 }
 
 function buildItems(results: UnifiedSearchResult[], query: string): PaletteItem[] {
+  const guided: PaletteItem[] = [];
   const cards: PaletteItem[] = [];
   const chapters: PaletteItem[] = [];
 
@@ -379,6 +394,26 @@ function buildItems(results: UnifiedSearchResult[], query: string): PaletteItem[
         explanation: explainCardMatch(result, query),
         snippet: channels || plainSnippet(result.snippet).slice(0, 90),
       });
+      // Direct entry for available guided workflows (search already returns
+      // only approved+published cards; availability then needs a matching tree).
+      const availability = getWorkflowAvailability({
+        slug: result.slug,
+        is_published: true,
+        review_status: "approved",
+        source_version: result.source_version,
+      });
+      if (availability.available) {
+        guided.push({
+          key: `guided-${result.id}`,
+          group: "Guided decisions",
+          title: result.title,
+          href: availability.href,
+          badge: result.service_code,
+          meta: "Deterministic",
+          explanation: "Guided",
+          snippet: "Answer verified questions to reach the outcome",
+        });
+      }
     } else {
       chapters.push({
         key: `chapter-${result.id}`,
@@ -393,7 +428,7 @@ function buildItems(results: UnifiedSearchResult[], query: string): PaletteItem[
     }
   }
 
-  return [...cards.slice(0, 6), ...chapters.slice(0, 5)];
+  return [...guided.slice(0, 4), ...cards.slice(0, 6), ...chapters.slice(0, 5)];
 }
 
 function explainCardMatch(

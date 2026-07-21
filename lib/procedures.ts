@@ -7,6 +7,8 @@ export interface ProcedureSourceChapter {
   chapter_number: number;
   title: string;
   slug: string;
+  source_version?: string | null;
+  updated_at?: string | null;
 }
 
 export interface ProcedureCardWithChapter extends ProcedureCard {
@@ -68,7 +70,7 @@ export async function getProcedureBySlug(slug: string) {
         "last_reviewed_by",
         "created_at",
         "updated_at",
-        "chapters(id, chapter_number, title, slug)",
+        "chapters(id, chapter_number, title, slug, source_version, updated_at)",
       ].join(", ")
     )
     .eq("slug", slug);

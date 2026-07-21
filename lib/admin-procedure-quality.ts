@@ -27,6 +27,16 @@ export type SourceReviewChapter = {
   updated_at?: string | null;
 };
 
+// Minimal structural input for the source-review helpers. Any fuller procedure
+// object (AdminQualityBaseProcedure) satisfies it, so existing callers are
+// unaffected; it also lets lightweight callers (e.g. the guided-decision
+// availability layer) reuse the exact freshness logic.
+export type SourceReviewInput = {
+  source_version?: string | null;
+  last_reviewed_at?: string | null;
+  chapters?: SourceReviewChapter | SourceReviewChapter[] | null;
+};
+
 export type SourceReviewWarning =
   | "Source updated"
   | "Never reviewed against source"
@@ -113,7 +123,7 @@ export function jsonItemsToSearchText(items: JsonValue[] | null | undefined) {
   return items.map((item) => readableJsonItem(item)).filter(Boolean).join(" ");
 }
 
-export function sourceReviewWarnings(procedure: AdminQualityBaseProcedure): SourceReviewWarning[] {
+export function sourceReviewWarnings(procedure: SourceReviewInput): SourceReviewWarning[] {
   const chapter = firstSourceReviewChapter(procedure.chapters);
   if (!chapter) return [];
 
@@ -138,7 +148,7 @@ export function sourceReviewWarnings(procedure: AdminQualityBaseProcedure): Sour
   return warnings;
 }
 
-export function sourceReviewStatus(procedure: AdminQualityBaseProcedure) {
+export function sourceReviewStatus(procedure: SourceReviewInput) {
   const warnings = sourceReviewWarnings(procedure);
   if (warnings.length > 0) return warnings.join("; ");
   return firstSourceReviewChapter(procedure.chapters) ? "Current" : "No linked source chapter";

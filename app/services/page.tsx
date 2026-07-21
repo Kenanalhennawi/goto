@@ -2,6 +2,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { canReviewProcedures } from "@/lib/permissions";
 import { WORK_AREAS, groupForCard, type WorkArea } from "@/lib/work-areas";
+import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
 import type { JsonValue } from "@/lib/types";
 import Link from "next/link";
 
@@ -23,6 +24,7 @@ type ServiceCard = {
   cut_off_time: string | null;
   channels: JsonValue[];
   priority: number;
+  source_version: string | null;
 };
 
 export default async function ServicesPage({
@@ -47,7 +49,7 @@ export default async function ServicesPage({
   const canReview = canReviewProcedures(role?.role);
   const { data, error } = await supabase
     .from("procedure_cards")
-    .select("id, title, slug, category, service_code, service_type, cut_off_time, channels, priority")
+    .select("id, title, slug, category, service_code, service_type, cut_off_time, channels, priority, source_version")
     .eq("is_published", true)
     .eq("review_status", "approved")
     .order("priority", { ascending: false })
@@ -193,6 +195,14 @@ function ServiceDirectoryCard({ card }: { card: ServiceCard }) {
   const timing = compactTiming(card.cut_off_time);
   const timingLabel = getTimingLabel(card);
   const channels = jsonItems(card.channels).slice(0, 3);
+  // Directory only lists approved+published cards, so availability reduces to a
+  // tree existing and the card version matching the tree.
+  const guided = getWorkflowAvailability({
+    slug: card.slug,
+    is_published: true,
+    review_status: "approved",
+    source_version: card.source_version,
+  });
 
   return (
     <article className="content-card quick-card hover-lift flex flex-col p-4 hover:border-accent">
@@ -235,13 +245,21 @@ function ServiceDirectoryCard({ card }: { card: ServiceCard }) {
         </div>
       )}
 
-      <div className="mt-auto pt-4">
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
         <Link
           href={`/procedure/${card.slug}`}
           className="inline-flex rounded bg-navy px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
         >
           Open
         </Link>
+        {guided.available && (
+          <Link
+            href={guided.href}
+            className="inline-flex rounded border border-sky bg-sky-soft px-3.5 py-1.5 text-xs font-semibold text-sky transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky focus-visible:ring-offset-1"
+          >
+            Guided decision
+          </Link>
+        )}
       </div>
     </article>
   );

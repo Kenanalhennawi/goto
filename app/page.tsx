@@ -212,6 +212,8 @@ export default async function Home({
           <div className="reveal-stagger space-y-6">
             <WorkspaceStrip />
 
+            <GuidedDecisionPanel />
+
             <DecisionFlow areas={decisionAreas} />
 
             <section>
@@ -322,6 +324,49 @@ export default async function Home({
         </div>
       </footer>
     </div>
+  );
+}
+
+function GuidedDecisionPanel() {
+  const examples: [string, string][] = [
+    ["Passenger cannot walk", "/decision"],
+    ["Pregnant passenger travelling tomorrow", "/decision?procedure=pregnancy"],
+    ["Missed flight after online check-in", "/decision?procedure=check-in-olci"],
+  ];
+
+  return (
+    <section className="content-card overflow-hidden border-l-4 border-l-sky">
+      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky">
+            Guided operational decision
+          </p>
+          <h2 className="mt-1 font-display text-lg font-semibold text-ink">
+            Describe the passenger scenario and follow verified operational questions.
+          </h2>
+          <p className="mt-1 text-sm text-ink-muted">
+            Deterministic guidance from reviewed operational rules — not every scenario is covered.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {examples.map(([label, href]) => (
+              <Link
+                key={label}
+                href={href}
+                className="rounded border border-border bg-white px-2.5 py-1 text-xs font-semibold text-sky transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky focus-visible:ring-offset-1"
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <Link
+          href="/decision"
+          className="inline-flex shrink-0 items-center justify-center rounded-md bg-sky px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky focus-visible:ring-offset-2"
+        >
+          Start guided decision
+        </Link>
+      </div>
+    </section>
   );
 }
 

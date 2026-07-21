@@ -6,6 +6,8 @@ import { RecentTracker } from "@/components/RecentTracker";
 import { SiteHeader } from "@/components/SiteHeader";
 import { getProcedureBySlug, type ProcedureCardWithChapter } from "@/lib/procedures";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
+import { GuidedDecisionEntry } from "@/components/decision/GuidedDecisionEntry";
 import { groupForCard } from "@/lib/work-areas";
 import type { JsonValue } from "@/lib/types";
 import Link from "next/link";
@@ -39,6 +41,14 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
   const updatedAt = safeDate(procedure.updated_at);
   const path = `/procedure/${procedure.slug}`;
   const related = await fetchRelatedProcedures(procedure);
+  const guidedAvailability = getWorkflowAvailability({
+    slug: procedure.slug,
+    is_published: procedure.is_published,
+    review_status: procedure.review_status,
+    source_version: procedure.source_version,
+    last_reviewed_at: procedure.last_reviewed_at,
+    chapters: procedure.chapters,
+  });
 
   return (
     <div className="dashboard-shell flex min-h-full flex-col">
@@ -162,6 +172,12 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
               )}
           </div>
         </section>
+
+        {guidedAvailability.hasTree && (
+          <div className="mb-5">
+            <GuidedDecisionEntry availability={guidedAvailability} canManage={canManage} />
+          </div>
+        )}
 
         <div className="space-y-5">
           <ServiceCardSections procedure={procedure} />

@@ -20,6 +20,7 @@ import {
   timingLabelForCard,
 } from "@/lib/search";
 import type { ChapterSearchResult, OperationalCardSearchResult, SearchResult, UnifiedSearchResult } from "@/lib/types";
+import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
 
 type ProcedureSearchRow = Parameters<typeof scoreOperationalCard>[0] & {
   id: string;
@@ -390,6 +391,14 @@ function OperationalCardResult({ result, query }: { result: OperationalCardSearc
   const openLabel = isReferenceCard(result) ? "Open card" : "Open service";
   const timingLines = result.cut_off_time ? compactTimingPreview(result.cut_off_time, result, 2) : [];
   const matchLabel = operationalMatchLabel(result, query);
+  // Search only returns approved+published cards, so availability reduces to a
+  // tree existing and the card version matching the tree.
+  const guided = getWorkflowAvailability({
+    slug: result.slug,
+    is_published: true,
+    review_status: "approved",
+    source_version: result.source_version,
+  });
 
   return (
     <article className="content-card hover-lift p-4 hover:border-accent">
@@ -437,12 +446,27 @@ function OperationalCardResult({ result, query }: { result: OperationalCardSearc
             </div>
           ) : null}
         </div>
-        <Link
-          href={`/procedure/${result.slug}`}
-          className="inline-flex shrink-0 items-center justify-center rounded bg-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-dim"
-        >
-          {openLabel}
-        </Link>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {guided.available && (
+            <Link
+              href={guided.href}
+              className="inline-flex items-center justify-center rounded border border-sky bg-sky-soft px-3.5 py-2 text-xs font-semibold text-sky transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky focus-visible:ring-offset-1"
+            >
+              Guided decision
+            </Link>
+          )}
+          {!guided.available && guided.hasTree && (
+            <span className="inline-flex items-center rounded border border-dashed border-border px-2.5 py-1 text-[11px] font-semibold text-ink-faint">
+              Guided workflow under review
+            </span>
+          )}
+          <Link
+            href={`/procedure/${result.slug}`}
+            className="inline-flex items-center justify-center rounded bg-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-dim"
+          >
+            {openLabel}
+          </Link>
+        </div>
       </div>
     </article>
   );

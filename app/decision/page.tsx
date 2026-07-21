@@ -12,7 +12,12 @@ export const metadata = {
 
 // Phase A: deterministic routing over approved+published cards only.
 // No external AI, no drafts, no personal-data persistence.
-export default async function DecisionPage() {
+export default async function DecisionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ procedure?: string }>;
+}) {
+  const { procedure } = await searchParams;
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("procedure_cards")
@@ -25,6 +30,8 @@ export default async function DecisionPage() {
     .limit(200);
 
   const cards = ((data ?? []) as RoutableCard[]).filter(Boolean);
+  const initialProcedureSlug =
+    typeof procedure === "string" && procedure.trim().length > 0 ? procedure.trim() : null;
 
   return (
     <div className="dashboard-shell flex min-h-full flex-col">
@@ -52,7 +59,7 @@ export default async function DecisionPage() {
             </p>
           </div>
         ) : (
-          <DecisionIntake cards={cards} />
+          <DecisionIntake cards={cards} initialProcedureSlug={initialProcedureSlug} />
         )}
       </main>
     </div>

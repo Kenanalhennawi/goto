@@ -541,4 +541,84 @@ const speqUnanswered = evaluate(SPEQ, { speq_request: "New equipment booking" })
 assert.equal(speqUnanswered.outcome, "Insufficient information");
 assert.equal(speqUnanswered.matchedRuleId, null);
 
+// ---- Phase E: guided-decision availability layer ----
+const { getWorkflowAvailability, hasDecisionTree } = await import(
+  "../lib/decision-engine/availability.ts"
+);
+
+// Supported + available (card approved, published, version matches tree).
+const availSpeq = getWorkflowAvailability({
+  slug: "sporting-equipment",
+  is_published: true,
+  review_status: "approved",
+  source_version: "81.2 (10-Jul-2026)",
+});
+assert.equal(availSpeq.status, "available");
+assert.equal(availSpeq.available, true);
+assert.equal(availSpeq.hasTree, true);
+assert.equal(availSpeq.href, "/decision?procedure=sporting-equipment");
+assert.equal(availSpeq.adminReason, null);
+
+// Supported but unpublished / not approved.
+const availUnpub = getWorkflowAvailability({
+  slug: "sporting-equipment",
+  is_published: false,
+  review_status: "needs_review",
+  source_version: "81.2",
+});
+assert.equal(availUnpub.status, "unavailable_unpublished");
+assert.equal(availUnpub.available, false);
+assert.equal(availUnpub.adminReason, "Card not published");
+// Ordinary agents only ever see the safe message, never internal metadata.
+assert.equal(availUnpub.safeMessage, "Guided decision is temporarily unavailable. Use the operational card.");
+
+// Supported but source-version mismatch (card still at 80.8, tree at 81.2).
+const availMismatch = getWorkflowAvailability({
+  slug: "sporting-equipment",
+  is_published: true,
+  review_status: "approved",
+  source_version: "80.8 (23-Jun-2026)",
+});
+assert.equal(availMismatch.status, "unavailable_source_mismatch");
+assert.equal(availMismatch.adminReason, "Source version requires review");
+
+// Supported but source updated after review (stale under freshness rules).
+const availStale = getWorkflowAvailability({
+  slug: "sporting-equipment",
+  is_published: true,
+  review_status: "approved",
+  source_version: "81.2",
+  last_reviewed_at: "2026-07-10T00:00:00.000Z",
+  chapters: { source_version: "81.2", updated_at: "2026-07-15T00:00:00.000Z" },
+});
+assert.equal(availStale.status, "unavailable_source_stale");
+assert.equal(availStale.adminReason, "Source updated after review");
+
+// Unsupported procedure slug (no deterministic tree): no entry point at all.
+const availNoTree = getWorkflowAvailability({
+  slug: "wheelchair",
+  is_published: true,
+  review_status: "approved",
+  source_version: "81.2",
+});
+assert.equal(availNoTree.status, "unavailable_no_tree");
+assert.equal(availNoTree.hasTree, false);
+assert.equal(availNoTree.safeMessage, ""); // nothing to show
+
+// Pregnancy tree is verified against 80.8, so an 80.8 approved card is available.
+const availPreg = getWorkflowAvailability({
+  slug: "pregnancy",
+  is_published: true,
+  review_status: "approved",
+  source_version: "80.8 (23-Jun-2026)",
+});
+assert.equal(availPreg.status, "available");
+
+// hasDecisionTree only true for the six real trees.
+assert.equal(hasDecisionTree("pregnancy"), true);
+assert.equal(hasDecisionTree("minimum-connection-time"), true);
+assert.equal(hasDecisionTree("wheelchair"), false);
+assert.equal(hasDecisionTree("name-correction"), false);
+assert.equal(hasDecisionTree("nonexistent-slug"), false);
+
 console.log("Decision router checks passed.");
