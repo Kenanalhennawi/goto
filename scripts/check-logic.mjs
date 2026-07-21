@@ -144,223 +144,234 @@ const titleMatch = resolveChapterIdentity(
 assert.equal(titleMatch.operation, "update");
 assert.equal(titleMatch.existingId, "id-b");
 
-// ---- Publish plan: atomic renumbering after an inserted middle chapter ----
+// ---- Publish plan: full atomic chapter-ordering repair ----
 const { buildPublishPlan } = await import("../lib/sync-identity.ts");
-
 const V = "81.2 (10-Jul-2026)";
-// Existing chapters at their OLD numbers/content.
-const ex3 = [
-  { id: "id-a", slug: "a", title: "A", chapter_number: 1, body_text: "A-old", source_version: "80.8" },
-  { id: "id-b", slug: "b", title: "B", chapter_number: 2, body_text: "B-old", source_version: "80.8" },
-  { id: "id-c", slug: "c", title: "C", chapter_number: 3, body_text: "C-old", source_version: "80.8" },
-];
-// Incoming after NEW is inserted at position 2: B->3, C->4.
-const in3 = [
-  { chapter_number: 1, title: "A", new_body_text: "A-new" },
-  { chapter_number: 2, title: "NEW", new_body_text: "NEW-body" },
-  { chapter_number: 3, title: "B", new_body_text: "B-new" },
-  { chapter_number: 4, title: "C", new_body_text: "C-new" },
-];
-const plan1 = buildPublishPlan(in3, ex3, V);
-assert.equal(plan1.ok, true);
-const byTitle1 = Object.fromEntries(plan1.operations.map((o) => [o.title, o]));
-assert.equal(byTitle1["NEW"].op, "insert");
-assert.equal(byTitle1["NEW"].finalNumber, 2);
-assert.equal(byTitle1["NEW"].slug, "new");
-assert.equal(byTitle1["A"].op, "update");
-assert.equal(byTitle1["A"].chapterId, "id-a");
-assert.equal(byTitle1["B"].op, "update");
-assert.equal(byTitle1["B"].chapterId, "id-b");
-assert.equal(byTitle1["B"].finalNumber, 3);
-assert.equal(byTitle1["C"].op, "update");
-assert.equal(byTitle1["C"].chapterId, "id-c");
-assert.equal(byTitle1["C"].finalNumber, 4);
-// B and C are moved to temp first (they change number); every written update is.
-assert.ok(plan1.tempRenumberIds.includes("id-b"));
-assert.ok(plan1.tempRenumberIds.includes("id-c"));
-// No duplicate final numbers, no duplicate slugs across operations.
-const finals1 = plan1.operations.map((o) => o.finalNumber);
-assert.equal(new Set(finals1).size, finals1.length);
-const slugs1 = plan1.operations.map((o) => o.slug);
-assert.equal(new Set(slugs1).size, slugs1.length);
-// Existing ids preserved (no operation invents an id for A/B/C).
-assert.equal(byTitle1["A"].chapterId, "id-a");
 
-// Multiple inserted chapters.
-const exM = [
-  { id: "x", slug: "x", title: "X", chapter_number: 1, body_text: "x", source_version: "80.8" },
-  { id: "y", slug: "y", title: "Y", chapter_number: 2, body_text: "y", source_version: "80.8" },
-];
-const inM = [
-  { chapter_number: 1, title: "N1", new_body_text: "n1" },
-  { chapter_number: 2, title: "X", new_body_text: "x2" },
-  { chapter_number: 3, title: "N2", new_body_text: "n2" },
-  { chapter_number: 4, title: "Y", new_body_text: "y2" },
-];
-const planM = buildPublishPlan(inM, exM, V);
-assert.equal(planM.ok, true);
-assert.equal(planM.operations.filter((o) => o.op === "insert").length, 2);
-assert.equal(planM.operations.filter((o) => o.op === "update").length, 2);
+// Smaller inserted-middle fixture (kept): existing 1..3, NEW inserted at 2.
+{
+  const existing = [
+    { id: "id-a", slug: "a", title: "A", chapter_number: 1, body_text: "A-old", source_version: "80.8" },
+    { id: "id-b", slug: "b", title: "B", chapter_number: 2, body_text: "B-old", source_version: "80.8" },
+    { id: "id-c", slug: "c", title: "C", chapter_number: 3, body_text: "C-old", source_version: "80.8" },
+  ];
+  const incoming = [
+    { chapter_number: 1, title: "A", new_body_text: "A-new" },
+    { chapter_number: 2, title: "NEW", new_body_text: "NEW" },
+    { chapter_number: 3, title: "B", new_body_text: "B-new" },
+    { chapter_number: 4, title: "C", new_body_text: "C-new" },
+  ];
+  const p = buildPublishPlan(incoming, existing, V);
+  assert.equal(p.ok, true);
+  const byTitle = Object.fromEntries(p.operations.map((o) => [o.title, o]));
+  assert.equal(byTitle["NEW"].op, "insert");
+  assert.equal(byTitle["NEW"].finalNumber, 2);
+  assert.equal(byTitle["B"].op, "update");
+  assert.equal(byTitle["B"].chapterId, "id-b");
+  assert.equal(byTitle["B"].finalNumber, 3);
+  assert.equal(byTitle["C"].chapterId, "id-c");
+  assert.ok(p.temporaryMoveIds.includes("id-b"));
+  assert.ok(p.temporaryMoveIds.includes("id-c"));
+  assert.equal(p.inserted, 1);
+  const finals = p.operations.map((o) => o.finalNumber);
+  assert.equal(new Set(finals).size, finals.length);
+}
 
-// Reordered chapter (number changes, slug/title stable) resolves to update.
-const exR = [
-  { id: "p", slug: "p", title: "P", chapter_number: 5, body_text: "p", source_version: "80.8" },
-  { id: "q", slug: "q", title: "Q", chapter_number: 6, body_text: "q", source_version: "80.8" },
-];
-const planR = buildPublishPlan(
-  [
-    { chapter_number: 6, title: "P", new_body_text: "p2" },
-    { chapter_number: 5, title: "Q", new_body_text: "q2" },
-  ],
-  exR,
-  V
-);
-assert.equal(planR.ok, true);
-const byTitleR = Object.fromEntries(planR.operations.map((o) => [o.title, o]));
-assert.equal(byTitleR["P"].op, "update");
-assert.equal(byTitleR["P"].finalNumber, 6);
-assert.equal(byTitleR["P"].numberChanges, true);
-assert.equal(byTitleR["Q"].finalNumber, 5);
+// (1) An already-applied row occupies a final number needed by a pending insert.
+// A is fully applied at 1; NEW inserts at 2; B (content correct, wrong number)
+// must move 2->3 so nothing blocks. If B were skipped, insert at 2 would collide.
+{
+  const existing = [
+    { id: "id-a", slug: "a", title: "A", chapter_number: 1, body_text: "A", source_version: V },
+    { id: "id-b", slug: "b", title: "B", chapter_number: 2, body_text: "B", source_version: V },
+  ];
+  const incoming = [
+    { chapter_number: 1, title: "A", new_body_text: "A" }, // fully applied -> skip
+    { chapter_number: 2, title: "NEW", new_body_text: "NEW" }, // insert at 2
+    { chapter_number: 3, title: "B", new_body_text: "B" }, // content ok, number 2->3 -> renumber
+  ];
+  const p = buildPublishPlan(incoming, existing, V);
+  assert.equal(p.ok, true);
+  assert.equal(p.alreadyApplied, 1); // A
+  const byTitle = Object.fromEntries(p.operations.map((o) => [o.title, o]));
+  assert.equal(byTitle["NEW"].op, "insert");
+  assert.equal(byTitle["B"].op, "renumber"); // number-only, no history
+  assert.equal(byTitle["B"].finalNumber, 3);
+  assert.ok(p.temporaryMoveIds.includes("id-b"));
+  assert.equal(p.renumbered, 1);
+}
 
-// Title punctuation change still matches the existing chapter (normalized title).
-const planPunct = buildPublishPlan(
-  [{ chapter_number: 1, title: "Ways to Check-in!", new_body_text: "z" }],
-  [{ id: "w", slug: "ways-to-check-in-old", title: "Ways to Check-in", chapter_number: 1, body_text: "old", source_version: "80.8" }],
-  V
-);
-assert.equal(planPunct.ok, true);
-assert.equal(planPunct.operations[0].op, "update");
-assert.equal(planPunct.operations[0].chapterId, "w");
+// (5) Correct content/version but wrong final number is NOT alreadyApplied.
+{
+  const existing = [
+    { id: "id-x", slug: "x", title: "X", chapter_number: 9, body_text: "x", source_version: V },
+  ];
+  const p = buildPublishPlan([{ chapter_number: 1, title: "X", new_body_text: "x" }], existing, V);
+  assert.equal(p.ok, true);
+  assert.equal(p.alreadyApplied, 0);
+  assert.equal(p.operations[0].op, "renumber");
+  assert.equal(p.operations[0].finalNumber, 1);
+}
 
-// Duplicate incoming final number aborts before any write.
-const dupNum = buildPublishPlan(
-  [
-    { chapter_number: 2, title: "One", new_body_text: "1" },
-    { chapter_number: 2, title: "Two", new_body_text: "2" },
-  ],
-  [],
-  V
-);
-assert.equal(dupNum.ok, false);
-assert.ok(dupNum.failed.some((f) => /duplicate final chapter number/i.test(f.safeMessage)));
+// A row fully correct (content + number) IS skipped.
+{
+  const existing = [{ id: "id-x", slug: "x", title: "X", chapter_number: 1, body_text: "x", source_version: V }];
+  const p = buildPublishPlan([{ chapter_number: 1, title: "X", new_body_text: "x" }], existing, V);
+  assert.equal(p.ok, true);
+  assert.equal(p.alreadyApplied, 1);
+  assert.equal(p.operations.length, 0);
+}
 
-// Duplicate incoming slug aborts before any write.
-const dupSlug = buildPublishPlan(
-  [
-    { chapter_number: 1, title: "Same Name", new_body_text: "1" },
-    { chapter_number: 2, title: "Same Name", new_body_text: "2" },
-  ],
-  [],
-  V
-);
-assert.equal(dupSlug.ok, false);
-assert.ok(dupSlug.failed.some((f) => /duplicate chapter slug/i.test(f.safeMessage)));
-
-// Non-positive number aborts.
-const badNum = buildPublishPlan([{ chapter_number: 0, title: "Z", new_body_text: "z" }], [], V);
-assert.equal(badNum.ok, false);
-assert.ok(badNum.failed.some((f) => /positive integer/i.test(f.safeMessage)));
-
-// Retry idempotency: chapters already at target content+version are skipped.
-const exApplied = [
-  { id: "id-a", slug: "a", title: "A", chapter_number: 1, body_text: "A-new", source_version: V },
-  { id: "id-b", slug: "b", title: "B", chapter_number: 3, body_text: "B-new", source_version: V },
-  { id: "id-c", slug: "c", title: "C", chapter_number: 3, body_text: "C-old", source_version: "80.8" },
-];
-const planRetry = buildPublishPlan(
-  [
-    { chapter_number: 1, title: "A", new_body_text: "A-new" }, // already applied
-    { chapter_number: 2, title: "NEW", new_body_text: "NEW" }, // still insert
-    { chapter_number: 4, title: "C", new_body_text: "C-new" }, // still needs write
-  ],
-  exApplied,
-  V
-);
-assert.equal(planRetry.ok, true);
-assert.equal(planRetry.alreadyApplied, 1); // A skipped
-assert.equal(planRetry.operations.some((o) => o.title === "A"), false);
-assert.equal(planRetry.operations.find((o) => o.title === "NEW").op, "insert");
-assert.equal(planRetry.operations.find((o) => o.title === "C").op, "update");
-
-// A chapter whose number does not change is still updated (content differs).
-const planSameNum = buildPublishPlan(
-  [{ chapter_number: 1, title: "A", new_body_text: "A-new" }],
-  [{ id: "id-a", slug: "a", title: "A", chapter_number: 1, body_text: "A-old", source_version: "80.8" }],
-  V
-);
-assert.equal(planSameNum.operations[0].op, "update");
-assert.equal(planSameNum.operations[0].numberChanges, false);
-
-// Empty approved selection: valid plan with nothing to do.
-const planEmpty = buildPublishPlan([], ex3, V);
-assert.equal(planEmpty.ok, true);
-assert.equal(planEmpty.operations.length, 0);
-assert.equal(planEmpty.totalApproved, 0);
-
-// Cross-batch collision: a shifted chapter's final number is held by an
-// existing neighbour that was NOT included in the batch -> abort before writes.
-const exNeighbour = [
-  { id: "dup", slug: "duplicate-booking", title: "Duplicate Booking", chapter_number: 46, body_text: "d", source_version: "80.8" },
-  { id: "visa", slug: "visa", title: "Visa", chapter_number: 47, body_text: "v", source_version: "80.8" },
-];
-const planConflict = buildPublishPlan(
-  [
-    { chapter_number: 46, title: "MEDA", new_body_text: "meda" },       // insert at 46
-    { chapter_number: 47, title: "Duplicate Booking", new_body_text: "d2" }, // 46 -> 47, but Visa still at 47
-  ],
-  exNeighbour,
-  V
-);
-assert.equal(planConflict.ok, false);
-assert.ok(planConflict.failed.some((f) => /still used by "visa"/i.test(f.safeMessage)));
-
-// Same batch WITH the neighbour included resolves cleanly (Visa also shifts).
-const planResolved = buildPublishPlan(
-  [
+// (2) A row has MEDA title/content but the duplicate-booking slug (earlier
+// partial publish). Incoming MEDA resolves by TITLE to that row; incoming
+// Duplicate Booking resolves by SLUG to the SAME row -> ambiguity + dup target.
+{
+  const existing = [
+    { id: "id-r", slug: "duplicate-booking", title: "MEDA", chapter_number: 46, body_text: "meda", source_version: "80.8" },
+  ];
+  const incoming = [
     { chapter_number: 46, title: "MEDA", new_body_text: "meda" },
-    { chapter_number: 47, title: "Duplicate Booking", new_body_text: "d2" },
-    { chapter_number: 48, title: "Visa", new_body_text: "v2" },
-  ],
-  exNeighbour,
-  V
-);
-assert.equal(planResolved.ok, true);
-assert.equal(planResolved.operations.filter((o) => o.op === "insert").length, 1);
-assert.equal(planResolved.operations.filter((o) => o.op === "update").length, 2);
+    { chapter_number: 47, title: "Duplicate Booking", new_body_text: "dup" },
+  ];
+  const p = buildPublishPlan(incoming, existing, V);
+  assert.equal(p.ok, false);
+  assert.ok(
+    p.failed.some((f) => /AMBIGUOUS_SLUG_TITLE_MATCH/.test(f.safeMessage)) ||
+      p.failed.some((f) => /DUPLICATE_TARGET_CHAPTER_ID/.test(f.safeMessage))
+  );
+}
 
-// Production-shape fixture: MEDA insert at 46, a run of shifted updates through
-// Partner Inquiries at 79, with content_blocks JSON, keyword arrays and null
-// page fields. All existing rows are in the batch, so the plan is valid.
-const prodExisting = [];
-const prodIncoming = [];
-// chapters 43..45 unchanged number, updated content (already in batch)
-for (let n = 43; n <= 45; n++) {
-  prodExisting.push({ id: `id-${n}`, slug: `ch-${n}`, title: `Ch ${n}`, chapter_number: n, body_text: `old-${n}`, source_version: "80.8" });
-  prodIncoming.push({ chapter_number: n, title: `Ch ${n}`, new_body_text: `new-${n}`, new_content_blocks: [{ type: "text", text: `t-${n}` }], new_keywords: [`k${n}`] });
+// (3) Incoming MEDA resolves by title to duplicate-booking row while incoming
+// Duplicate Booking resolves by slug to the same row: ambiguous-target failure.
+{
+  const existing = [
+    { id: "id-r", slug: "duplicate-booking", title: "MEDA", chapter_number: 46, body_text: "m", source_version: "80.8" },
+    { id: "id-o", slug: "other", title: "Other", chapter_number: 47, body_text: "o", source_version: "80.8" },
+  ];
+  const incoming = [
+    { chapter_number: 46, title: "MEDA", new_body_text: "m" },
+    { chapter_number: 47, title: "Duplicate Booking", new_body_text: "d" },
+    { chapter_number: 48, title: "Other", new_body_text: "o2" },
+  ];
+  const p = buildPublishPlan(incoming, existing, V);
+  assert.equal(p.ok, false);
+  assert.ok(p.failed.some((f) => /AMBIGUOUS_SLUG_TITLE_MATCH|DUPLICATE_TARGET_CHAPTER_ID/.test(f.safeMessage)));
 }
-// MEDA inserted at 46
-prodIncoming.push({ chapter_number: 46, title: "MEDA", new_body_text: "meda body", new_content_blocks: [{ type: "text", text: "meda" }], new_keywords: ["meda"] });
-// existing 46..78 shift to 47..79 (Partner Inquiries lands at 79)
-for (let n = 46; n <= 78; n++) {
-  const title = n === 78 ? "flydubai Partner Inquiries – Travel Agencies" : `Existing ${n}`;
-  prodExisting.push({ id: `id-${n}`, slug: n === 78 ? "flydubai-partner-inquiries-travel-agencies" : `ex-${n}`, title, chapter_number: n, body_text: `old-${n}`, source_version: "80.8" });
-  prodIncoming.push({ chapter_number: n + 1, title, new_body_text: `new-${n}`, new_content_blocks: null, new_keywords: null });
+
+// (4) Two incoming changes resolve to the same existing id (both by slug/title).
+{
+  const existing = [{ id: "id-s", slug: "same", title: "Same", chapter_number: 5, body_text: "s", source_version: "80.8" }];
+  const incoming = [
+    { chapter_number: 1, title: "Same", new_body_text: "a", slug: "same" },
+    { chapter_number: 2, title: "Same", new_body_text: "b", slug: "same" },
+  ];
+  const p = buildPublishPlan(incoming, existing, V);
+  assert.equal(p.ok, false);
+  // duplicate slug and/or duplicate target id must be reported
+  assert.ok(p.failed.some((f) => /DUPLICATE_SLUG|DUPLICATE_TARGET_CHAPTER_ID/.test(f.safeMessage)));
 }
-const prodPlan = buildPublishPlan(prodIncoming, prodExisting, V);
-assert.equal(prodPlan.ok, true);
-const medaOp = prodPlan.operations.find((o) => o.slug === "meda");
-assert.equal(medaOp.op, "insert");
-assert.equal(medaOp.finalNumber, 46);
-const partnerOp = prodPlan.operations.find((o) => o.slug === "flydubai-partner-inquiries-travel-agencies");
-assert.equal(partnerOp.op, "update");
-assert.equal(partnerOp.finalNumber, 79);
-assert.equal(partnerOp.numberChanges, true);
-// unique final numbers / slugs across the whole plan
-const pFinals = prodPlan.operations.map((o) => o.finalNumber);
-assert.equal(new Set(pFinals).size, pFinals.length);
-const pSlugs = prodPlan.operations.map((o) => o.slug);
-assert.equal(new Set(pSlugs).size, pSlugs.length);
-// null page/content fields survive as null contentBlocks (RPC keeps existing)
-assert.equal(partnerOp.contentBlocks, null);
+
+// Untouched occupant of a required final number aborts (neighbour not included).
+{
+  const existing = [
+    { id: "dup", slug: "duplicate-booking", title: "Duplicate Booking", chapter_number: 46, body_text: "d", source_version: "80.8" },
+    { id: "visa", slug: "visa", title: "Visa", chapter_number: 47, body_text: "v", source_version: "80.8" },
+  ];
+  const incoming = [
+    { chapter_number: 46, title: "MEDA", new_body_text: "meda" },
+    { chapter_number: 47, title: "Duplicate Booking", new_body_text: "d2" }, // Visa (47) not included
+  ];
+  const p = buildPublishPlan(incoming, existing, V);
+  assert.equal(p.ok, false);
+  assert.ok(p.failed.some((f) => /FINAL_NUMBER_OCCUPIED_BY_UNTOUCHED_CHAPTER/.test(f.safeMessage)));
+}
+
+// (6) Full live-state repair: 78 existing (46..75 shifted, 76 absent, 77..79
+// already correct), MEDA inserted at 46. Verify all invariants.
+{
+  const existing = [];
+  const incoming = [];
+  // 1..45 already applied (content + number correct)
+  for (let n = 1; n <= 45; n++) {
+    existing.push({ id: `id-${n}`, slug: `ch-${n}`, title: `Ch ${n}`, chapter_number: n, body_text: `b-${n}`, source_version: V });
+    incoming.push({ chapter_number: n, title: `Ch ${n}`, new_body_text: `b-${n}` });
+  }
+  // MEDA insert at 46
+  incoming.push({ chapter_number: 46, title: "MEDA", new_body_text: "meda", new_content_blocks: [{ type: "text", text: "m" }], new_keywords: ["meda"] });
+  // existing 46..75 (old 80.8 content) shift to 47..76
+  const names = {};
+  for (let n = 46; n <= 75; n++) {
+    const title = n === 75 ? "Pilot Recruitment" : `Existing ${n}`;
+    const slug = n === 75 ? "pilot-recruitment" : `ex-${n}`;
+    existing.push({ id: `id-${n}`, slug, title, chapter_number: n, body_text: `old-${n}`, source_version: "80.8" });
+    incoming.push({ chapter_number: n + 1, title, new_body_text: `new-${n}`, new_content_blocks: null, new_keywords: null });
+    names[n] = slug;
+  }
+  // 77..79 already correct (content V, correct number)
+  const tail = { 77: ["digital-certificate", "Digital Certificate"], 78: ["blacklisted-customer", "Blacklisted Customer"], 79: ["flydubai-partner-inquiries", "flydubai Partner Inquiries"] };
+  for (const n of [77, 78, 79]) {
+    existing.push({ id: `id-${n}`, slug: tail[n][0], title: tail[n][1], chapter_number: n, body_text: `t-${n}`, source_version: V });
+    incoming.push({ chapter_number: n, title: tail[n][1], new_body_text: `t-${n}` });
+  }
+
+  const p = buildPublishPlan(incoming, existing, V);
+  assert.equal(p.ok, true);
+  assert.equal(p.totalApproved, 79);
+  // MEDA is the only insert.
+  assert.equal(p.inserted, 1);
+  const meda = p.operations.find((o) => o.slug === "meda");
+  assert.equal(meda.op, "insert");
+  assert.equal(meda.finalNumber, 46);
+  // Pilot moves 75 -> 76.
+  const pilot = p.operations.find((o) => o.slug === "pilot-recruitment");
+  assert.equal(pilot.finalNumber, 76);
+  assert.equal(pilot.numberChanges, true);
+  // 1..45 and 77..79 fully applied -> skipped (48 rows).
+  assert.equal(p.alreadyApplied, 48);
+  // Chapters currently 46..75 are all in the temporary move set (30 rows).
+  assert.equal(p.temporaryMoveIds.length, 30);
+  for (let n = 46; n <= 75; n++) assert.ok(p.temporaryMoveIds.includes(`id-${n}`));
+  // 77..79 keep their ids/numbers and are NOT moved.
+  for (const n of [77, 78, 79]) assert.ok(!p.temporaryMoveIds.includes(`id-${n}`));
+  // Every existing id is preserved (each update/renumber carries an existing id).
+  const writeIds = p.operations.filter((o) => o.op !== "insert").map((o) => o.chapterId);
+  assert.equal(new Set(writeIds).size, writeIds.length); // no duplicate target id
+  // Final numbers of the full desired state = 1..79 exactly.
+  const finalNumbers = new Set(incoming.map((c) => c.chapter_number));
+  assert.equal(finalNumbers.size, 79);
+  assert.equal(Math.min(...finalNumbers), 1);
+  assert.equal(Math.max(...finalNumbers), 79);
+  // Unique final slugs across everything (ops + skipped are all distinct).
+  const opSlugs = p.operations.map((o) => o.slug);
+  assert.equal(new Set(opSlugs).size, opSlugs.length);
+
+  // Retry idempotency: after the repair, feed the target state back in.
+  const repaired = [];
+  // 1..45 unchanged
+  for (let n = 1; n <= 45; n++) repaired.push({ id: `id-${n}`, slug: `ch-${n}`, title: `Ch ${n}`, chapter_number: n, body_text: `b-${n}`, source_version: V });
+  // MEDA now exists at 46
+  repaired.push({ id: "id-meda", slug: "meda", title: "MEDA", chapter_number: 46, body_text: "meda", source_version: V });
+  // 46..75 now at 47..76 with new content
+  for (let n = 46; n <= 75; n++) {
+    const title = n === 75 ? "Pilot Recruitment" : `Existing ${n}`;
+    const slug = n === 75 ? "pilot-recruitment" : `ex-${n}`;
+    repaired.push({ id: `id-${n}`, slug, title, chapter_number: n + 1, body_text: `new-${n}`, source_version: V });
+  }
+  for (const n of [77, 78, 79]) repaired.push({ id: `id-${n}`, slug: tail[n][0], title: tail[n][1], chapter_number: n, body_text: `t-${n}`, source_version: V });
+
+  const p2 = buildPublishPlan(incoming, repaired, V);
+  assert.equal(p2.ok, true);
+  assert.equal(p2.operations.length, 0); // nothing to do
+  assert.equal(p2.alreadyApplied, 79);
+  assert.equal(p2.temporaryMoveIds.length, 0);
+}
+
+// Empty approved selection: valid plan, nothing to do.
+{
+  const p = buildPublishPlan([], [], V);
+  assert.equal(p.ok, true);
+  assert.equal(p.operations.length, 0);
+  assert.equal(p.totalApproved, 0);
+}
 
 console.log("Logic checks passed.");

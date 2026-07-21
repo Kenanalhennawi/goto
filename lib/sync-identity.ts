@@ -155,7 +155,14 @@ export type IncomingStagedChange = {
 
 /** A single write the RPC will perform, with the final (post-shift) number. */
 export type PublishOperation = {
-  op: "update" | "insert";
+  /**
+   * insert   — a genuinely new chapter (e.g. MEDA).
+   * update   — an existing chapter whose content and/or number must change
+   *            (rewrites content and logs edit_history).
+   * renumber — an existing chapter whose content is already correct but whose
+   *            chapter_number is wrong (number-only fix, no content, no history).
+   */
+  op: "insert" | "update" | "renumber";
   chapterId: string | null;
   slug: string;
   finalNumber: number;
@@ -178,26 +185,74 @@ export type PublishPlan =
   | { ok: false; failed: PublishFailure[] }
   | {
       ok: true;
-      /** Operations that must be written (already-applied rows are excluded). */
+      /** All writes the RPC performs: inserts, content updates, renumbers. */
       operations: PublishOperation[];
-      /** Count of approved rows whose content already matches the target. */
+      /**
+       * Explicit, unique list of existing chapter ids the RPC must move to a
+       * temporary number BEFORE assigning final numbers. Derived from the full
+       * plan, not just update operations.
+       */
+      temporaryMoveIds: string[];
+      /** Rows fully correct already (content + version + title + number): skipped. */
       alreadyApplied: number;
+      /** Number-only repairs (content already correct, number wrong). */
+      renumbered: number;
+      /** Content updates (content/title/version differs). */
+      updated: number;
+      /** New chapters inserted (MEDA). */
+      inserted: number;
       /** Count of approved rows considered. */
       totalApproved: number;
-      /** Chapter ids the RPC will move to a temporary number first. */
-      tempRenumberIds: string[];
     };
 
 export function countWords(text: string | null | undefined): number {
   return (text ?? "").split(/\s+/).filter(Boolean).length;
 }
 
+type Resolution = {
+  incomingSlug: string;
+  resolved: ExistingChapterContent | null;
+  bySlug: ExistingChapterContent | null;
+  byTitle: ExistingChapterContent | null;
+  ambiguous: boolean;
+};
+
+function resolveDetail(
+  change: IncomingStagedChange,
+  existing: ExistingChapterContent[]
+): Resolution {
+  const incomingSlug =
+    change.slug && change.slug.trim().length > 0
+      ? change.slug.trim()
+      : slugifyChapter(change.title);
+  const bySlug = existing.find((e) => e.slug === incomingSlug) ?? null;
+  const nt = normalizeTitle(change.title);
+  const byTitle = nt.length > 0 ? existing.find((e) => normalizeTitle(e.title) === nt) ?? null : null;
+  const byId =
+    change.chapter_id && change.chapter_id.trim().length > 0
+      ? existing.find((e) => e.id === change.chapter_id) ?? null
+      : null;
+  const resolved = bySlug ?? byTitle ?? byId ?? null;
+  // Ambiguous when slug and title point at DIFFERENT existing rows: an earlier
+  // partial publish may have moved a title onto the wrong stable id.
+  const ambiguous = !!(bySlug && byTitle && bySlug.id !== byTitle.id);
+  return { incomingSlug, resolved, bySlug, byTitle, ambiguous };
+}
+
 /**
- * Build the two-phase publish plan. Validation errors (duplicate slug,
- * duplicate final number, non-positive number) abort the whole batch before
- * any write is attempted. Rows whose stored content already equals the target
- * (body_text + source_version) are classified as already-applied and skipped,
- * so retrying a partial publish is idempotent.
+ * Build the complete, atomic publish plan from ALL approved staged changes.
+ *
+ * Correctness invariants enforced before any write (any failure aborts):
+ *   - unique final slugs and unique final chapter numbers
+ *   - positive integer chapter numbers
+ *   - no existing chapter id targeted by two incoming changes (DUPLICATE_TARGET_CHAPTER_ID)
+ *   - no slug/title ambiguity (AMBIGUOUS_SLUG_TITLE_MATCH)
+ *   - every existing row occupying a required final number is either that
+ *     number's target or in the temporary-move set (FINAL_NUMBER_OCCUPIED_BY_UNTOUCHED_CHAPTER)
+ *
+ * A row is only skipped as already-applied when its resolved id/slug, title,
+ * final chapter_number, source version AND body all match. A row with correct
+ * content but the wrong number is a renumber (kept in the numbering plan).
  */
 export function buildPublishPlan(
   approved: IncomingStagedChange[],
@@ -207,33 +262,33 @@ export function buildPublishPlan(
   const failures: PublishFailure[] = [];
   const seenSlugs = new Set<string>();
   const seenNumbers = new Set<number>();
+  const targetById = new Map<string, number>(); // existing id -> incoming number
 
-  // --- Validation pass: never touch the database if the batch is inconsistent.
+  // --- Validation pass over identity + uniqueness (no DB writes yet).
   for (const change of approved) {
-    const identity = resolveChapterIdentity(
-      {
-        title: change.title,
-        slug: change.slug ?? null,
-        chapter_id: change.chapter_id ?? null,
-        chapter_number: change.chapter_number,
-      },
-      existing
-    );
-    const slug = identity.slug;
+    const detail = resolveDetail(change, existing);
+    const slug = detail.resolved ? detail.resolved.slug : detail.incomingSlug;
     const finalNumber = change.chapter_number;
 
     if (!Number.isInteger(finalNumber) || finalNumber < 1) {
       failures.push({
         chapterNumber: finalNumber,
         slug,
-        safeMessage: "Chapter number must be a positive integer.",
+        safeMessage: "INVALID_FINAL_NUMBER: chapter number must be a positive integer.",
+      });
+    }
+    if (detail.ambiguous) {
+      failures.push({
+        chapterNumber: finalNumber,
+        slug,
+        safeMessage: `AMBIGUOUS_SLUG_TITLE_MATCH: "${change.title}" resolves to different rows by slug (${detail.bySlug?.slug}) and by title (${detail.byTitle?.slug}).`,
       });
     }
     if (seenSlugs.has(slug)) {
       failures.push({
         chapterNumber: finalNumber,
         slug,
-        safeMessage: `Duplicate chapter slug in this sync: ${slug}.`,
+        safeMessage: `DUPLICATE_SLUG: ${slug} appears more than once in this sync.`,
       });
     } else {
       seenSlugs.add(slug);
@@ -242,10 +297,22 @@ export function buildPublishPlan(
       failures.push({
         chapterNumber: finalNumber,
         slug,
-        safeMessage: `Duplicate final chapter number in this sync: ${finalNumber}.`,
+        safeMessage: `DUPLICATE_FINAL_NUMBER: ${finalNumber} appears more than once in this sync.`,
       });
     } else {
       seenNumbers.add(finalNumber);
+    }
+    if (detail.resolved) {
+      const prior = targetById.get(detail.resolved.id);
+      if (prior !== undefined && prior !== finalNumber) {
+        failures.push({
+          chapterNumber: finalNumber,
+          slug,
+          safeMessage: `DUPLICATE_TARGET_CHAPTER_ID: existing chapter ${detail.resolved.slug} is targeted by chapters ${prior} and ${finalNumber}.`,
+        });
+      } else {
+        targetById.set(detail.resolved.id, finalNumber);
+      }
     }
   }
 
@@ -253,65 +320,28 @@ export function buildPublishPlan(
     return { ok: false, failed: failures };
   }
 
-  // --- Build pass: classify already-applied and assemble write operations.
+  // --- Build pass: classify and assemble operations.
   const operations: PublishOperation[] = [];
-  const tempRenumberIds: string[] = [];
+  const moveIds = new Set<string>();
   let alreadyApplied = 0;
+  let renumbered = 0;
+  let updated = 0;
+  let inserted = 0;
 
   for (const change of approved) {
-    const identity = resolveChapterIdentity(
-      {
-        title: change.title,
-        slug: change.slug ?? null,
-        chapter_id: change.chapter_id ?? null,
-        chapter_number: change.chapter_number,
-      },
-      existing
-    );
-    const slug = identity.slug;
+    const detail = resolveDetail(change, existing);
     const finalNumber = change.chapter_number;
     const bodyText = change.new_body_text ?? "";
     const wordCount = countWords(bodyText);
     const contentBlocks = change.new_content_blocks ?? null;
     const keywords = change.new_keywords ?? null;
 
-    if (identity.operation === "update") {
-      const current = existing.find((c) => c.id === identity.existingId);
-      const currentNumber = current?.chapter_number ?? null;
-      const numberChanges = currentNumber == null ? true : currentNumber !== finalNumber;
-
-      // Already applied: stored body + source version already equal the target.
-      const alreadyMatches =
-        current != null &&
-        current.body_text != null &&
-        current.body_text === bodyText &&
-        (current.source_version ?? null) === (targetSourceVersion ?? null);
-
-      if (alreadyMatches) {
-        alreadyApplied++;
-        continue;
-      }
-
-      operations.push({
-        op: "update",
-        chapterId: identity.existingId,
-        slug,
-        finalNumber,
-        title: change.title,
-        bodyText,
-        contentBlocks,
-        keywords,
-        wordCount,
-        numberChanges,
-      });
-      // Every written update is moved to a temp number first so its old number
-      // can be reused by another shifted chapter without a collision.
-      tempRenumberIds.push(identity.existingId);
-    } else {
+    if (!detail.resolved) {
+      inserted++;
       operations.push({
         op: "insert",
         chapterId: null,
-        slug,
+        slug: detail.incomingSlug,
         finalNumber,
         title: change.title,
         bodyText,
@@ -320,25 +350,73 @@ export function buildPublishPlan(
         wordCount,
         numberChanges: false,
       });
+      continue;
     }
+
+    const current = detail.resolved;
+    const numberChanges = (current.chapter_number ?? null) !== finalNumber;
+    const contentMatches =
+      current.body_text != null &&
+      current.body_text === bodyText &&
+      (current.source_version ?? null) === (targetSourceVersion ?? null) &&
+      normalizeTitle(current.title) === normalizeTitle(change.title);
+
+    if (contentMatches && !numberChanges) {
+      // Fully correct: same content, version, title and number -> skip entirely.
+      alreadyApplied++;
+      continue;
+    }
+
+    if (contentMatches && numberChanges) {
+      // Content correct but number wrong -> number-only repair, no history.
+      renumbered++;
+      moveIds.add(current.id);
+      operations.push({
+        op: "renumber",
+        chapterId: current.id,
+        slug: current.slug,
+        finalNumber,
+        title: change.title,
+        bodyText,
+        contentBlocks,
+        keywords,
+        wordCount,
+        numberChanges: true,
+      });
+      continue;
+    }
+
+    // Content differs -> content update (also fixes number if needed).
+    updated++;
+    if (numberChanges) moveIds.add(current.id);
+    operations.push({
+      op: "update",
+      chapterId: current.id,
+      slug: current.slug,
+      finalNumber,
+      title: change.title,
+      bodyText,
+      contentBlocks,
+      keywords,
+      wordCount,
+      numberChanges,
+    });
   }
 
-  // Cross-batch collision guard: a final number must not be permanently held
-  // by an existing chapter that this publish does NOT move. This happens when a
-  // shifted chapter's neighbour was not approved/included — the atomic write
-  // would then roll back on chapters_chapter_number_key. Detect it up front and
-  // report exactly which chapter blocks the number.
-  const movedIds = new Set(tempRenumberIds);
+  // --- Occupant coverage: every existing row sitting on a required final number
+  // must be the number's own target OR be in the temporary-move set. Otherwise
+  // the final write would collide (chapters_chapter_number_key).
   const conflicts: PublishFailure[] = [];
   for (const operation of operations) {
-    const blocker = existing.find(
-      (c) => c.chapter_number === operation.finalNumber && !movedIds.has(c.id)
-    );
-    if (blocker) {
+    const occupant = existing.find((e) => e.chapter_number === operation.finalNumber);
+    if (!occupant) continue;
+    const isOwnTarget = occupant.id === operation.chapterId; // renumber/update in place
+    if (isOwnTarget) continue;
+    if (!moveIds.has(occupant.id)) {
       conflicts.push({
         chapterNumber: operation.finalNumber,
         slug: operation.slug,
-        safeMessage: `Chapter number ${operation.finalNumber} is still used by "${blocker.slug}", which is not part of this publish. Approve that chapter too, then retry.`,
+        safeMessage: `FINAL_NUMBER_OCCUPIED_BY_UNTOUCHED_CHAPTER: number ${operation.finalNumber} is held by "${occupant.slug}", which this publish does not move. Approve/include it, then retry.`,
       });
     }
   }
@@ -350,8 +428,11 @@ export function buildPublishPlan(
   return {
     ok: true,
     operations,
+    temporaryMoveIds: Array.from(moveIds),
     alreadyApplied,
+    renumbered,
+    updated,
+    inserted,
     totalApproved: approved.length,
-    tempRenumberIds,
   };
 }

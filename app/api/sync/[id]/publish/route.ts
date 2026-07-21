@@ -85,13 +85,18 @@ export async function POST(
       success: true,
       published: 0,
       alreadyApplied: plan.alreadyApplied,
+      renumbered: 0,
+      inserted: 0,
       failed: [],
     });
   }
 
   // Apply all writes atomically (temp renumber -> final) inside one transaction.
+  // temporaryMoveIds is the complete, explicit set of rows to move out of the
+  // final range first — derived from the whole plan, not just update ops.
   const { data: rpcResult, error: rpcError } = await supabase.rpc("publish_sync_chapters", {
     p_operations: plan.operations,
+    p_temporary_move_ids: plan.temporaryMoveIds,
     p_editor: user.id,
     p_editor_email: user.email ?? null,
     p_source_version: sourceVersion,
@@ -134,8 +139,9 @@ export async function POST(
         errorCode,
         published: 0,
         alreadyApplied: plan.alreadyApplied,
-        // Batch-level failure — no single chapter number/slug is to blame.
-        failed: [{ chapterNumber: null, slug: null, safeMessage }],
+        // Batch-level failure — no single chapter is to blame; no fake chapter 0.
+        failed: [],
+        batchFailure: { safeMessage },
       },
       { status: 500 }
     );
@@ -154,6 +160,8 @@ export async function POST(
         error: "Changes were published, but the sync run status could not be updated.",
         published,
         alreadyApplied: plan.alreadyApplied,
+        renumbered: plan.renumbered,
+        inserted: plan.inserted,
         failed: [],
       },
       { status: 500 }
@@ -164,6 +172,8 @@ export async function POST(
     success: true,
     published,
     alreadyApplied: plan.alreadyApplied,
+    renumbered: plan.renumbered,
+    inserted: plan.inserted,
     failed: [],
   });
 }
