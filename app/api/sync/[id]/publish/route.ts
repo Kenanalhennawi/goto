@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 import { canManageUsers } from "@/lib/permissions";
+import { resolveChapterIdentity, type ExistingChapter } from "@/lib/sync-identity";
 
 export async function POST(
   request: Request,
@@ -47,38 +48,77 @@ export async function POST(
     return NextResponse.json({ error: "No approved changes to publish." }, { status: 400 });
   }
 
+  // Load all existing chapters once so identity can be resolved by stable
+  // attributes (slug / title / id) rather than by the volatile chapter_number.
+  const { data: existingChapters, error: existingListError } = await supabase
+    .from("chapters")
+    .select("id, slug, title, chapter_number");
+
+  if (existingListError) {
+    return NextResponse.json({ error: "Couldn't load existing chapters." }, { status: 500 });
+  }
+
+  const existingRefs: ExistingChapter[] = existingChapters ?? [];
+
   let publishedCount = 0;
   const failures: string[] = [];
 
   for (const change of approvedChanges) {
-    if (change.is_new_chapter) {
-      const { error: insertError } = await supabase.from("chapters").insert({
-        chapter_number: change.chapter_number,
-        title: change.title,
-        slug: slugify(change.title),
-        search_keywords: change.new_keywords ?? [],
-        body_text: change.new_body_text,
-        content_blocks: change.new_content_blocks ?? [],
-        word_count: change.new_body_text.split(/\s+/).filter(Boolean).length,
-        source_version: syncRun?.source_version ?? null,
-        updated_by: user.id,
-      });
+    // Resolve identity by slug -> title -> id. chapter_number is used only in
+    // diagnostic messages, never to decide insert vs update.
+    const identity = resolveChapterIdentity(
+      { title: change.title, chapter_number: change.chapter_number },
+      existingRefs
+    );
+    const label = `Ch. ${change.chapter_number} (${identity.slug})`;
+    const wordCount = (change.new_body_text ?? "").split(/\s+/).filter(Boolean).length;
+
+    // INSERT only when no existing chapter matches. This guarantees we never
+    // violate chapters_slug_key by inserting a slug that already exists.
+    if (identity.operation === "insert") {
+      const { data: inserted, error: insertError } = await supabase
+        .from("chapters")
+        .insert({
+          chapter_number: change.chapter_number,
+          title: change.title,
+          slug: identity.slug,
+          search_keywords: change.new_keywords ?? [],
+          body_text: change.new_body_text,
+          content_blocks: change.new_content_blocks ?? [],
+          word_count: wordCount,
+          source_version: syncRun?.source_version ?? null,
+          updated_by: user.id,
+        })
+        .select("id")
+        .single();
       if (insertError) {
-        failures.push(`Ch. ${change.chapter_number}: ${insertError.message}`);
+        failures.push(`${label}: ${insertError.message}`);
       } else {
         publishedCount++;
+        // Keep the in-memory list current so a later change with the same slug
+        // resolves to this new row instead of attempting a second insert.
+        if (inserted) {
+          existingRefs.push({
+            id: inserted.id,
+            slug: identity.slug,
+            title: change.title,
+            chapter_number: change.chapter_number,
+          });
+        }
       }
       continue;
     }
 
+    // UPDATE the matched chapter by its stable id. Fetch its current content so
+    // existing content_blocks/keywords are preserved and edit_history is logged.
     const { data: existingChapter, error: existingError } = await supabase
       .from("chapters")
       .select("id, body_text, search_keywords, content_blocks")
-      .eq("chapter_number", change.chapter_number)
+      .eq("id", identity.existingId)
       .single();
 
     if (existingError || !existingChapter) {
-      failures.push(`Ch. ${change.chapter_number}: existing chapter not found`);
+      failures.push(`${label}: existing chapter not found`);
       continue;
     }
 
@@ -96,17 +136,21 @@ export async function POST(
     });
 
     if (historyError) {
-      failures.push(`Ch. ${change.chapter_number}: edit history was not saved`);
+      failures.push(`${label}: edit history was not saved`);
       continue;
     }
 
     const { error: updateError } = await supabase
       .from("chapters")
       .update({
+        // chapter_number may shift when a chapter is inserted earlier; keep it
+        // in sync while identity itself stays anchored to the stable id/slug.
+        chapter_number: change.chapter_number,
+        title: change.title,
         body_text: change.new_body_text,
         content_blocks: change.new_content_blocks ?? existingChapter.content_blocks ?? [],
         search_keywords: change.new_keywords ?? existingChapter.search_keywords,
-        word_count: change.new_body_text.split(/\s+/).filter(Boolean).length,
+        word_count: wordCount,
         source_version: syncRun?.source_version ?? null,
         updated_at: new Date().toISOString(),
         updated_by: user.id,
@@ -114,7 +158,7 @@ export async function POST(
       .eq("id", existingChapter.id);
 
     if (updateError) {
-      failures.push(`Ch. ${change.chapter_number}: ${updateError.message}`);
+      failures.push(`${label}: ${updateError.message}`);
     } else {
       publishedCount++;
     }
@@ -144,13 +188,4 @@ export async function POST(
   }
 
   return NextResponse.json({ success: true, published: publishedCount });
-}
-
-function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_]+/g, "-")
-    .slice(0, 60);
 }

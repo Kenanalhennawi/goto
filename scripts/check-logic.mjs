@@ -68,4 +68,80 @@ assert.equal(
   true
 );
 
+// ---- Sync chapter-identity matching (inserted-middle-chapter regression) ----
+const { resolveChapterIdentity, slugifyChapter, normalizeTitle } = await import(
+  "../lib/sync-identity.ts"
+);
+
+// slugify parity with the historical publish-route behaviour.
+assert.equal(slugifyChapter("Sporting Equipment"), "sporting-equipment");
+assert.equal(slugifyChapter("Ways to Check-in"), "ways-to-check-in");
+assert.equal(slugifyChapter("Connection and Transfers"), "connection-and-transfers");
+assert.equal(normalizeTitle("Ways to  Check-in!"), "ways to check in");
+
+// Existing chapters before the sync (numbers as currently stored).
+const existing = [
+  { id: "id-a", slug: "duplicate-booking", title: "Duplicate Booking", chapter_number: 1 },
+  { id: "id-b", slug: "partner-inquiries", title: "Partner Inquiries", chapter_number: 2 },
+  { id: "id-c", slug: "connection-and-transfers", title: "Connection and Transfers", chapter_number: 3 },
+];
+
+// Incoming PDF after MEDA is inserted in the middle: everything from
+// Duplicate Booking onward shifts by +1.
+const incoming = [
+  { title: "Duplicate Booking", chapter_number: 1 },
+  { title: "MEDA", chapter_number: 2 },
+  { title: "Partner Inquiries", chapter_number: 3 },
+  { title: "Connection and Transfers", chapter_number: 4 },
+];
+
+const resolved = incoming.map((c) => ({ title: c.title, ...resolveChapterIdentity(c, existing) }));
+
+// MEDA is the only genuine insert.
+const meda = resolved.find((r) => r.title === "MEDA");
+assert.equal(meda.operation, "insert");
+assert.equal(meda.existingId, null);
+assert.equal(meda.slug, "meda");
+
+// Every pre-existing chapter is an UPDATE of its stable id, matched by slug,
+// even though its chapter_number shifted by +1.
+const dup = resolved.find((r) => r.title === "Duplicate Booking");
+assert.equal(dup.operation, "update");
+assert.equal(dup.existingId, "id-a");
+assert.equal(dup.matchedBy, "slug");
+
+const partner = resolved.find((r) => r.title === "Partner Inquiries");
+assert.equal(partner.operation, "update");
+assert.equal(partner.existingId, "id-b");
+assert.equal(partner.chapterNumberChanged, true); // 2 -> 3
+
+const conx = resolved.find((r) => r.title === "Connection and Transfers");
+assert.equal(conx.operation, "update");
+assert.equal(conx.existingId, "id-c");
+assert.equal(conx.chapterNumberChanged, true); // 3 -> 4
+
+// No incoming chapter that matches an existing one is ever an insert, so no
+// duplicate slug can be produced.
+const insertSlugs = resolved.filter((r) => r.operation === "insert").map((r) => r.slug);
+assert.deepEqual(insertSlugs, ["meda"]);
+const existingSlugs = new Set(existing.map((c) => c.slug));
+assert.equal(insertSlugs.some((s) => existingSlugs.has(s)), false);
+
+// chapter_number must never establish identity: a renamed chapter keeping the
+// same number is treated as a new insert, not an accidental update.
+const renamed = resolveChapterIdentity(
+  { title: "Totally New Chapter", chapter_number: 1 },
+  existing
+);
+assert.equal(renamed.operation, "insert");
+assert.equal(renamed.slug, "totally-new-chapter");
+
+// Title match still resolves when a slug drifts but the title is unchanged.
+const titleMatch = resolveChapterIdentity(
+  { title: "Partner Inquiries", slug: "partner-inquiries-old" },
+  [{ id: "id-b", slug: "partner-inquiries", title: "Partner Inquiries", chapter_number: 2 }]
+);
+assert.equal(titleMatch.operation, "update");
+assert.equal(titleMatch.existingId, "id-b");
+
 console.log("Logic checks passed.");
