@@ -1,5 +1,5 @@
 import { CopyLinkButton } from "@/components/CopyLinkButton";
-import { PinButton } from "@/components/PinButton";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { CopyTextButton } from "@/components/CopyTextButton";
 import { InteractiveChecklist } from "@/components/InteractiveChecklist";
 import { RecentTracker } from "@/components/RecentTracker";
@@ -143,7 +143,8 @@ export default async function ProcedurePage({ params }: { params: Promise<{ slug
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <CopyLinkButton path={path} />
-                <PinButton
+                <FavoriteButton
+                  kind="procedure"
                   slug={procedure.slug}
                   title={procedure.title}
                   code={procedure.service_code}

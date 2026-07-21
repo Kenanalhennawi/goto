@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SearchTrigger } from "@/components/SearchTrigger";
-import { WorkspaceStrip } from "@/components/WorkspaceStrip";
+import { AgentWorkspace } from "@/components/AgentWorkspace";
 import { ChapterDirectory } from "@/components/ChapterDirectory";
 import { DecisionFlow, type DecisionFlowArea } from "@/components/DecisionFlow";
 import { WORK_AREAS, groupForCard } from "@/lib/work-areas";
@@ -210,7 +210,7 @@ export default async function Home({
           <EmptyState />
         ) : (
           <div className="reveal-stagger space-y-6">
-            <WorkspaceStrip />
+            <AgentWorkspace />
 
             <GuidedDecisionPanel />
 

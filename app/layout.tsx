@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { CommandPalette } from "@/components/CommandPalette";
+import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 
 const display = Space_Grotesk({
   variable: "--font-display",
@@ -42,6 +43,7 @@ export default function RootLayout({
         </a>
         {children}
         <CommandPalette />
+        <KeyboardShortcuts />
       </body>
     </html>
   );

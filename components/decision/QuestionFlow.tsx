@@ -5,6 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { answeredCount, nextQuestion, validateAnswer } from "@/lib/decision-engine/session";
 import { evaluate } from "@/lib/decision-engine/evaluator";
 import { DECISION_DEFINITIONS, sourceVersionMatches } from "@/lib/decision-engine/definitions";
+import { CopyTextButton } from "@/components/CopyTextButton";
+import {
+  recordRecentWorkflow,
+  recordDecisionOutcome,
+  formatOutcomeSummary,
+} from "@/lib/agent-workspace";
 import type { AnswerValue, DecisionAnswers, DecisionQuestion } from "@/lib/decision-engine/types";
 
 const SESSION_KEY = "goto.decision.session.v1";
@@ -98,16 +104,44 @@ export function QuestionFlow({
     }
   }, [procedureSlug, session]);
 
+  // Record the started workflow for the homepage/palette "recent" lists
+  // (slug + title only, device-local).
   useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+    recordRecentWorkflow(procedureSlug, procedureTitle);
+  }, [procedureSlug, procedureTitle]);
 
   const current = useMemo(() => nextQuestion(questions, answers), [questions, answers]);
   const done = answeredCount(questions, answers);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const inField =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      // ArrowLeft edits the previous answer (reopens the last answered question),
+      // unless the agent is typing in a field.
+      if (event.key === "ArrowLeft" && !inField) {
+        const answered = questions.filter((question) => question.id in answers);
+        const last = answered[answered.length - 1];
+        if (last) {
+          event.preventDefault();
+          reopen(last.id);
+        }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // reopen is stable enough; answers/questions drive which question is reopened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose, questions, answers]);
 
   // Source-freshness guard (Phase D): when the published card's source
   // version no longer matches the version this tree was verified against,
@@ -339,6 +373,30 @@ function OutcomePanel({
   procedureSlug: string;
 }) {
   const result = evaluate(definition, answers);
+
+  // Log the reached outcome to device-local decision history (slug + outcome +
+  // timestamp only — never passenger data). Records once per completed panel.
+  useEffect(() => {
+    recordDecisionOutcome({
+      slug: procedureSlug,
+      title: definition.procedureTitle,
+      outcome: result.outcome,
+      at: Date.now(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const summary = formatOutcomeSummary({
+    title: definition.procedureTitle,
+    outcome: result.outcome,
+    nextAction: result.nextAction,
+    passengerAdvice: result.outcome !== "Insufficient information" ? definition.notes : null,
+    matchedRuleId: result.matchedRuleId,
+    sourceChapter: definition.sourceChapter,
+    sourcePages: result.rulePages ?? definition.sourcePages,
+    sourceVersion: definition.sourceVersion,
+  });
+
   const tone =
     result.outcome === "Not permitted"
       ? "border-red-200 border-l-4 border-l-red-500 bg-red-50"
@@ -387,12 +445,15 @@ function OutcomePanel({
         {result.matchedRuleId ? ` · Rule ${result.matchedRuleId}` : ""} — always verify on the
         procedure card.
       </p>
-      <Link
-        href={`/procedure/${procedureSlug}`}
-        className="mt-2 inline-flex rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
-      >
-        Open procedure card
-      </Link>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Link
+          href={`/procedure/${procedureSlug}`}
+          className="inline-flex rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
+        >
+          Open procedure card
+        </Link>
+        <CopyTextButton text={summary} label="Copy summary" />
+      </div>
     </div>
   );
 }

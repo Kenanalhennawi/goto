@@ -374,4 +374,93 @@ const V = "81.2 (10-Jul-2026)";
   assert.equal(p.totalApproved, 0);
 }
 
+// ---- Phase I: agent workspace local-state (pure transforms) ----
+const {
+  toggleFavorite,
+  isFavorite,
+  mergeLegacyPins,
+  upsertRecent,
+  sanitizeHistoryEntry,
+  addDecisionHistory,
+  incrementUsage,
+  topUsed,
+  formatOutcomeSummary,
+  MAX_HISTORY,
+} = await import("../lib/agent-workspace.ts");
+
+// Favorites: toggle add/remove, keyed by kind+slug, distinct kinds coexist.
+let favs = [];
+favs = toggleFavorite(favs, { kind: "procedure", slug: "a", title: "A" });
+favs = toggleFavorite(favs, { kind: "service", slug: "a", title: "A service" });
+assert.equal(favs.length, 2);
+assert.equal(isFavorite(favs, "procedure", "a"), true);
+assert.equal(isFavorite(favs, "workflow", "a"), false);
+favs = toggleFavorite(favs, { kind: "procedure", slug: "a", title: "A" }); // remove
+assert.equal(isFavorite(favs, "procedure", "a"), false);
+assert.equal(favs.length, 1);
+
+// Legacy pins migrate in as procedure favorites, de-duped.
+const migrated = mergeLegacyPins(
+  [{ kind: "procedure", slug: "p1", title: "P1" }],
+  [{ slug: "p1", title: "P1", code: "X" }, { slug: "p2", title: "P2", code: null }]
+);
+assert.equal(migrated.filter((f) => f.slug === "p1").length, 1);
+assert.ok(migrated.some((f) => f.slug === "p2" && f.kind === "procedure"));
+
+// Recent: newest first, de-dupe by slug, capped.
+let rec = [];
+for (let i = 0; i < 15; i++) rec = upsertRecent(rec, { slug: `s${i}`, title: "t", at: i }, 10);
+assert.equal(rec.length, 10);
+assert.equal(rec[0].slug, "s14");
+rec = upsertRecent(rec, { slug: "s14", title: "t2", at: 99 }, 10);
+assert.equal(rec.length, 10); // no duplicate
+assert.equal(rec[0].slug, "s14");
+
+// Decision history NEVER persists passenger data.
+const withPII = addDecisionHistory([], {
+  slug: "pregnancy",
+  title: "Pregnancy",
+  outcome: "Can proceed",
+  at: 1,
+  pnr: "ABC123",
+  passenger_name: "John Doe",
+  passport: "X1234",
+});
+assert.deepEqual(Object.keys(withPII[0]).sort(), ["at", "outcome", "slug", "title"]);
+assert.equal("pnr" in withPII[0], false);
+assert.equal("passport" in withPII[0], false);
+assert.equal(sanitizeHistoryEntry({ outcome: "x" }), null); // missing slug -> dropped
+// History capped at MAX_HISTORY.
+let hist = [];
+for (let i = 0; i < MAX_HISTORY + 5; i++) hist = addDecisionHistory(hist, { slug: `w${i}`, outcome: "o", at: i });
+assert.equal(hist.length, MAX_HISTORY);
+
+// Most used: counts, sorted desc, positive only.
+let usage = {};
+usage = incrementUsage(usage, "a");
+usage = incrementUsage(usage, "a");
+usage = incrementUsage(usage, "b");
+assert.equal(usage.a, 2);
+assert.deepEqual(topUsed(usage, 2), [
+  { slug: "a", count: 2 },
+  { slug: "b", count: 1 },
+]);
+
+// Copy summary contains outcome, action, advice, rule, source, version — no PII.
+const summary = formatOutcomeSummary({
+  title: "Pregnancy",
+  outcome: "Requires document",
+  nextAction: "Advise the certificate requirements",
+  passengerAdvice: ["Only the original certificate is accepted"],
+  matchedRuleId: "single-29-36",
+  sourceChapter: "42. Pregnancy",
+  sourcePages: [259],
+  sourceVersion: "81.2 (10-Jul-2026)",
+});
+assert.ok(summary.includes("Outcome: Requires document"));
+assert.ok(summary.includes("Required action: Advise the certificate requirements"));
+assert.ok(summary.includes("Matched rule: single-29-36"));
+assert.ok(summary.includes("Page 259"));
+assert.ok(summary.includes("81.2 (10-Jul-2026)"));
+
 console.log("Logic checks passed.");

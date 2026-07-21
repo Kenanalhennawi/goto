@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { canReviewProcedures } from "@/lib/permissions";
 import { WORK_AREAS, groupForCard, type WorkArea } from "@/lib/work-areas";
 import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import type { JsonValue } from "@/lib/types";
 import Link from "next/link";
 
@@ -260,6 +261,13 @@ function ServiceDirectoryCard({ card }: { card: ServiceCard }) {
             Guided decision
           </Link>
         )}
+        <FavoriteButton
+          kind="service"
+          slug={card.slug}
+          title={card.title}
+          code={card.service_code}
+          size="sm"
+        />
       </div>
     </article>
   );

@@ -8,8 +8,22 @@ import {
   plainSnippet,
   readableJsonItems,
 } from "@/lib/search";
-import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
+import { getWorkflowAvailability, hasDecisionTree } from "@/lib/decision-engine/availability";
+import {
+  readFavorites,
+  readRecentWorkflows,
+  readDecisionHistory,
+  type FavoriteItem,
+  type RecentWorkflow,
+  type DecisionHistoryEntry,
+} from "@/lib/agent-workspace";
 import type { UnifiedSearchResult } from "@/lib/types";
+
+function favoriteHref(item: FavoriteItem) {
+  return item.kind === "workflow"
+    ? `/decision?procedure=${encodeURIComponent(item.slug)}`
+    : `/procedure/${item.slug}`;
+}
 
 const RECENT_KEY = "goto.palette.recent.v1";
 const MAX_RECENT = 6;
@@ -34,6 +48,9 @@ export function CommandPalette() {
   const [results, setResults] = useState<UnifiedSearchResult[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [recent, setRecent] = useState<string[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  const [recentWorkflows, setRecentWorkflows] = useState<RecentWorkflow[]>([]);
+  const [decisionHistory, setDecisionHistory] = useState<DecisionHistoryEntry[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -51,6 +68,10 @@ export function CommandPalette() {
     } catch {
       // localStorage unavailable; recent searches simply stay empty
     }
+    // Device-local workspace shortcuts (favorites / recent / restart decision).
+    setFavorites(readFavorites());
+    setRecentWorkflows(readRecentWorkflows());
+    setDecisionHistory(readDecisionHistory());
     setOpen(true);
   }, []);
 
@@ -140,6 +161,26 @@ export function CommandPalette() {
   }, [open, query]);
 
   const items = useMemo(() => buildItems(results, query), [results, query]);
+
+  // Deduped restart/continue-decision entries from recent workflows + history,
+  // limited to slugs that still have a deterministic tree. No duplicates.
+  const restartWorkflows = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { slug: string; title: string }[] = [];
+    for (const wf of recentWorkflows) {
+      if (!seen.has(wf.slug) && hasDecisionTree(wf.slug)) {
+        seen.add(wf.slug);
+        out.push({ slug: wf.slug, title: wf.title });
+      }
+    }
+    for (const h of decisionHistory) {
+      if (!seen.has(h.slug) && hasDecisionTree(h.slug)) {
+        seen.add(h.slug);
+        out.push({ slug: h.slug, title: h.title });
+      }
+    }
+    return out.slice(0, 6);
+  }, [recentWorkflows, decisionHistory]);
 
   const navigate = useCallback(
     (item: PaletteItem) => {
@@ -257,6 +298,58 @@ export function CommandPalette() {
                   Guided
                 </span>
               </button>
+
+              {favorites.length > 0 && (
+                <>
+                  <p className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+                    Favorites
+                  </p>
+                  <div className="mb-3 grid gap-1">
+                    {favorites.slice(0, 6).map((item) => (
+                      <button
+                        key={`fav-${item.kind}-${item.slug}`}
+                        type="button"
+                        onClick={() => {
+                          close();
+                          router.push(favoriteHref(item));
+                        }}
+                        className="flex items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-left text-sm font-medium text-ink transition-colors hover:bg-sky-soft"
+                      >
+                        <span className="truncate">{item.code ? `${item.code} · ${item.title}` : item.title}</span>
+                        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                          {item.kind}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {restartWorkflows.length > 0 && (
+                <>
+                  <p className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+                    Restart / continue decision
+                  </p>
+                  <div className="mb-3 grid gap-1">
+                    {restartWorkflows.map((wf) => (
+                      <button
+                        key={`wf-${wf.slug}`}
+                        type="button"
+                        onClick={() => {
+                          close();
+                          router.push(`/decision?procedure=${encodeURIComponent(wf.slug)}`);
+                        }}
+                        className="flex items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-left text-sm font-medium text-ink transition-colors hover:bg-sky-soft"
+                      >
+                        <span className="truncate">{wf.title}</span>
+                        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-sky/80">
+                          Decision
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
               {recent.length > 0 && (
                 <>
                   <p className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">

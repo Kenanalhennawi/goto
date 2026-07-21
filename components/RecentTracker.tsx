@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import { recordUsage } from "@/lib/agent-workspace";
 
 const KEY = "goto.recent.pages.v1";
-const MAX = 8;
+const MAX = 10;
 
 export type RecentPage = {
   kind: "procedure" | "chapter";
@@ -38,6 +39,8 @@ export function RecentTracker({
     } catch {
       // localStorage unavailable; tracking silently disabled
     }
+    // Usage counting powers the homepage "Most used" section (procedures only).
+    if (kind === "procedure") recordUsage(slug);
   }, [kind, slug, title, code]);
 
   return null;
