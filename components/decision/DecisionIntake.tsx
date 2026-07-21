@@ -127,6 +127,7 @@ export function DecisionIntake({ cards }: { cards: RoutableCard[] }) {
               />
               {activeFlow && QUESTION_SETS[activeFlow.slug] && (
                 <QuestionFlow
+                  key={activeFlow.slug}
                   procedureSlug={activeFlow.slug}
                   procedureTitle={activeFlow.title}
                   questions={QUESTION_SETS[activeFlow.slug]}

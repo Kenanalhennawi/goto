@@ -9,6 +9,45 @@ import type { AnswerValue, DecisionAnswers, DecisionQuestion } from "@/lib/decis
 
 const SESSION_KEY = "goto.decision.session.v1";
 
+type StoredDecisionSession = {
+  startedAt: number;
+  answers: DecisionAnswers;
+};
+
+// Pure, SSR-safe reader for the non-sensitive guided-decision session.
+// Never throws during render, so a lazy state initializer can call it
+// directly. Returns an empty session for missing, corrupt, non-object,
+// array, or mismatched-procedure storage.
+function readStoredSession(procedureSlug: string): {
+  answers: DecisionAnswers;
+  startedAt: number | null;
+} {
+  const empty = { answers: {} as DecisionAnswers, startedAt: null };
+  if (typeof window === "undefined") return empty;
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return empty;
+    const stored = JSON.parse(raw);
+    if (
+      !stored ||
+      typeof stored !== "object" ||
+      stored.procedureSlug !== procedureSlug ||
+      typeof stored.answers !== "object" ||
+      stored.answers === null ||
+      Array.isArray(stored.answers)
+    ) {
+      return empty;
+    }
+    const startedAt =
+      typeof stored.startedAt === "number" && Number.isFinite(stored.startedAt)
+        ? stored.startedAt
+        : null;
+    return { answers: stored.answers as DecisionAnswers, startedAt };
+  } catch {
+    return empty;
+  }
+}
+
 // Guided clarifying-question stepper (Phase B).
 // Collects non-sensitive operational context; outcomes arrive with the
 // Phase C decision trees. Session survives reloads via sessionStorage.
@@ -26,20 +65,38 @@ export function QuestionFlow({
   cardSourceVersion?: string | null;
   onClose: () => void;
 }) {
-  const [answers, setAnswers] = useState<DecisionAnswers>({});
+  // Single lazy session state: answers plus a stable startedAt. The lazy
+  // initializer is the only place a clock is read (allowed: it runs once on
+  // mount, not on every render/update). A changing procedureSlug remounts
+  // this component via a `key` at the call site, so the initializer re-runs
+  // cleanly instead of relying on setState inside an effect.
+  const [session, setSession] = useState<StoredDecisionSession>(() => {
+    const stored = readStoredSession(procedureSlug);
+    return {
+      answers: stored.answers,
+      startedAt: stored.startedAt ?? new Date().getTime(),
+    };
+  });
   const [draft, setDraft] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
+  const answers = session.answers;
+
+  // Synchronize state outward to sessionStorage only. Never calls setState.
   useEffect(() => {
     try {
-      const stored = JSON.parse(window.sessionStorage.getItem(SESSION_KEY) ?? "null");
-      if (stored && stored.procedureSlug === procedureSlug && stored.answers) {
-        setAnswers(stored.answers);
-      }
+      window.sessionStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify({
+          procedureSlug,
+          startedAt: session.startedAt,
+          answers: session.answers,
+        })
+      );
     } catch {
-      // start fresh
+      // Storage failure is non-fatal.
     }
-  }, [procedureSlug]);
+  }, [procedureSlug, session]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -101,35 +158,28 @@ export function QuestionFlow({
     );
   }
 
-  function persist(next: DecisionAnswers) {
-    try {
-      window.sessionStorage.setItem(
-        SESSION_KEY,
-        JSON.stringify({ procedureSlug, startedAt: Date.now(), answers: next })
-      );
-    } catch {
-      // non-fatal
-    }
-  }
-
   function record(question: DecisionQuestion, value: AnswerValue) {
     const problem = validateAnswer(question, value);
     if (problem) {
       setError(problem);
       return;
     }
-    const next = { ...answers, [question.id]: value };
-    setAnswers(next);
-    persist(next);
+    // Update answers only; startedAt stays stable and the storage effect
+    // persists after commit.
+    setSession((current) => ({
+      ...current,
+      answers: { ...current.answers, [question.id]: value },
+    }));
     setDraft("");
     setError(null);
   }
 
   function reopen(questionId: string) {
-    const next = { ...answers };
-    delete next[questionId];
-    setAnswers(next);
-    persist(next);
+    setSession((current) => {
+      const next = { ...current.answers };
+      delete next[questionId];
+      return { ...current, answers: next };
+    });
     setError(null);
   }
 
