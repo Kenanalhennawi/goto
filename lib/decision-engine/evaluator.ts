@@ -26,6 +26,10 @@ export type DecisionRule = {
   outcome: DecisionOutcomeKind;
   explanation: string;
   nextAction?: string;
+  /** Source pages backing this specific rule (falls back to definition pages). */
+  sourcePages?: number[];
+  /** Operational card field that supports the rule (audit aid). */
+  sourceField?: string;
 };
 
 export type DecisionDefinition = {
@@ -38,6 +42,8 @@ export type DecisionDefinition = {
   questions: DecisionQuestion[];
   rules: DecisionRule[];
   notes: string[];
+  /** Optional deterministic derivation shown with the outcome (e.g. MCT difference in minutes). */
+  derive?: (answers: DecisionAnswers) => string | null;
 };
 
 export type EvaluationResult = {
@@ -45,6 +51,10 @@ export type EvaluationResult = {
   explanation: string;
   nextAction: string | null;
   matchedRuleId: string | null;
+  /** Pages backing the matched rule (rule-level if present, else definition-level). */
+  rulePages: number[] | null;
+  /** Deterministic derived detail (definition.derive), never generated text. */
+  derived: string | null;
   confidence: "High confidence" | "Conditional" | "Insufficient information";
   missing: string[];
 };
@@ -57,6 +67,8 @@ export function evaluate(definition: DecisionDefinition, answers: DecisionAnswer
       explanation: "Required questions are unanswered.",
       nextAction: null,
       matchedRuleId: null,
+      rulePages: null,
+      derived: null,
       confidence: "Insufficient information",
       missing,
     };
@@ -69,10 +81,16 @@ export function evaluate(definition: DecisionDefinition, answers: DecisionAnswer
         explanation: rule.explanation,
         nextAction: rule.nextAction ?? null,
         matchedRuleId: rule.id,
+        rulePages: rule.sourcePages ?? definition.sourcePages,
+        derived: definition.derive ? definition.derive(answers) : null,
         confidence:
-          rule.outcome === "Requires document" || rule.outcome === "Requires supervisor"
+          rule.outcome === "Requires document" ||
+          rule.outcome === "Requires supervisor" ||
+          rule.outcome === "Can proceed with conditions"
             ? "Conditional"
-            : "High confidence",
+            : rule.outcome === "Insufficient information"
+              ? "Insufficient information"
+              : "High confidence",
         missing: [],
       };
     }
@@ -83,6 +101,8 @@ export function evaluate(definition: DecisionDefinition, answers: DecisionAnswer
     explanation: "No verified rule covers this combination of answers.",
     nextAction: "Open the full procedure card and verify against the source.",
     matchedRuleId: null,
+    rulePages: null,
+    derived: null,
     confidence: "Insufficient information",
     missing: [],
   };

@@ -86,7 +86,3 @@ export const PREGNANCY_DEFINITION: DecisionDefinition = {
     "This guidance covers uncomplicated pregnancies; medical and airport authority decisions always stand.",
   ],
 };
-
-export const DECISION_DEFINITIONS: Record<string, DecisionDefinition> = {
-  pregnancy: PREGNANCY_DEFINITION,
-};

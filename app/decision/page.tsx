@@ -16,7 +16,9 @@ export default async function DecisionPage() {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("procedure_cards")
-    .select("id, title, slug, category, service_code, service_type, summary, keywords, aliases, priority")
+    .select(
+      "id, title, slug, category, service_code, service_type, summary, keywords, aliases, priority, source_version"
+    )
     .eq("is_published", true)
     .eq("review_status", "approved")
     .order("priority", { ascending: false })

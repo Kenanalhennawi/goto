@@ -98,4 +98,447 @@ const incomplete = evaluate(PREGNANCY_DEFINITION, { pregnancy_type: "Single" });
 assert.equal(incomplete.outcome, "Insufficient information");
 assert.ok(incomplete.missing.length > 0);
 
+// ---- Phase D: five operational decision trees (verified: GO TO v81.2) ----
+const { DECISION_DEFINITIONS, sourceVersionMatches } = await import(
+  "../lib/decision-engine/definitions/index.ts"
+);
+
+for (const slug of [
+  "pregnancy",
+  "sporting-equipment",
+  "check-in-olci",
+  "flight-disruption",
+  "extra-seat-cbbg",
+  "minimum-connection-time",
+]) {
+  assert.ok(DECISION_DEFINITIONS[slug], `definition registered for ${slug}`);
+  assert.ok(DECISION_DEFINITIONS[slug].sourcePages.length > 0, `source pages for ${slug}`);
+  assert.ok(DECISION_DEFINITIONS[slug].sourceVersion, `source version for ${slug}`);
+}
+
+// Every rule in every Phase D definition carries source evidence.
+for (const definition of Object.values(DECISION_DEFINITIONS)) {
+  for (const rule of definition.rules) {
+    const pages = rule.sourcePages ?? definition.sourcePages;
+    assert.ok(pages.length > 0, `rule ${definition.procedureSlug}/${rule.id} has source pages`);
+    assert.ok(rule.explanation.length > 0, `rule ${definition.procedureSlug}/${rule.id} has explanation`);
+  }
+}
+
+// Freshness guard.
+assert.equal(sourceVersionMatches("81.2", "81.2 (10-Jul-2026)"), true);
+assert.equal(sourceVersionMatches("80.8", "81.2 (10-Jul-2026)"), false);
+assert.equal(sourceVersionMatches(null, "81.2 (10-Jul-2026)"), false);
+
+/** Shared helper: evaluate and assert the matched rule, outcome and confidence. */
+function expectRule(definition, answers, ruleId, outcome, confidence) {
+  const result = evaluate(definition, answers);
+  assert.equal(result.matchedRuleId, ruleId, `${definition.procedureSlug}: rule ${ruleId} (got ${result.matchedRuleId})`);
+  assert.equal(result.outcome, outcome, `${definition.procedureSlug}/${ruleId}: outcome`);
+  assert.equal(result.confidence, confidence, `${definition.procedureSlug}/${ruleId}: confidence`);
+  assert.ok(result.rulePages && result.rulePages.length > 0, `${definition.procedureSlug}/${ruleId}: source evidence`);
+  return result;
+}
+
+// ---- Sporting Equipment (v81.2 ch.28 pp.126-131) ----
+const SPEQ = DECISION_DEFINITIONS["sporting-equipment"];
+const speqBase = {
+  speq_request: "New equipment booking",
+  equipment_kind: "Standard sporting equipment",
+  total_dimension_cm: 170,
+  equipment_count: 1,
+  hours_before_departure: 48,
+  journey_type: "Point-to-point",
+};
+// standard equipment with sufficient notice
+expectRule(SPEQ, speqBase, "standard-24h-plus-speq", "Can proceed", "High confidence");
+expectRule(
+  SPEQ,
+  { ...speqBase, total_dimension_cm: 120 },
+  "standard-24h-plus-free-size",
+  "Can proceed",
+  "High confidence"
+);
+expectRule(
+  SPEQ,
+  { ...speqBase, total_dimension_cm: 300 },
+  "standard-24h-plus-spex",
+  "Can proceed",
+  "High confidence"
+);
+// sporting weapon below 96 hours
+expectRule(
+  SPEQ,
+  { ...speqBase, equipment_kind: "Sporting weapon, firearm or ammunition", hours_before_departure: 95 },
+  "weapon-under-96h",
+  "Not permitted",
+  "High confidence"
+);
+// item longer than 350 cm below 48 hours
+expectRule(
+  SPEQ,
+  { ...speqBase, total_dimension_cm: 400, hours_before_departure: 40 },
+  "over-350cm-under-48h",
+  "Not permitted",
+  "High confidence"
+);
+// more than 10 pieces
+expectRule(
+  SPEQ,
+  { ...speqBase, equipment_count: 11 },
+  "over-10-pieces",
+  "Requires supervisor",
+  "Conditional"
+);
+// refund request inside restricted window
+expectRule(
+  SPEQ,
+  { ...speqBase, speq_request: "Cancel or refund an existing equipment fee", hours_before_departure: 10 },
+  "refund-inside-24h",
+  "Not permitted",
+  "High confidence"
+);
+// supervisor late-add window and go-show
+expectRule(
+  SPEQ,
+  { ...speqBase, hours_before_departure: 15 },
+  "standard-12-to-24h",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  SPEQ,
+  { ...speqBase, hours_before_departure: 5 },
+  "standard-under-12h-goshow",
+  "Can proceed with conditions",
+  "Conditional"
+);
+// interline escalation
+expectRule(
+  SPEQ,
+  { ...speqBase, journey_type: "Interline or codeshare" },
+  "interline-codeshare",
+  "Requires supervisor",
+  "Conditional"
+);
+
+// ---- Check-in / OLCI (v81.2 ch.55 pp.282-285) ----
+const OLCI = DECISION_DEFINITIONS["check-in-olci"];
+const olciBase = {
+  olci_goal: "Complete online check-in",
+  checkin_state: "Not checked in",
+  minutes_to_departure: 300,
+  card_verification: false,
+  has_exst_cbbg: false,
+};
+// eligible online-check-in window
+expectRule(OLCI, olciBase, "olci-eligible-window", "Can proceed", "High confidence");
+// inside 75 minutes
+expectRule(
+  OLCI,
+  { ...olciBase, minutes_to_departure: 70 },
+  "olci-closed-under-75min",
+  "Can proceed with conditions",
+  "Conditional"
+);
+// post-OLCI cancellation before offload deadline
+expectRule(
+  OLCI,
+  {
+    ...olciBase,
+    olci_goal: "Modify or cancel after online check-in",
+    checkin_state: "Checked in online",
+    minutes_to_departure: 120,
+  },
+  "offload-before-deadline",
+  "Requires supervisor",
+  "Conditional"
+);
+// too late for offload
+expectRule(
+  OLCI,
+  {
+    ...olciBase,
+    olci_goal: "Modify or cancel after online check-in",
+    checkin_state: "Checked in online",
+    minutes_to_departure: 45,
+  },
+  "offload-too-late",
+  "Not permitted",
+  "High confidence"
+);
+// passenger checked in at airport
+expectRule(
+  OLCI,
+  {
+    ...olciBase,
+    olci_goal: "Modify or cancel after online check-in",
+    checkin_state: "Checked in at the airport",
+  },
+  "offload-airport-checked-in",
+  "Not permitted",
+  "High confidence"
+);
+// request to add SSR after OLCI
+expectRule(
+  OLCI,
+  { ...olciBase, olci_goal: "Add an SSR after check-in", checkin_state: "Checked in online" },
+  "ssr-after-checkin",
+  "Not permitted",
+  "High confidence"
+);
+// card-verification exclusion
+expectRule(
+  OLCI,
+  { ...olciBase, card_verification: true },
+  "olci-card-verification-block",
+  "Can proceed with conditions",
+  "Conditional"
+);
+
+// ---- Flight Disruption (v81.2 ch.71 pp.329-340) ----
+const FDIS = DECISION_DEFINITIONS["flight-disruption"];
+const fdisBase = {
+  fdis_popup: "No pop-up",
+  booking_channel: "Direct flydubai channel",
+  request: "Rebooking",
+  olci_done: false,
+  hours_to_departure: 48,
+  refund_zone: "Not shown / unknown",
+};
+// pop-up available
+expectRule(
+  FDIS,
+  { ...fdisBase, fdis_popup: "Disruption pop-up available" },
+  "popup-available",
+  "Can proceed with conditions",
+  "Conditional"
+);
+// no pop-up / no validated free option (after OLCI)
+expectRule(
+  FDIS,
+  { ...fdisBase, olci_done: true },
+  "rebooking-after-olci-validate",
+  "Requires supervisor",
+  "Conditional"
+);
+// travel-agent-issued (GDS/OAL) ticket: refund goes to ticket issuer
+expectRule(
+  FDIS,
+  {
+    ...fdisBase,
+    booking_channel: "GDS / interline / codeshare (TA or OAL system)",
+    request: "Refund or voucher",
+  },
+  "interline-refund-ticket-issuer",
+  "Can proceed with conditions",
+  "Conditional"
+);
+// interline rebooking inside/outside 72 hours
+expectRule(
+  FDIS,
+  { ...fdisBase, booking_channel: "GDS / interline / codeshare (TA or OAL system)", hours_to_departure: 48 },
+  "interline-rebooking-within-72h",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  FDIS,
+  { ...fdisBase, booking_channel: "GDS / interline / codeshare (TA or OAL system)", hours_to_departure: 96 },
+  "interline-rebooking-outside-72h",
+  "Can proceed with conditions",
+  "Conditional"
+);
+// self-service available
+expectRule(FDIS, fdisBase, "direct-self-service", "Can proceed with conditions", "Conditional");
+// refund/voucher scenario with insufficient context (zone unknown)
+expectRule(
+  FDIS,
+  { ...fdisBase, request: "Refund or voucher" },
+  "refund-zone-unknown",
+  "Insufficient information",
+  "Insufficient information"
+);
+// zonal refunds
+expectRule(
+  FDIS,
+  { ...fdisBase, request: "Refund or voucher", refund_zone: "Green" },
+  "refund-green-zone",
+  "Can proceed with conditions",
+  "Conditional"
+);
+expectRule(
+  FDIS,
+  { ...fdisBase, request: "Refund or voucher", refund_zone: "Red or Amber" },
+  "refund-red-amber-zone",
+  "Can proceed with conditions",
+  "Conditional"
+);
+// "Flight not cancelled Changes" pop-up
+expectRule(
+  FDIS,
+  { ...fdisBase, fdis_popup: "'Flight not cancelled Changes' pop-up" },
+  "popup-flight-not-cancelled",
+  "Requires supervisor",
+  "Conditional"
+);
+
+// ---- Extra Seat / CBBG (v81.2 ch.33 pp.160-163) ----
+const EXST = DECISION_DEFINITIONS["extra-seat-cbbg"];
+const exstBase = {
+  seat_request: "EXST (comfort)",
+  cabin_class: "Economy",
+  seat_count: 1,
+  item_weight_kg: 0,
+  can_secure: true,
+  seat_rows: "Standard rows",
+  checkin_status: "Not checked in",
+  hours_before_departure: 24,
+  booking_channel: "Direct / TA",
+  meda_case: false,
+};
+// eligible EXST
+expectRule(EXST, exstBase, "exst-proceed", "Can proceed", "High confidence");
+// CBBG requested in Business Class
+expectRule(
+  EXST,
+  { ...exstBase, seat_request: "CBBG (cabin baggage seat)", cabin_class: "Business" },
+  "cbbg-business-block",
+  "Not permitted",
+  "High confidence"
+);
+// CBBG over verified weight
+expectRule(
+  EXST,
+  { ...exstBase, seat_request: "CBBG (cabin baggage seat)", item_weight_kg: 80 },
+  "cbbg-over-75kg",
+  "Not permitted",
+  "High confidence"
+);
+// checked-in passenger
+expectRule(
+  EXST,
+  { ...exstBase, checkin_status: "Checked in" },
+  "already-checked-in",
+  "Not permitted",
+  "High confidence"
+);
+// quantity limit exceeded
+expectRule(
+  EXST,
+  { ...exstBase, seat_count: 3 },
+  "exst-quantity-limit",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  EXST,
+  { ...exstBase, seat_request: "CBBG (cabin baggage seat)", seat_count: 2 },
+  "cbbg-quantity-limit",
+  "Not permitted",
+  "High confidence"
+);
+// eligible CBBG, GDS handling, interline block, deadline missed, MEDA
+expectRule(
+  EXST,
+  { ...exstBase, seat_request: "CBBG (cabin baggage seat)", item_weight_kg: 40 },
+  "cbbg-proceed",
+  "Can proceed",
+  "High confidence"
+);
+expectRule(
+  EXST,
+  { ...exstBase, booking_channel: "GDS" },
+  "gds-separate-pnr",
+  "Can proceed with conditions",
+  "Conditional"
+);
+expectRule(
+  EXST,
+  { ...exstBase, booking_channel: "Interline or codeshare" },
+  "interline-not-permitted",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  EXST,
+  { ...exstBase, hours_before_departure: 1 },
+  "deadline-missed-goshow",
+  "Can proceed with conditions",
+  "Conditional"
+);
+expectRule(EXST, { ...exstBase, meda_case: true }, "meda-approval", "Requires document", "Conditional");
+
+// ---- Minimum Connection Time (v81.2 ch.25 p.102) ----
+const MCT = DECISION_DEFINITIONS["minimum-connection-time"];
+const mctBase = {
+  arrival_terminal: "T2",
+  departure_terminal: "T2",
+  carrier_pair: "FZ-FZ",
+  connection_minutes: 60,
+};
+// exact minimum
+const mctExact = expectRule(MCT, mctBase, "t2-t2-fz-fz-meets", "Can proceed with conditions", "Conditional");
+assert.ok(mctExact.derived && mctExact.derived.includes("difference +0 min"), "MCT derived difference at exact minimum");
+// above minimum
+const mctAbove = expectRule(
+  MCT,
+  { ...mctBase, connection_minutes: 90 },
+  "t2-t2-fz-fz-meets",
+  "Can proceed with conditions",
+  "Conditional"
+);
+assert.ok(mctAbove.derived.includes("difference +30 min"), "MCT derived above minimum");
+// below minimum
+const mctBelow = expectRule(
+  MCT,
+  { ...mctBase, connection_minutes: 45 },
+  "t2-t2-fz-fz-below",
+  "Not permitted",
+  "High confidence"
+);
+assert.ok(mctBelow.derived.includes("difference -15 min"), "MCT derived below minimum");
+// terminal/carrier exception (T3-T1 FZ-SQ 150, incl. vice versa)
+expectRule(
+  MCT,
+  { arrival_terminal: "T3", departure_terminal: "T1", carrier_pair: "FZ-SQ", connection_minutes: 150 },
+  "t3-t1-fz-sq-meets",
+  "Can proceed with conditions",
+  "Conditional"
+);
+expectRule(
+  MCT,
+  { arrival_terminal: "T1", departure_terminal: "T3", carrier_pair: "FZ-SQ", connection_minutes: 149 },
+  "t1-t3-fz-sq-below",
+  "Not permitted",
+  "High confidence"
+);
+// directional PR exception
+expectRule(
+  MCT,
+  { arrival_terminal: "T1", departure_terminal: "T2", carrier_pair: "PR-FZ", connection_minutes: 150 },
+  "t1-t2-pr-fz-meets",
+  "Can proceed with conditions",
+  "Conditional"
+);
+// missing terminal information
+const mctMissing = evaluate(MCT, { carrier_pair: "FZ-FZ", connection_minutes: 60 });
+assert.equal(mctMissing.outcome, "Insufficient information");
+assert.equal(mctMissing.confidence, "Insufficient information");
+assert.ok(mctMissing.missing.length >= 2, "missing terminal answers reported");
+// pairing not in published table -> no unsupported outcome is generated
+const mctUnknown = evaluate(MCT, {
+  arrival_terminal: "T1",
+  departure_terminal: "T1",
+  carrier_pair: "FZ-FZ",
+  connection_minutes: 600,
+});
+assert.equal(mctUnknown.outcome, "Insufficient information");
+assert.equal(mctUnknown.matchedRuleId, null);
+
+// No unsupported outcome: unanswered combinations never produce a decision.
+const speqUnanswered = evaluate(SPEQ, { speq_request: "New equipment booking" });
+assert.equal(speqUnanswered.outcome, "Insufficient information");
+assert.equal(speqUnanswered.matchedRuleId, null);
+
 console.log("Decision router checks passed.");

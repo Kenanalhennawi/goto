@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { answeredCount, nextQuestion, validateAnswer } from "@/lib/decision-engine/session";
 import { evaluate } from "@/lib/decision-engine/evaluator";
-import { DECISION_DEFINITIONS } from "@/lib/decision-engine/definitions/pregnancy";
+import { DECISION_DEFINITIONS, sourceVersionMatches } from "@/lib/decision-engine/definitions";
 import type { AnswerValue, DecisionAnswers, DecisionQuestion } from "@/lib/decision-engine/types";
 
 const SESSION_KEY = "goto.decision.session.v1";
@@ -16,11 +16,14 @@ export function QuestionFlow({
   procedureSlug,
   procedureTitle,
   questions,
+  cardSourceVersion,
   onClose,
 }: {
   procedureSlug: string;
   procedureTitle: string;
   questions: DecisionQuestion[];
+  /** source_version of the published card, used for the freshness guard. */
+  cardSourceVersion?: string | null;
   onClose: () => void;
 }) {
   const [answers, setAnswers] = useState<DecisionAnswers>({});
@@ -48,6 +51,55 @@ export function QuestionFlow({
 
   const current = useMemo(() => nextQuestion(questions, answers), [questions, answers]);
   const done = answeredCount(questions, answers);
+
+  // Source-freshness guard (Phase D): when the published card's source
+  // version no longer matches the version this tree was verified against,
+  // disable the guided workflow rather than risk a stale outcome.
+  const definition = DECISION_DEFINITIONS[procedureSlug];
+  const stale =
+    definition !== undefined &&
+    cardSourceVersion !== undefined &&
+    !sourceVersionMatches(cardSourceVersion, definition.sourceVersion);
+
+  if (stale) {
+    return (
+      <section className="content-card reveal mt-4 overflow-hidden border-t-2 border-t-warn" aria-live="polite">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-warn">
+              Guided decision · unavailable
+            </p>
+            <p className="text-sm font-semibold text-ink">{procedureTitle}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-border bg-white px-2.5 py-1 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+          >
+            Close (Esc)
+          </button>
+        </div>
+        <div className="p-5">
+          <div className="rounded-md border border-amber-200 bg-amber-soft px-4 py-3">
+            <p className="text-sm font-bold text-ink">
+              Guided decision temporarily unavailable because the operational source requires review.
+            </p>
+            <p className="mt-1 text-sm leading-6 text-ink-muted">
+              This workflow was verified against GO TO v{definition.sourceVersion}, but the
+              published card cites {cardSourceVersion ? `v${cardSourceVersion}` : "no source version"}.
+              Verify the case against the full procedure card instead.
+            </p>
+            <Link
+              href={`/procedure/${procedureSlug}`}
+              className="mt-2 inline-flex rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
+            >
+              Open procedure card
+            </Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   function persist(next: DecisionAnswers) {
     try {
@@ -260,6 +312,11 @@ function OutcomePanel({
           Next: {result.nextAction}
         </p>
       )}
+      {result.derived && (
+        <p className="mt-1.5 rounded-sm border border-ink/10 bg-white/60 px-2 py-1.5 font-mono text-xs leading-5 text-ink">
+          {result.derived}
+        </p>
+      )}
       {result.missing.length > 0 && (
         <p className="mt-1.5 text-xs font-medium text-ink-muted">
           Missing: {result.missing.join(" · ")}
@@ -276,7 +333,7 @@ function OutcomePanel({
       )}
       <p className="mt-2.5 border-t border-ink/10 pt-2 text-[11px] font-medium text-ink-muted">
         Source: GO TO v{definition.sourceVersion} · {definition.sourceChapter} · Page{" "}
-        {definition.sourcePages.join(", ")}
+        {(result.rulePages ?? definition.sourcePages).join(", ")}
         {result.matchedRuleId ? ` · Rule ${result.matchedRuleId}` : ""} — always verify on the
         procedure card.
       </p>

@@ -11,6 +11,8 @@ export type RoutableCard = {
   keywords: string[] | null;
   aliases: string[] | null;
   priority: number | null;
+  /** GO TO source version of the published card (Phase D freshness check). */
+  source_version?: string | null;
 };
 
 export type MatchedConcept = {
@@ -46,6 +48,8 @@ export type DecisionQuestion = {
   required: boolean;
   /** Why the question is asked (shown to the agent). */
   reason: string;
+  /** Which verified rule area this answer affects (audit aid). */
+  ruleAffected?: string;
   /** Bounds for number answers. */
   min?: number;
   max?: number;

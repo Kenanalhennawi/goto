@@ -13,7 +13,11 @@ import type { RoutableCard } from "@/lib/decision-engine/types";
 export function DecisionIntake({ cards }: { cards: RoutableCard[] }) {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
-  const [activeFlow, setActiveFlow] = useState<{ slug: string; title: string } | null>(null);
+  const [activeFlow, setActiveFlow] = useState<{
+    slug: string;
+    title: string;
+    sourceVersion: string | null;
+  } | null>(null);
 
   const result = useMemo(
     () => (submitted.trim().length >= 3 ? routeIntent(submitted, cards) : null),
@@ -116,6 +120,7 @@ export function DecisionIntake({ cards }: { cards: RoutableCard[] }) {
                         setActiveFlow({
                           slug: result.primary!.slug,
                           title: result.primary!.title,
+                          sourceVersion: result.primary!.source_version ?? null,
                         })
                     : undefined
                 }
@@ -125,6 +130,7 @@ export function DecisionIntake({ cards }: { cards: RoutableCard[] }) {
                   procedureSlug={activeFlow.slug}
                   procedureTitle={activeFlow.title}
                   questions={QUESTION_SETS[activeFlow.slug]}
+                  cardSourceVersion={activeFlow.sourceVersion}
                   onClose={() => setActiveFlow(null)}
                 />
               )}
