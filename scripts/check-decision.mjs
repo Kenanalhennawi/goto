@@ -614,6 +614,19 @@ const availPreg = getWorkflowAvailability({
 });
 assert.equal(availPreg.status, "available");
 
+// Direct-link preselect fallback (Phase G): /decision?procedure=<slug> can be
+// opened with no card info (e.g. before cards are published). The preselect
+// panel calls getWorkflowAvailability with only the slug and must degrade to a
+// safe state, never crash or claim availability.
+const preselectNoCard = getWorkflowAvailability({ slug: "pregnancy" });
+assert.equal(preselectNoCard.available, false);
+assert.equal(preselectNoCard.status, "unavailable_unpublished");
+assert.equal(preselectNoCard.hasTree, true);
+assert.ok(preselectNoCard.safeMessage.length > 0); // safe message shown, no internal detail leaked
+const preselectNoTree = getWorkflowAvailability({ slug: "wheelchair" });
+assert.equal(preselectNoTree.hasTree, false);
+assert.equal(preselectNoTree.status, "unavailable_no_tree");
+
 // hasDecisionTree only true for the six real trees.
 assert.equal(hasDecisionTree("pregnancy"), true);
 assert.equal(hasDecisionTree("minimum-connection-time"), true);

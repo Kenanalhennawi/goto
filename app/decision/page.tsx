@@ -50,7 +50,7 @@ export default async function DecisionPage({
           </p>
         </div>
 
-        {cards.length === 0 ? (
+        {cards.length === 0 && !initialProcedureSlug ? (
           <div className="content-card p-6">
             <p className="text-sm font-bold text-ink">No published procedures available yet.</p>
             <p className="mt-1 text-sm text-ink-muted">
@@ -59,6 +59,9 @@ export default async function DecisionPage({
             </p>
           </div>
         ) : (
+          // A direct ?procedure= link must still show its preselected availability
+          // state (safe message if the card is unpublished) even when no cards are
+          // published yet; DecisionIntake handles an unmatched slug gracefully.
           <DecisionIntake cards={cards} initialProcedureSlug={initialProcedureSlug} />
         )}
       </main>
