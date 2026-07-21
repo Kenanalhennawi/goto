@@ -69,9 +69,25 @@ export function SyncReviewClient({
     });
   }
 
-  function approveAll() {
+  // Bulk selection helpers — pure React state updates, no network or reload.
+  function selectAll() {
     setApproved(new Set(changes.map((c) => c.id)));
   }
+
+  function clearSelection() {
+    setApproved(new Set());
+  }
+
+  function selectChangedOnly() {
+    setApproved(new Set(changes.filter((c) => !c.is_new_chapter).map((c) => c.id)));
+  }
+
+  function selectNewOnly() {
+    setApproved(new Set(changes.filter((c) => c.is_new_chapter).map((c) => c.id)));
+  }
+
+  const changedCount = changes.filter((c) => !c.is_new_chapter).length;
+  const newCount = changes.filter((c) => c.is_new_chapter).length;
 
   async function handlePublish() {
     if (approved.size === 0) {
@@ -139,24 +155,51 @@ export function SyncReviewClient({
 
       {!alreadyPublished && canPublish && (
         <div className="flex items-center justify-between mb-6 bg-panel border border-border rounded-lg px-4 py-3">
-          <p className="text-sm text-ink-muted">
+          <p className="text-sm text-ink-muted" aria-live="polite">
             {approved.size} of {changes.length} chapters approved
           </p>
-          <div className="flex gap-2">
-            <button
-              onClick={approveAll}
-              className="text-xs text-ink-muted hover:text-accent transition-colors"
-            >
-              Approve all
-            </button>
-            <button
-              onClick={handlePublish}
-              disabled={publishing || approved.size === 0}
-              className="bg-accent text-base font-medium rounded-lg px-4 py-2 text-sm hover:bg-accent-dim transition-colors disabled:opacity-40"
-            >
-              {publishing ? "Publishing..." : `Publish ${approved.size} chapter${approved.size === 1 ? "" : "s"}`}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handlePublish}
+            disabled={publishing || approved.size === 0}
+            aria-label={`Publish ${approved.size} selected chapter${approved.size === 1 ? "" : "s"}`}
+            className="bg-accent text-base font-medium rounded-lg px-4 py-2 text-sm hover:bg-accent-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+          >
+            {publishing ? "Publishing..." : `Publish ${approved.size} chapter${approved.size === 1 ? "" : "s"}`}
+          </button>
+        </div>
+      )}
+
+      {!alreadyPublished && canPublish && (
+        <div
+          role="group"
+          aria-label="Bulk chapter selection"
+          className="mb-6 flex flex-wrap items-center gap-2"
+        >
+          <ToolbarButton
+            onClick={selectAll}
+            ariaLabel={`Select all ${changes.length} chapters`}
+          >
+            <span aria-hidden="true">✓</span> Select all
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={clearSelection}
+            ariaLabel="Clear selection"
+          >
+            <span aria-hidden="true">✕</span> Clear selection
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={selectChangedOnly}
+            ariaLabel={`Select changed chapters only (${changedCount})`}
+          >
+            <span aria-hidden="true">✓</span> Select changed only
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={selectNewOnly}
+            ariaLabel={`Select new chapters only (${newCount})`}
+          >
+            <span aria-hidden="true">✓</span> Select new chapters only
+          </ToolbarButton>
         </div>
       )}
 
@@ -224,6 +267,27 @@ export function SyncReviewClient({
         })}
       </div>
     </div>
+  );
+}
+
+function ToolbarButton({
+  onClick,
+  ariaLabel,
+  children,
+}: {
+  onClick: () => void;
+  ariaLabel: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+    >
+      {children}
+    </button>
   );
 }
 
