@@ -22,6 +22,13 @@ import { MEET_ASSIST_DEFINITION } from "./meet-assist.ts";
 import { BUSINESS_LOUNGE_DEFINITION } from "./business-lounge.ts";
 import { BLUE_RIBBON_BAGS_DEFINITION } from "./blue-ribbon-bags.ts";
 import { WORLDTRACER_DEFINITION } from "./worldtracer.ts";
+import { MEDA_DEFINITION } from "./meda.ts";
+import { DEATH_CASE_DEFINITION } from "./death-case.ts";
+import { OXYGEN_DEFINITION } from "./oxygen.ts";
+import { SERVICE_ANIMAL_DEFINITION } from "./service-animal.ts";
+import { PLASTER_CAST_LEG_BRACE_DEFINITION } from "./plaster-cast-leg-brace.ts";
+import { DPNA_DEFINITION } from "./dpna.ts";
+import { HUMAN_REMAINS_DEFINITION } from "./human-remains.ts";
 
 export const DECISION_DEFINITIONS: Record<string, DecisionDefinition> = {
   pregnancy: PREGNANCY_DEFINITION,
@@ -43,6 +50,13 @@ export const DECISION_DEFINITIONS: Record<string, DecisionDefinition> = {
   "business-lounge": BUSINESS_LOUNGE_DEFINITION,
   "blue-ribbon-bags": BLUE_RIBBON_BAGS_DEFINITION,
   worldtracer: WORLDTRACER_DEFINITION,
+  meda: MEDA_DEFINITION,
+  "death-case": DEATH_CASE_DEFINITION,
+  oxygen: OXYGEN_DEFINITION,
+  "service-animal": SERVICE_ANIMAL_DEFINITION,
+  "plaster-cast-leg-brace": PLASTER_CAST_LEG_BRACE_DEFINITION,
+  dpna: DPNA_DEFINITION,
+  "human-remains": HUMAN_REMAINS_DEFINITION,
 };
 
 /**

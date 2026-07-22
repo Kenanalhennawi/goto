@@ -853,4 +853,226 @@ export const QUESTION_SETS: Record<string, DecisionQuestion[]> = {
       ruleAffected: "WorldTracer PIR prerequisite (pp.115-116)",
     },
   ],
+
+  // ---------- Phase J-D Batch 4: MEDA / Medical Travel Exception (GO TO v81.2 ch.43 pp.260-263) ----------
+  "meda": [
+    {
+      id: "has_medical_cert",
+      label: "Is there a medical certificate stating the passenger was unfit to travel on the scheduled flight date?",
+      answerType: "yes_no",
+      required: true,
+      reason: "A medical exception requires a certificate stating the passenger was unfit to travel on the scheduled date.",
+      ruleAffected: "Medical certificate requirement (pp.260, 262)",
+    },
+    {
+      id: "ta_block_fare",
+      label: "Is this a TA block-fare booking?",
+      answerType: "yes_no",
+      required: false,
+      reason: "TA block-fare bookings are not eligible for a medical exception.",
+      ruleAffected: "TA block-fare exclusion (pp.260-261)",
+    },
+    {
+      id: "docs_validated",
+      label: "Has Customer Service validated the documents and shared options?",
+      answerType: "single_choice",
+      options: ["Customer Service validated and shared options", "Not yet validated"],
+      required: false,
+      reason: "Only after Customer Service validates and shares options can SUP/FS action the change.",
+      ruleAffected: "Validation status (p.262)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 4: Death Case (GO TO v81.2 ch.43 pp.260-263) ----------
+  "death-case": [
+    {
+      id: "relationship",
+      label: "What is the relationship to the deceased?",
+      answerType: "single_choice",
+      options: [
+        "Passenger or immediate family (parent, sibling, spouse, child, in-law)",
+        "Second-degree relative (aunt, uncle, grandparent, grandchild, niece, nephew, half-sibling)",
+        "Other or unrelated",
+      ],
+      required: true,
+      reason: "A death exception is documented only for the passenger, immediate family, or a second-degree relative.",
+      ruleAffected: "Eligible relationships (p.260)",
+    },
+    {
+      id: "has_docs",
+      label: "Are the death certificate, deceased passport copy, and proof of relationship available?",
+      answerType: "yes_no",
+      required: true,
+      reason: "A death exception requires the death certificate, deceased passport copy, and proof of relationship.",
+      ruleAffected: "Death-case document requirement (p.262)",
+    },
+    {
+      id: "docs_validated",
+      label: "Has Customer Service validated the documents and shared options?",
+      answerType: "single_choice",
+      options: ["Customer Service validated and shared options", "Not yet validated"],
+      required: false,
+      reason: "Only after Customer Service validates and shares options can SUP/FS action the change or refund.",
+      ruleAffected: "Validation status (p.262)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 4: Oxygen Carry (GO TO v81.2 ch.30 pp.135-138) ----------
+  "oxygen": [
+    {
+      id: "device_type",
+      label: "What oxygen device is the passenger carrying?",
+      answerType: "single_choice",
+      options: [
+        "Approved portable oxygen concentrator (battery-powered)",
+        "Battery POC newly FAA-approved (not on flydubai list)",
+        "Non-portable or non-battery cylinder",
+      ],
+      required: true,
+      reason: "Only portable, battery-powered concentrators are accepted; other devices are excluded or need approval.",
+      ruleAffected: "Device eligibility (p.135)",
+    },
+    {
+      id: "first_carrier",
+      label: "Who is the first operating carrier of the journey?",
+      answerType: "single_choice",
+      options: ["flydubai (FZ)", "Other airline (OAL) – interline/codeshare"],
+      required: false,
+      reason: "An OAL first carrier requires written approval from that carrier before adding the SSR.",
+      ruleAffected: "First-carrier handling (p.138)",
+    },
+    {
+      id: "has_medical_cert",
+      label: "Does the passenger have the original medical (fit-to-fly) certificate with the required statements?",
+      answerType: "yes_no",
+      required: false,
+      reason: "An original medical certificate must be presented at check-in for a passenger travelling with their own oxygen.",
+      ruleAffected: "Medical certificate requirement (p.135)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 4: Service Animal (GO TO v81.2 ch.36 p.173) ----------
+  "service-animal": [
+    {
+      id: "animal_type",
+      label: "What type of animal is it?",
+      answerType: "single_choice",
+      options: [
+        "Service dog (vision/hearing/physical impairment)",
+        "Emotional support animal",
+      ],
+      required: true,
+      reason: "flydubai accepts only service dogs; Emotional Support Animals are not accepted.",
+      ruleAffected: "Service dog vs ESA acceptance (p.173)",
+    },
+    {
+      id: "approval_status",
+      label: "What is the approval status?",
+      answerType: "single_choice",
+      options: [
+        "Pre-approved via Let's Talk (72h) with documents",
+        "Not yet approved or documents pending",
+      ],
+      required: false,
+      reason: "Carriage requires pre-approval via Let's Talk at least 72 hours before departure with the documented records.",
+      ruleAffected: "Service dog pre-approval (p.173)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 4: Plaster Cast / Leg Brace (GO TO v81.2 ch.44 pp.264-266) ----------
+  "plaster-cast-leg-brace": [
+    {
+      id: "cast_type",
+      label: "What is the cast type?",
+      answerType: "single_choice",
+      options: [
+        "Half cast below the knee (boot type)",
+        "One full leg cast (including the knee)",
+        "Both legs in cast",
+      ],
+      required: true,
+      reason: "Seating and acceptance differ by cast type; both legs in cast is not accepted.",
+      ruleAffected: "Cast-type acceptance and seating (pp.264-265)",
+    },
+    {
+      id: "cast_age",
+      label: "How old is the cast?",
+      answerType: "single_choice",
+      options: ["More than 48 hours old", "48 hours or less (fresh)"],
+      required: true,
+      reason: "A fresh cast (48h or less) must be split and requires a medical certificate.",
+      ruleAffected: "Fresh-cast split and certificate (p.265)",
+    },
+    {
+      id: "can_sit_upright_and_move",
+      label: "Can the passenger sit upright for take-off/landing and move unaided in an emergency?",
+      answerType: "yes_no",
+      required: false,
+      reason: "If not, the passenger must be accompanied by an able-bodied person.",
+      ruleAffected: "Upright/mobility condition (p.264)",
+    },
+    {
+      id: "needs_leg_elevation",
+      label: "Does the passenger need to elevate their leg during the flight?",
+      answerType: "yes_no",
+      required: false,
+      reason: "Leg elevation is restricted and only considered in Business class.",
+      ruleAffected: "Leg-elevation restriction (pp.264-265)",
+    },
+    {
+      id: "cabin",
+      label: "What cabin is the passenger booked in?",
+      answerType: "single_choice",
+      options: ["Economy", "Business"],
+      required: false,
+      reason: "A full leg cast is accepted only in a Business class window seat.",
+      ruleAffected: "Cabin-based seating (p.265)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 4: DPNA (GO TO v81.2 ch.35 pp.172-173) ----------
+  "dpna": [
+    {
+      id: "companion_same_cabin",
+      label: "Is a travel companion travelling in the same cabin?",
+      answerType: "yes_no",
+      required: true,
+      reason: "A same-cabin companion is mandatory for a DPNA passenger.",
+      ruleAffected: "Mandatory same-cabin companion (p.172)",
+    },
+    {
+      id: "seat_fare",
+      label: "What is the seat fare type?",
+      answerType: "single_choice",
+      options: ["Seat-inclusive fare", "Non-inclusive seat fare"],
+      required: false,
+      reason: "A non-inclusive fare needs SUP/FS approval to waive/assign the seats.",
+      ruleAffected: "Fare-based seat assignment (pp.172-173)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 4: Human Remains (GO TO v81.2 ch.32 pp.140-143) ----------
+  "human-remains": [
+    {
+      id: "request",
+      label: "What is the request?",
+      answerType: "single_choice",
+      options: [
+        "Transport human remains (as cargo)",
+        "Carry ashes of the deceased in the cabin",
+      ],
+      required: true,
+      reason: "Transport is handled by Cargo/dnata; carrying ashes in the cabin follows separate conditions.",
+      ruleAffected: "Human remains vs ashes handling (pp.140-143)",
+    },
+    {
+      id: "accompanying",
+      label: "Will a passenger accompany the remains?",
+      answerType: "single_choice",
+      options: ["A passenger will accompany the remains", "No passenger accompanying"],
+      required: false,
+      reason: "When no passenger accompanies, destination clearance confirmation is also required.",
+      ruleAffected: "Accompanying vs not (pp.142-143)",
+    },
+  ],
 };

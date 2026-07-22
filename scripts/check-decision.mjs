@@ -1379,6 +1379,373 @@ for (const slug of ["meet-assist", "business-lounge", "blue-ribbon-bags", "world
   assert.equal(live.available, true);
 }
 
+// ---- Phase J-D Batch 4: Medical & Special Assistance (verified: GO TO v81.2 10-Jul-2026) ----
+
+// Every Batch 4 tree is registered, versioned to 81.2 and source-cited; no bare "Can proceed".
+for (const slug of [
+  "meda",
+  "death-case",
+  "oxygen",
+  "service-animal",
+  "plaster-cast-leg-brace",
+  "dpna",
+  "human-remains",
+]) {
+  assert.ok(DECISION_DEFINITIONS[slug], `definition registered for ${slug}`);
+  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.2 (10-Jul-2026)");
+  assert.ok(DECISION_DEFINITIONS[slug].sourcePages.length > 0, `source pages for ${slug}`);
+  for (const rule of DECISION_DEFINITIONS[slug].rules) {
+    assert.ok((rule.sourceField ?? "").length > 0, `${slug}/${rule.id}: non-empty sourceField`);
+    assert.ok((rule.sourcePages ?? []).length > 0, `${slug}/${rule.id}: rule source pages`);
+    assert.notEqual(rule.outcome, "Can proceed", `${slug}/${rule.id}: no bare Can proceed`);
+  }
+}
+// MEDA, Death and Service Animal never self-authorise carriage/clearance.
+for (const slug of ["meda", "death-case", "service-animal"]) {
+  for (const rule of DECISION_DEFINITIONS[slug].rules) {
+    assert.ok(
+      ["Requires document", "Requires supervisor", "Not permitted", "Insufficient information"].includes(rule.outcome),
+      `${slug}/${rule.id}: conservative outcome only (got ${rule.outcome})`
+    );
+  }
+}
+
+// -- MEDA (ch.43 pp.260-263) --
+const MEDA = DECISION_DEFINITIONS["meda"];
+expectRule(MEDA, { has_medical_cert: true, ta_block_fare: true }, "meda-ta-block", "Not permitted", "High confidence");
+expectRule(MEDA, { has_medical_cert: false }, "meda-no-cert", "Requires document", "Conditional");
+expectRule(
+  MEDA,
+  { has_medical_cert: true, docs_validated: "Not yet validated" },
+  "meda-not-validated",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  MEDA,
+  { has_medical_cert: true, docs_validated: "Customer Service validated and shared options" },
+  "meda-validated",
+  "Requires supervisor",
+  "Conditional"
+);
+const medaIncomplete = evaluate(MEDA, {});
+assert.equal(medaIncomplete.outcome, "Insufficient information");
+assert.equal(medaIncomplete.matchedRuleId, null);
+assert.ok(medaIncomplete.missing.length > 0);
+// Cert present but no validation state chosen never self-authorises.
+const medaNoValidation = evaluate(MEDA, { has_medical_cert: true });
+assert.equal(medaNoValidation.outcome, "Insufficient information");
+assert.equal(medaNoValidation.matchedRuleId, null);
+
+// -- Death Case (ch.43 pp.260-263) --
+const DC = DECISION_DEFINITIONS["death-case"];
+expectRule(
+  DC,
+  { relationship: "Other or unrelated", has_docs: true },
+  "dc-relationship-unclear",
+  "Insufficient information",
+  "Insufficient information"
+);
+expectRule(
+  DC,
+  { relationship: "Passenger or immediate family (parent, sibling, spouse, child, in-law)", has_docs: false },
+  "dc-no-docs",
+  "Requires document",
+  "Conditional"
+);
+expectRule(
+  DC,
+  {
+    relationship: "Passenger or immediate family (parent, sibling, spouse, child, in-law)",
+    has_docs: true,
+    docs_validated: "Not yet validated",
+  },
+  "dc-not-validated",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  DC,
+  {
+    relationship: "Second-degree relative (aunt, uncle, grandparent, grandchild, niece, nephew, half-sibling)",
+    has_docs: true,
+    docs_validated: "Customer Service validated and shared options",
+  },
+  "dc-validated",
+  "Requires supervisor",
+  "Conditional"
+);
+const dcIncomplete = evaluate(DC, {});
+assert.equal(dcIncomplete.outcome, "Insufficient information");
+assert.equal(dcIncomplete.matchedRuleId, null);
+assert.ok(dcIncomplete.missing.length > 0);
+
+// -- Oxygen Carry (ch.30 pp.135-138) --
+const OX = DECISION_DEFINITIONS["oxygen"];
+expectRule(
+  OX,
+  { device_type: "Non-portable or non-battery cylinder" },
+  "ox-not-portable",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  OX,
+  { device_type: "Battery POC newly FAA-approved (not on flydubai list)" },
+  "ox-faa-newly",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  OX,
+  { device_type: "Approved portable oxygen concentrator (battery-powered)", has_medical_cert: false },
+  "ox-approved-no-cert",
+  "Requires document",
+  "Conditional"
+);
+expectRule(
+  OX,
+  {
+    device_type: "Approved portable oxygen concentrator (battery-powered)",
+    first_carrier: "Other airline (OAL) – interline/codeshare",
+    has_medical_cert: true,
+  },
+  "ox-approved-oal",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  OX,
+  {
+    device_type: "Approved portable oxygen concentrator (battery-powered)",
+    first_carrier: "flydubai (FZ)",
+    has_medical_cert: true,
+  },
+  "ox-approved-fz",
+  "Can proceed with conditions",
+  "Conditional"
+);
+const oxIncomplete = evaluate(OX, {});
+assert.equal(oxIncomplete.outcome, "Insufficient information");
+assert.equal(oxIncomplete.matchedRuleId, null);
+assert.ok(oxIncomplete.missing.length > 0);
+// Approved device + cert but no carrier chosen never self-authorises.
+const oxNoCarrier = evaluate(OX, {
+  device_type: "Approved portable oxygen concentrator (battery-powered)",
+  has_medical_cert: true,
+});
+assert.equal(oxNoCarrier.outcome, "Insufficient information");
+assert.equal(oxNoCarrier.matchedRuleId, null);
+
+// -- Service Animal (ch.36 p.173) --
+const SA = DECISION_DEFINITIONS["service-animal"];
+expectRule(SA, { animal_type: "Emotional support animal" }, "sa-emotional", "Not permitted", "High confidence");
+expectRule(
+  SA,
+  {
+    animal_type: "Service dog (vision/hearing/physical impairment)",
+    approval_status: "Not yet approved or documents pending",
+  },
+  "sa-not-approved",
+  "Requires document",
+  "Conditional"
+);
+expectRule(
+  SA,
+  {
+    animal_type: "Service dog (vision/hearing/physical impairment)",
+    approval_status: "Pre-approved via Let's Talk (72h) with documents",
+  },
+  "sa-approved",
+  "Requires supervisor",
+  "Conditional"
+);
+const saIncomplete = evaluate(SA, {});
+assert.equal(saIncomplete.outcome, "Insufficient information");
+assert.equal(saIncomplete.matchedRuleId, null);
+assert.ok(saIncomplete.missing.length > 0);
+
+// -- Plaster Cast / Leg Brace (ch.44 pp.264-266) --
+const PC = DECISION_DEFINITIONS["plaster-cast-leg-brace"];
+expectRule(
+  PC,
+  { cast_type: "Both legs in cast", cast_age: "More than 48 hours old" },
+  "pc-both-legs",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  PC,
+  { cast_type: "Half cast below the knee (boot type)", cast_age: "48 hours or less (fresh)" },
+  "pc-fresh-cast",
+  "Requires document",
+  "Conditional"
+);
+expectRule(
+  PC,
+  {
+    cast_type: "Half cast below the knee (boot type)",
+    cast_age: "More than 48 hours old",
+    can_sit_upright_and_move: false,
+  },
+  "pc-cannot-sit-move",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  PC,
+  {
+    cast_type: "Half cast below the knee (boot type)",
+    cast_age: "More than 48 hours old",
+    needs_leg_elevation: true,
+  },
+  "pc-leg-elevation",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  PC,
+  { cast_type: "One full leg cast (including the knee)", cast_age: "More than 48 hours old", cabin: "Economy" },
+  "pc-full-cast-economy",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  PC,
+  {
+    cast_type: "One full leg cast (including the knee)",
+    cabin: "Business",
+    cast_age: "More than 48 hours old",
+    can_sit_upright_and_move: true,
+  },
+  "pc-full-cast-eligible",
+  "Can proceed with conditions",
+  "Conditional"
+);
+expectRule(
+  PC,
+  {
+    cast_type: "Half cast below the knee (boot type)",
+    cast_age: "More than 48 hours old",
+    can_sit_upright_and_move: true,
+  },
+  "pc-half-cast-eligible",
+  "Can proceed with conditions",
+  "Conditional"
+);
+const pcIncomplete = evaluate(PC, { cast_type: "Half cast below the knee (boot type)" });
+assert.equal(pcIncomplete.outcome, "Insufficient information");
+assert.equal(pcIncomplete.matchedRuleId, null);
+assert.ok(pcIncomplete.missing.length > 0);
+// Full cast, over 48h, can sit — but no cabin chosen — never auto-proceeds.
+const pcNoCabin = evaluate(PC, {
+  cast_type: "One full leg cast (including the knee)",
+  cast_age: "More than 48 hours old",
+  can_sit_upright_and_move: true,
+});
+assert.equal(pcNoCabin.outcome, "Insufficient information");
+assert.equal(pcNoCabin.matchedRuleId, null);
+
+// -- DPNA (ch.35 pp.172-173) --
+const DPNA = DECISION_DEFINITIONS["dpna"];
+expectRule(DPNA, { companion_same_cabin: false }, "dpna-no-companion", "Not permitted", "High confidence");
+expectRule(
+  DPNA,
+  { companion_same_cabin: true, seat_fare: "Non-inclusive seat fare" },
+  "dpna-non-inclusive-fare",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  DPNA,
+  { companion_same_cabin: true, seat_fare: "Seat-inclusive fare" },
+  "dpna-inclusive-fare",
+  "Can proceed with conditions",
+  "Conditional"
+);
+const dpnaIncomplete = evaluate(DPNA, {});
+assert.equal(dpnaIncomplete.outcome, "Insufficient information");
+assert.equal(dpnaIncomplete.matchedRuleId, null);
+assert.ok(dpnaIncomplete.missing.length > 0);
+const dpnaNoFare = evaluate(DPNA, { companion_same_cabin: true });
+assert.equal(dpnaNoFare.outcome, "Insufficient information");
+assert.equal(dpnaNoFare.matchedRuleId, null);
+
+// -- Human Remains (ch.32 pp.140-143) — guided escalation --
+const HR = DECISION_DEFINITIONS["human-remains"];
+expectRule(
+  HR,
+  { request: "Transport human remains (as cargo)", accompanying: "No passenger accompanying" },
+  "hr-transport-not-accompanying",
+  "Requires document",
+  "Conditional"
+);
+expectRule(
+  HR,
+  { request: "Transport human remains (as cargo)", accompanying: "A passenger will accompany the remains" },
+  "hr-transport-accompanying",
+  "Requires document",
+  "Conditional"
+);
+expectRule(
+  HR,
+  { request: "Carry ashes of the deceased in the cabin" },
+  "hr-ashes",
+  "Can proceed with conditions",
+  "Conditional"
+);
+const hrIncomplete = evaluate(HR, {});
+assert.equal(hrIncomplete.outcome, "Insufficient information");
+assert.equal(hrIncomplete.matchedRuleId, null);
+assert.ok(hrIncomplete.missing.length > 0);
+const hrNoAccompany = evaluate(HR, { request: "Transport human remains (as cargo)" });
+assert.equal(hrNoAccompany.outcome, "Insufficient information");
+assert.equal(hrNoAccompany.matchedRuleId, null);
+
+// -- Category mapping for Batch 4 --
+const { categoryForWorkflow: categoryForWorkflowB4 } = await import(
+  "../lib/decision-engine/categories.ts"
+);
+for (const slug of ["meda", "oxygen", "plaster-cast-leg-brace", "death-case"]) {
+  assert.equal(categoryForWorkflowB4(slug), "Medical");
+}
+for (const slug of ["dpna", "service-animal", "human-remains"]) {
+  assert.equal(categoryForWorkflowB4(slug), "Special Services");
+}
+
+// -- Availability: each Batch 4 workflow stays gated until a matching current card exists --
+for (const slug of [
+  "meda",
+  "death-case",
+  "oxygen",
+  "service-animal",
+  "plaster-cast-leg-brace",
+  "dpna",
+  "human-remains",
+]) {
+  const noCard = getWorkflowAvailability({ slug });
+  assert.equal(noCard.hasTree, true, `${slug} has a tree`);
+  assert.equal(noCard.available, false);
+  const unpub = getWorkflowAvailability({ slug, is_published: false, review_status: "needs_review" });
+  assert.equal(unpub.available, false);
+  const mismatch = getWorkflowAvailability({
+    slug,
+    is_published: true,
+    review_status: "approved",
+    source_version: "80.8 (23-Jun-2026)",
+  });
+  assert.equal(mismatch.status, "unavailable_source_mismatch");
+  assert.equal(mismatch.available, false);
+  const live = getWorkflowAvailability({
+    slug,
+    is_published: true,
+    review_status: "approved",
+    source_version: "81.2 (10-Jul-2026)",
+  });
+  assert.equal(live.status, "available");
+  assert.equal(live.available, true);
+}
+
 // ---- Phase J: structural tree validation must have zero errors ----
 const { validateAllTrees, treeErrors } = await import("../lib/decision-engine/validate-trees.ts");
 const treeIssues = validateAllTrees(DECISION_DEFINITIONS);
