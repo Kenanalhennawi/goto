@@ -648,4 +648,102 @@ export const QUESTION_SETS: Record<string, DecisionQuestion[]> = {
       ruleAffected: "Auto Split OD modification / cancellation matrix (pp.49-50)",
     },
   ],
+
+  // ---------- Phase J-D Batch 2: Travel Requirements — UAE Residency (GO TO v81.2 ch.49 p.272) ----------
+  "travel-requirements": [
+    {
+      id: "scenario",
+      label: "What travel-requirement question is this?",
+      answerType: "single_choice",
+      options: [
+        "UAE resident departing Dubai and returning to the UAE",
+        "Other entry or exit requirement",
+      ],
+      required: true,
+      reason: "Only the UAE-residency return-travel scenario is documented; all other requirements defer to the authorities.",
+      ruleAffected: "Travel requirements scope and disclaimer (p.272)",
+    },
+    {
+      id: "eid_present",
+      label: "Does the passenger have their ORIGINAL Emirates ID with them?",
+      answerType: "yes_no",
+      required: false,
+      reason: "The original Emirates ID is the accepted proof of UAE residency on return.",
+      ruleAffected: "Emirates ID as proof of UAE residency (p.272)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 2: OK to Board (GO TO v81.2 ch.50 pp.272-274) ----------
+  "ok-to-board": [
+    {
+      id: "request",
+      label: "What is the request?",
+      answerType: "single_choice",
+      options: [
+        "Add OKTB manually on an EK* flight",
+        "General OKTB policy or eligibility question",
+      ],
+      required: true,
+      reason: "OKTB policy defers to the official website; only the EK* manual-add is an internal process.",
+      ruleAffected: "OKTB website reference and EK* manual-add scope (pp.272-274)",
+    },
+    {
+      id: "actioning_role",
+      label: "Who will action the EK* manual add?",
+      answerType: "single_choice",
+      options: ["Floor Support or Supervisor", "Contact Centre agent"],
+      required: false,
+      reason: "The EK* manual OKTB-add is documented for Floor Support and Supervisors only.",
+      ruleAffected: "EK* manual-add restricted to Floor Support/Supervisor (p.272)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 2: Visa Change (GO TO v81.2 ch.48.1 p.271) ----------
+  "visa-change": [
+    {
+      id: "request_type",
+      label: "What is the request?",
+      answerType: "single_choice",
+      options: [
+        "Visa-change travel (re-entry to UAE)",
+        "General or transit visa enquiry",
+      ],
+      required: true,
+      reason: "Agents must not advise on visa details; only visa-change travel handling is actionable.",
+      ruleAffected: "Visa enquiry restriction and visa-change handling (p.271)",
+    },
+    {
+      id: "route",
+      label: "Which route is the visa-change travel on?",
+      answerType: "single_choice",
+      options: ["MCT", "KWI", "BAH", "Other route"],
+      required: false,
+      reason: "Visa-change flights are applicable only to MCT, KWI and BAH.",
+      ruleAffected: "Visa-change eligible routes (p.271)",
+    },
+    {
+      id: "valid_uae_visa_in_hand",
+      label: "Does the passenger hold a valid UAE visa in hand before departure?",
+      answerType: "yes_no",
+      required: false,
+      reason: "A valid UAE visa must be held before departure to re-enter the UAE.",
+      ruleAffected: "Valid UAE visa required before departure (p.271)",
+    },
+    {
+      id: "same_pnr_both_flights",
+      label: "Are both the outbound and inbound flights under the same PNR?",
+      answerType: "yes_no",
+      required: false,
+      reason: "Both flights must be under a single PNR for visa-change handling.",
+      ruleAffected: "Both flights under the same PNR (p.271)",
+    },
+    {
+      id: "outbound_noshow",
+      label: "Is the passenger a NOSHOW on the outbound flight?",
+      answerType: "yes_no",
+      required: false,
+      reason: "An outbound NOSHOW must be referred to the supervisor in charge.",
+      ruleAffected: "Visa-change outbound NOSHOW handling (p.271)",
+    },
+  ],
 };

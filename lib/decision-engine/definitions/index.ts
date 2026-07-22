@@ -15,6 +15,9 @@ import { FALCON_HANDLING_DEFINITION } from "./falcon-handling.ts";
 import { DUPLICATE_BOOKING_DEFINITION } from "./duplicate-booking.ts";
 import { GOVERNMENT_DEALS_DEFINITION } from "./government-deals.ts";
 import { AUTO_SPLIT_OD_DEFINITION } from "./auto-split-od.ts";
+import { TRAVEL_REQUIREMENTS_DEFINITION } from "./travel-requirements.ts";
+import { OK_TO_BOARD_DEFINITION } from "./ok-to-board.ts";
+import { VISA_CHANGE_DEFINITION } from "./visa-change.ts";
 
 export const DECISION_DEFINITIONS: Record<string, DecisionDefinition> = {
   pregnancy: PREGNANCY_DEFINITION,
@@ -29,6 +32,9 @@ export const DECISION_DEFINITIONS: Record<string, DecisionDefinition> = {
   "duplicate-booking": DUPLICATE_BOOKING_DEFINITION,
   "government-deals": GOVERNMENT_DEALS_DEFINITION,
   "auto-split-od": AUTO_SPLIT_OD_DEFINITION,
+  "travel-requirements": TRAVEL_REQUIREMENTS_DEFINITION,
+  "ok-to-board": OK_TO_BOARD_DEFINITION,
+  "visa-change": VISA_CHANGE_DEFINITION,
 };
 
 /**

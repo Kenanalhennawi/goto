@@ -595,8 +595,9 @@ assert.equal(availStale.status, "unavailable_source_stale");
 assert.equal(availStale.adminReason, "Source updated after review");
 
 // Unsupported procedure slug (no deterministic tree): no entry point at all.
+// ("payment" is a card slug with no deterministic decision tree.)
 const availNoTree = getWorkflowAvailability({
-  slug: "ok-to-board",
+  slug: "payment",
   is_published: true,
   review_status: "approved",
   source_version: "81.2",
@@ -623,17 +624,18 @@ assert.equal(preselectNoCard.available, false);
 assert.equal(preselectNoCard.status, "unavailable_unpublished");
 assert.equal(preselectNoCard.hasTree, true);
 assert.ok(preselectNoCard.safeMessage.length > 0); // safe message shown, no internal detail leaked
-const preselectNoTree = getWorkflowAvailability({ slug: "ok-to-board" });
+const preselectNoTree = getWorkflowAvailability({ slug: "payment" });
 assert.equal(preselectNoTree.hasTree, false);
 assert.equal(preselectNoTree.status, "unavailable_no_tree");
 
-// hasDecisionTree true for the nine real trees; false for concept-only slugs.
+// hasDecisionTree true for the real trees; false for concept/card-only slugs.
 assert.equal(hasDecisionTree("pregnancy"), true);
 assert.equal(hasDecisionTree("minimum-connection-time"), true);
 assert.equal(hasDecisionTree("wheelchair"), true);
 assert.equal(hasDecisionTree("name-correction"), true);
 assert.equal(hasDecisionTree("falcon-handling"), true);
-assert.equal(hasDecisionTree("ok-to-board"), false);
+assert.equal(hasDecisionTree("ok-to-board"), true); // now a Batch 2 tree
+assert.equal(hasDecisionTree("payment"), false);
 assert.equal(hasDecisionTree("nonexistent-slug"), false);
 
 // ---- Phase H: wheelchair, name-correction, falcon-handling ----
@@ -995,6 +997,197 @@ const govMismatch = getWorkflowAvailability({
   source_version: "80.8 (23-Jun-2026)",
 });
 assert.equal(govMismatch.status, "unavailable_source_mismatch");
+
+// ---- Phase J-D Batch 2: Travel Requirements workflows (verified: GO TO v81.2 10-Jul-2026) ----
+
+// Every Batch 2 tree is registered, versioned to 81.2 and source-cited.
+for (const slug of ["travel-requirements", "ok-to-board", "visa-change"]) {
+  assert.ok(DECISION_DEFINITIONS[slug], `definition registered for ${slug}`);
+  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.2 (10-Jul-2026)");
+  assert.ok(DECISION_DEFINITIONS[slug].sourcePages.length > 0, `source pages for ${slug}`);
+  for (const rule of DECISION_DEFINITIONS[slug].rules) {
+    assert.ok((rule.sourceField ?? "").length > 0, `${slug}/${rule.id}: non-empty sourceField`);
+    // High-risk travel-document trees must never imply admissibility with a bare "Can proceed".
+    assert.notEqual(rule.outcome, "Can proceed", `${slug}/${rule.id}: no bare Can proceed`);
+  }
+}
+
+// -- Travel Requirements — UAE residency (ch.49 p.272) --
+const TR = DECISION_DEFINITIONS["travel-requirements"];
+expectRule(
+  TR,
+  { scenario: "Other entry or exit requirement" },
+  "tr-other-requirement",
+  "Insufficient information",
+  "Insufficient information"
+);
+expectRule(
+  TR,
+  { scenario: "UAE resident departing Dubai and returning to the UAE", eid_present: false },
+  "tr-uae-resident-no-eid",
+  "Requires document",
+  "Conditional"
+);
+expectRule(
+  TR,
+  { scenario: "UAE resident departing Dubai and returning to the UAE", eid_present: true },
+  "tr-uae-resident-eid",
+  "Can proceed with conditions",
+  "Conditional"
+);
+const trIncomplete = evaluate(TR, {});
+assert.equal(trIncomplete.outcome, "Insufficient information");
+assert.equal(trIncomplete.matchedRuleId, null);
+assert.ok(trIncomplete.missing.length > 0);
+
+// -- OK to Board (ch.50 pp.272-274) --
+const OKTB = DECISION_DEFINITIONS["ok-to-board"];
+expectRule(
+  OKTB,
+  { request: "General OKTB policy or eligibility question" },
+  "oktb-policy-reference",
+  "Insufficient information",
+  "Insufficient information"
+);
+expectRule(
+  OKTB,
+  { request: "Add OKTB manually on an EK* flight", actioning_role: "Contact Centre agent" },
+  "oktb-ek-manual-not-fs",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  OKTB,
+  { request: "Add OKTB manually on an EK* flight", actioning_role: "Floor Support or Supervisor" },
+  "oktb-ek-manual-fs",
+  "Can proceed with conditions",
+  "Conditional"
+);
+// Manual add with no actioning role never self-authorises.
+const oktbNoRole = evaluate(OKTB, { request: "Add OKTB manually on an EK* flight" });
+assert.equal(oktbNoRole.outcome, "Insufficient information");
+assert.equal(oktbNoRole.matchedRuleId, null);
+const oktbIncomplete = evaluate(OKTB, {});
+assert.equal(oktbIncomplete.outcome, "Insufficient information");
+assert.equal(oktbIncomplete.matchedRuleId, null);
+assert.ok(oktbIncomplete.missing.length > 0);
+
+// -- Visa Change (ch.48.1 p.271) --
+const VC = DECISION_DEFINITIONS["visa-change"];
+expectRule(
+  VC,
+  { request_type: "General or transit visa enquiry" },
+  "vc-general-enquiry",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  VC,
+  { request_type: "Visa-change travel (re-entry to UAE)", outbound_noshow: true },
+  "vc-outbound-noshow",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  VC,
+  { request_type: "Visa-change travel (re-entry to UAE)", route: "Other route" },
+  "vc-route-unsupported",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  VC,
+  { request_type: "Visa-change travel (re-entry to UAE)", valid_uae_visa_in_hand: false },
+  "vc-no-valid-visa",
+  "Requires document",
+  "Conditional"
+);
+expectRule(
+  VC,
+  { request_type: "Visa-change travel (re-entry to UAE)", valid_uae_visa_in_hand: true, same_pnr_both_flights: false },
+  "vc-not-same-pnr",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  VC,
+  {
+    request_type: "Visa-change travel (re-entry to UAE)",
+    route: "MCT",
+    valid_uae_visa_in_hand: true,
+    same_pnr_both_flights: true,
+    outbound_noshow: false,
+  },
+  "vc-eligible-mct",
+  "Can proceed with conditions",
+  "Conditional"
+);
+expectRule(
+  VC,
+  {
+    request_type: "Visa-change travel (re-entry to UAE)",
+    route: "KWI",
+    valid_uae_visa_in_hand: true,
+    same_pnr_both_flights: true,
+    outbound_noshow: false,
+  },
+  "vc-eligible-kwi",
+  "Can proceed with conditions",
+  "Conditional"
+);
+// Safety: everything valid EXCEPT an unanswered route must never reach an eligible outcome.
+const vcNoRoute = evaluate(VC, {
+  request_type: "Visa-change travel (re-entry to UAE)",
+  valid_uae_visa_in_hand: true,
+  same_pnr_both_flights: true,
+  outbound_noshow: false,
+});
+assert.equal(vcNoRoute.outcome, "Insufficient information");
+assert.equal(vcNoRoute.matchedRuleId, null);
+// Bare visa-change with no supporting answers never self-authorises.
+const vcBare = evaluate(VC, { request_type: "Visa-change travel (re-entry to UAE)" });
+assert.equal(vcBare.outcome, "Insufficient information");
+assert.equal(vcBare.matchedRuleId, null);
+const vcIncomplete = evaluate(VC, {});
+assert.equal(vcIncomplete.outcome, "Insufficient information");
+assert.equal(vcIncomplete.matchedRuleId, null);
+assert.ok(vcIncomplete.missing.length > 0);
+
+// -- Category mapping: all three Batch 2 workflows are Travel Requirements --
+const { categoryForWorkflow: categoryForWorkflowB2 } = await import(
+  "../lib/decision-engine/categories.ts"
+);
+for (const slug of ["travel-requirements", "ok-to-board", "visa-change"]) {
+  assert.equal(categoryForWorkflowB2(slug), "Travel Requirements");
+}
+
+// -- Availability: cards are still at v80.8, so each Batch 2 workflow stays gated --
+for (const slug of ["travel-requirements", "ok-to-board", "visa-change"]) {
+  const noTree = getWorkflowAvailability({ slug });
+  assert.equal(noTree.hasTree, true, `${slug} has a tree`);
+  assert.equal(noTree.available, false);
+  // Unpublished / needs-review card stays unavailable.
+  const unpub = getWorkflowAvailability({ slug, is_published: false, review_status: "needs_review" });
+  assert.equal(unpub.available, false);
+  // A card still at v80.8 (source-version mismatch vs the 81.2 tree) stays unavailable.
+  const mismatch = getWorkflowAvailability({
+    slug,
+    is_published: true,
+    review_status: "approved",
+    source_version: "80.8 (23-Jun-2026)",
+  });
+  assert.equal(mismatch.status, "unavailable_source_mismatch");
+  assert.equal(mismatch.available, false);
+  // Only an approved, published, version-matched card makes it available.
+  const live = getWorkflowAvailability({
+    slug,
+    is_published: true,
+    review_status: "approved",
+    source_version: "81.2 (10-Jul-2026)",
+  });
+  assert.equal(live.status, "available");
+  assert.equal(live.available, true);
+}
 
 // ---- Phase J: structural tree validation must have zero errors ----
 const { validateAllTrees, treeErrors } = await import("../lib/decision-engine/validate-trees.ts");
