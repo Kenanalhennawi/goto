@@ -1189,6 +1189,196 @@ for (const slug of ["travel-requirements", "ok-to-board", "visa-change"]) {
   assert.equal(live.available, true);
 }
 
+// ---- Phase J-D Batch 3: Airport Services workflows (verified: GO TO v81.2 10-Jul-2026) ----
+
+// Every Batch 3 tree is registered, versioned to 81.2 and source-cited.
+for (const slug of ["meet-assist", "business-lounge", "blue-ribbon-bags", "worldtracer"]) {
+  assert.ok(DECISION_DEFINITIONS[slug], `definition registered for ${slug}`);
+  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.2 (10-Jul-2026)");
+  assert.ok(DECISION_DEFINITIONS[slug].sourcePages.length > 0, `source pages for ${slug}`);
+  for (const rule of DECISION_DEFINITIONS[slug].rules) {
+    assert.ok((rule.sourceField ?? "").length > 0, `${slug}/${rule.id}: non-empty sourceField`);
+    assert.ok((rule.sourcePages ?? []).length > 0, `${slug}/${rule.id}: rule source pages`);
+  }
+}
+
+// -- Meet & Assist (MASD) (p.304) --
+const MA = DECISION_DEFINITIONS["meet-assist"];
+expectRule(MA, { booking_type: "Economy", departure: "DXB Terminal 2" }, "ma-economy", "Not permitted", "High confidence");
+expectRule(
+  MA,
+  { booking_type: "Staff, discounted or rebate", departure: "DXB Terminal 2" },
+  "ma-staff-discount",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  MA,
+  { booking_type: "Upgraded (bid, OLCI or airport UPGJ)", departure: "DXB Terminal 2" },
+  "ma-upgraded",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  MA,
+  { booking_type: "Commercial Business Class", departure: "DXB Terminal 3" },
+  "ma-terminal-3",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  MA,
+  { booking_type: "Commercial Business Class", departure: "Outstation" },
+  "ma-outstation",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  MA,
+  { booking_type: "Commercial Business Class", departure: "DXB Terminal 2", transit_dxb_t2: true },
+  "ma-transit",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  MA,
+  {
+    booking_type: "Commercial Business Class",
+    departure: "DXB Terminal 2",
+    transit_dxb_t2: false,
+    no_lounge_ssr: true,
+  },
+  "ma-no-lounge-ssr",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  MA,
+  {
+    booking_type: "Commercial Business Class",
+    departure: "DXB Terminal 2",
+    transit_dxb_t2: false,
+    no_lounge_ssr: false,
+  },
+  "ma-eligible",
+  "Can proceed with conditions",
+  "Conditional"
+);
+const maIncomplete = evaluate(MA, { booking_type: "Commercial Business Class" });
+assert.equal(maIncomplete.outcome, "Insufficient information");
+assert.equal(maIncomplete.matchedRuleId, null);
+assert.ok(maIncomplete.missing.length > 0);
+
+// -- Business Lounge – DXB T2 (ch.64 p.314) --
+const BL = DECISION_DEFINITIONS["business-lounge"];
+expectRule(BL, { fz_operated: false }, "bl-not-fz", "Not permitted", "High confidence");
+expectRule(BL, { fz_operated: true, payment_method: "Cash" }, "bl-cash", "Not permitted", "High confidence");
+expectRule(BL, { fz_operated: true, payment_method: "Miles" }, "bl-miles", "Not permitted", "High confidence");
+expectRule(BL, { fz_operated: true, payment_method: "Other" }, "bl-other-pay", "Not permitted", "High confidence");
+expectRule(
+  BL,
+  { fz_operated: true, payment_method: "Credit or debit card" },
+  "bl-eligible",
+  "Can proceed with conditions",
+  "Conditional"
+);
+// FZ but no payment method chosen never self-authorises.
+const blNoPay = evaluate(BL, { fz_operated: true });
+assert.equal(blNoPay.outcome, "Insufficient information");
+assert.equal(blNoPay.matchedRuleId, null);
+const blIncomplete = evaluate(BL, {});
+assert.equal(blIncomplete.outcome, "Insufficient information");
+assert.equal(blIncomplete.matchedRuleId, null);
+assert.ok(blIncomplete.missing.length > 0);
+
+// -- Blue Ribbon Bags (ch.26 p.119) --
+const BRB = DECISION_DEFINITIONS["blue-ribbon-bags"];
+expectRule(BRB, { all_sectors_fz: false }, "brb-oal", "Not permitted", "High confidence");
+expectRule(
+  BRB,
+  { all_sectors_fz: true, request: "Claim or compensation follow-up" },
+  "brb-claim",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  BRB,
+  { all_sectors_fz: true, request: "Purchase BRB protection" },
+  "brb-eligible",
+  "Can proceed with conditions",
+  "Conditional"
+);
+const brbNoReq = evaluate(BRB, { all_sectors_fz: true });
+assert.equal(brbNoReq.outcome, "Insufficient information");
+assert.equal(brbNoReq.matchedRuleId, null);
+const brbIncomplete = evaluate(BRB, {});
+assert.equal(brbIncomplete.outcome, "Insufficient information");
+assert.equal(brbIncomplete.matchedRuleId, null);
+assert.ok(brbIncomplete.missing.length > 0);
+
+// -- WorldTracer (ch.26.6-26.9 pp.115-118) — conservative escalation only --
+const WT = DECISION_DEFINITIONS["worldtracer"];
+expectRule(WT, { issue_type: "Delayed baggage", has_pir: false }, "wt-no-pir", "Requires supervisor", "Conditional");
+expectRule(WT, { issue_type: "Lost – over 21 days", has_pir: true }, "wt-lost", "Requires supervisor", "Conditional");
+expectRule(
+  WT,
+  { issue_type: "Delayed baggage", has_pir: true },
+  "wt-delayed-pir",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  WT,
+  { issue_type: "Damaged or pilfered baggage", has_pir: true },
+  "wt-damaged-pir",
+  "Requires document",
+  "Conditional"
+);
+const wtIncomplete = evaluate(WT, { issue_type: "Delayed baggage" });
+assert.equal(wtIncomplete.outcome, "Insufficient information");
+assert.equal(wtIncomplete.matchedRuleId, null);
+assert.ok(wtIncomplete.missing.length > 0);
+// WorldTracer must never produce a proceed or not-permitted outcome.
+for (const rule of WT.rules) {
+  assert.ok(
+    ["Requires document", "Requires supervisor", "Insufficient information"].includes(rule.outcome),
+    `worldtracer/${rule.id}: conservative outcome only (got ${rule.outcome})`
+  );
+}
+
+// -- Category mapping: all four Batch 3 workflows are Airport --
+const { categoryForWorkflow: categoryForWorkflowB3 } = await import(
+  "../lib/decision-engine/categories.ts"
+);
+for (const slug of ["meet-assist", "business-lounge", "blue-ribbon-bags", "worldtracer"]) {
+  assert.equal(categoryForWorkflowB3(slug), "Airport");
+}
+
+// -- Availability: no cards yet, so each Batch 3 workflow stays gated --
+for (const slug of ["meet-assist", "business-lounge", "blue-ribbon-bags", "worldtracer"]) {
+  const noCard = getWorkflowAvailability({ slug });
+  assert.equal(noCard.hasTree, true, `${slug} has a tree`);
+  assert.equal(noCard.available, false);
+  const unpub = getWorkflowAvailability({ slug, is_published: false, review_status: "needs_review" });
+  assert.equal(unpub.available, false);
+  const mismatch = getWorkflowAvailability({
+    slug,
+    is_published: true,
+    review_status: "approved",
+    source_version: "80.8 (23-Jun-2026)",
+  });
+  assert.equal(mismatch.status, "unavailable_source_mismatch");
+  assert.equal(mismatch.available, false);
+  const live = getWorkflowAvailability({
+    slug,
+    is_published: true,
+    review_status: "approved",
+    source_version: "81.2 (10-Jul-2026)",
+  });
+  assert.equal(live.status, "available");
+  assert.equal(live.available, true);
+}
+
 // ---- Phase J: structural tree validation must have zero errors ----
 const { validateAllTrees, treeErrors } = await import("../lib/decision-engine/validate-trees.ts");
 const treeIssues = validateAllTrees(DECISION_DEFINITIONS);

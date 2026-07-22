@@ -746,4 +746,111 @@ export const QUESTION_SETS: Record<string, DecisionQuestion[]> = {
       ruleAffected: "Visa-change outbound NOSHOW handling (p.271)",
     },
   ],
+
+  // ---------- Phase J-D Batch 3: Meet & Assist (MASD) (GO TO v81.2 p.304) ----------
+  "meet-assist": [
+    {
+      id: "booking_type",
+      label: "What is the booking type?",
+      answerType: "single_choice",
+      options: [
+        "Commercial Business Class",
+        "Economy",
+        "Staff, discounted or rebate",
+        "Upgraded (bid, OLCI or airport UPGJ)",
+      ],
+      required: true,
+      reason: "MASD is limited to commercial Business Class; several booking types are excluded.",
+      ruleAffected: "MASD eligibility and exclusions (p.304)",
+    },
+    {
+      id: "departure",
+      label: "Where does the flight depart from?",
+      answerType: "single_choice",
+      options: ["DXB Terminal 2", "DXB Terminal 3", "Outstation"],
+      required: true,
+      reason: "This MASD service applies only to DXB Terminal 2 departures.",
+      ruleAffected: "MASD station/terminal eligibility (p.304)",
+    },
+    {
+      id: "transit_dxb_t2",
+      label: "Is the passenger a transit passenger at DXB Terminal 2?",
+      answerType: "yes_no",
+      required: false,
+      reason: "Transit passengers at DXB T2 are excluded from this departure MASD procedure.",
+      ruleAffected: "MASD transit exclusion (p.304)",
+    },
+    {
+      id: "no_lounge_ssr",
+      label: "Does the booking contain SSR LNGN – No Lounge Access?",
+      answerType: "yes_no",
+      required: false,
+      reason: "A booking with SSR LNGN (No Lounge Access) is excluded from MASD.",
+      ruleAffected: "MASD SSR exclusion (p.304)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 3: Business Lounge – DXB T2 (GO TO v81.2 ch.64 p.314) ----------
+  "business-lounge": [
+    {
+      id: "fz_operated",
+      label:
+        "Is the flight operated by flydubai, including an eligible codeshare/interline booking on an FZ-operated flight?",
+      answerType: "yes_no",
+      required: true,
+      reason: "Lounge access under this procedure is limited to eligible FZ-operated flights.",
+      ruleAffected: "Business Lounge flight eligibility (p.314)",
+    },
+    {
+      id: "payment_method",
+      label: "How does the passenger intend to pay?",
+      answerType: "single_choice",
+      options: ["Credit or debit card", "Cash", "Miles", "Other"],
+      required: false,
+      reason: "Payment is credit/debit card only; cash, miles, and other forms are not accepted.",
+      ruleAffected: "Business Lounge payment restrictions (p.314)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 3: Blue Ribbon Bags (GO TO v81.2 ch.26 p.119) ----------
+  "blue-ribbon-bags": [
+    {
+      id: "all_sectors_fz",
+      label: "Are all journey sectors operated by flydubai?",
+      answerType: "yes_no",
+      required: true,
+      reason: "BRB protection applies only when all sectors are operated by flydubai.",
+      ruleAffected: "BRB journey eligibility (p.119)",
+    },
+    {
+      id: "request",
+      label: "What is the request?",
+      answerType: "single_choice",
+      options: ["Purchase BRB protection", "Claim or compensation follow-up"],
+      required: false,
+      reason: "Purchase and claim follow-up are handled differently.",
+      ruleAffected: "BRB purchase vs claim handling (p.119)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 3: WorldTracer (GO TO v81.2 ch.26.6-26.9 pp.115-118) ----------
+  "worldtracer": [
+    {
+      id: "issue_type",
+      label: "What is the baggage issue?",
+      answerType: "single_choice",
+      options: ["Delayed baggage", "Damaged or pilfered baggage", "Lost – over 21 days"],
+      required: true,
+      reason: "Delayed, damaged/pilfered, and lost cases follow different documented handling.",
+      ruleAffected: "WorldTracer issue handling (pp.115-118)",
+    },
+    {
+      id: "has_pir",
+      label: "Does the passenger already have a PIR reference?",
+      answerType: "yes_no",
+      required: true,
+      reason: "A PIR reference is required for the documented WorldTracer follow-up.",
+      ruleAffected: "WorldTracer PIR prerequisite (pp.115-116)",
+    },
+  ],
 };

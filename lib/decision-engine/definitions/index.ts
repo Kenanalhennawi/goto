@@ -18,6 +18,10 @@ import { AUTO_SPLIT_OD_DEFINITION } from "./auto-split-od.ts";
 import { TRAVEL_REQUIREMENTS_DEFINITION } from "./travel-requirements.ts";
 import { OK_TO_BOARD_DEFINITION } from "./ok-to-board.ts";
 import { VISA_CHANGE_DEFINITION } from "./visa-change.ts";
+import { MEET_ASSIST_DEFINITION } from "./meet-assist.ts";
+import { BUSINESS_LOUNGE_DEFINITION } from "./business-lounge.ts";
+import { BLUE_RIBBON_BAGS_DEFINITION } from "./blue-ribbon-bags.ts";
+import { WORLDTRACER_DEFINITION } from "./worldtracer.ts";
 
 export const DECISION_DEFINITIONS: Record<string, DecisionDefinition> = {
   pregnancy: PREGNANCY_DEFINITION,
@@ -35,6 +39,10 @@ export const DECISION_DEFINITIONS: Record<string, DecisionDefinition> = {
   "travel-requirements": TRAVEL_REQUIREMENTS_DEFINITION,
   "ok-to-board": OK_TO_BOARD_DEFINITION,
   "visa-change": VISA_CHANGE_DEFINITION,
+  "meet-assist": MEET_ASSIST_DEFINITION,
+  "business-lounge": BUSINESS_LOUNGE_DEFINITION,
+  "blue-ribbon-bags": BLUE_RIBBON_BAGS_DEFINITION,
+  worldtracer: WORLDTRACER_DEFINITION,
 };
 
 /**
