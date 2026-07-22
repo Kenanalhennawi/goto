@@ -10,7 +10,12 @@ import {
   recordRecentWorkflow,
   recordDecisionOutcome,
   formatOutcomeSummary,
+  formatOutcomeExport,
+  OUTCOME_EXPORT_LABELS,
+  type OutcomeExportKind,
+  type OutcomeSummaryInput,
 } from "@/lib/agent-workspace";
+import { recordAnalyticsEvent } from "@/lib/decision-analytics";
 import type { AnswerValue, DecisionAnswers, DecisionQuestion } from "@/lib/decision-engine/types";
 
 const SESSION_KEY = "goto.decision.session.v1";
@@ -62,6 +67,7 @@ export function QuestionFlow({
   procedureTitle,
   questions,
   cardSourceVersion,
+  cardChapterSlug = null,
   onClose,
 }: {
   procedureSlug: string;
@@ -69,6 +75,8 @@ export function QuestionFlow({
   questions: DecisionQuestion[];
   /** source_version of the published card, used for the freshness guard. */
   cardSourceVersion?: string | null;
+  /** linked source chapter slug for the "View source" deep link. */
+  cardChapterSlug?: string | null;
   onClose: () => void;
 }) {
   // Single lazy session state: answers plus a stable startedAt. The lazy
@@ -105,9 +113,10 @@ export function QuestionFlow({
   }, [procedureSlug, session]);
 
   // Record the started workflow for the homepage/palette "recent" lists
-  // (slug + title only, device-local).
+  // (slug + title only, device-local) and fire the started analytics event.
   useEffect(() => {
     recordRecentWorkflow(procedureSlug, procedureTitle);
+    recordAnalyticsEvent({ type: "workflow_started", slug: procedureSlug });
   }, [procedureSlug, procedureTitle]);
 
   const current = useMemo(() => nextQuestion(questions, answers), [questions, answers]);
@@ -342,6 +351,9 @@ export function QuestionFlow({
             definition={DECISION_DEFINITIONS[procedureSlug]}
             answers={answers}
             procedureSlug={procedureSlug}
+            chapterSlug={cardChapterSlug}
+            startedAt={session.startedAt}
+            questionsAnswered={done}
           />
         ) : (
           <div className="rounded-md border border-blue-200 bg-sky-soft px-4 py-3">
@@ -367,15 +379,24 @@ function OutcomePanel({
   definition,
   answers,
   procedureSlug,
+  chapterSlug = null,
+  startedAt,
+  questionsAnswered,
 }: {
   definition: (typeof DECISION_DEFINITIONS)[string];
   answers: DecisionAnswers;
   procedureSlug: string;
+  chapterSlug?: string | null;
+  startedAt?: number;
+  questionsAnswered?: number;
 }) {
   const result = evaluate(definition, answers);
+  const pages = result.rulePages ?? definition.sourcePages;
+  const showAdvice = result.outcome !== "Insufficient information" && definition.notes.length > 0;
 
   // Log the reached outcome to device-local decision history (slug + outcome +
-  // timestamp only — never passenger data). Records once per completed panel.
+  // timestamp only — never passenger data) and fire the completed analytics
+  // event (aggregates only). Records once per completed panel.
   useEffect(() => {
     recordDecisionOutcome({
       slug: procedureSlug,
@@ -383,19 +404,27 @@ function OutcomePanel({
       outcome: result.outcome,
       at: Date.now(),
     });
+    recordAnalyticsEvent({
+      type: "workflow_completed",
+      slug: procedureSlug,
+      outcome: result.outcome,
+      questions: questionsAnswered ?? 0,
+      durationMs: startedAt ? Math.max(0, Date.now() - startedAt) : 0,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const summary = formatOutcomeSummary({
+  const summaryInput: OutcomeSummaryInput = {
     title: definition.procedureTitle,
     outcome: result.outcome,
     nextAction: result.nextAction,
-    passengerAdvice: result.outcome !== "Insufficient information" ? definition.notes : null,
+    passengerAdvice: showAdvice ? definition.notes : null,
     matchedRuleId: result.matchedRuleId,
     sourceChapter: definition.sourceChapter,
-    sourcePages: result.rulePages ?? definition.sourcePages,
+    sourcePages: pages,
     sourceVersion: definition.sourceVersion,
-  });
+  };
+  const summary = formatOutcomeSummary(summaryInput);
 
   const tone =
     result.outcome === "Not permitted"
@@ -408,6 +437,7 @@ function OutcomePanel({
 
   return (
     <div className={`rounded-md border px-4 py-3.5 ${tone}`}>
+      {/* Result */}
       <div className="flex flex-wrap items-center gap-2">
         <p className="font-display text-base font-bold text-ink">{result.outcome}</p>
         <span className="rounded-sm border border-border bg-white px-1.5 py-0.5 text-[10px] font-bold text-ink-muted">
@@ -415,10 +445,10 @@ function OutcomePanel({
         </span>
       </div>
       <p className="mt-1.5 text-sm leading-6 text-ink">{result.explanation}</p>
+
+      {/* Required action */}
       {result.nextAction && (
-        <p className="mt-1.5 text-sm font-semibold leading-6 text-ink">
-          Next: {result.nextAction}
-        </p>
+        <Field label="Required action">{result.nextAction}</Field>
       )}
       {result.derived && (
         <p className="mt-1.5 rounded-sm border border-ink/10 bg-white/60 px-2 py-1.5 font-mono text-xs leading-5 text-ink">
@@ -430,21 +460,29 @@ function OutcomePanel({
           Missing: {result.missing.join(" · ")}
         </p>
       )}
-      {definition.notes.length > 0 && result.outcome !== "Insufficient information" && (
-        <ul className="mt-2 space-y-1">
-          {definition.notes.map((note) => (
-            <li key={note.slice(0, 24)} className="text-xs leading-5 text-ink-muted">
-              {note}
-            </li>
-          ))}
-        </ul>
+
+      {/* Notes / advice */}
+      {showAdvice && (
+        <div className="mt-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Notes</p>
+          <ul className="mt-1 space-y-1">
+            {definition.notes.map((note) => (
+              <li key={note.slice(0, 24)} className="text-xs leading-5 text-ink-muted">
+                {note}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
+
+      {/* Reference */}
       <p className="mt-2.5 border-t border-ink/10 pt-2 text-[11px] font-medium text-ink-muted">
-        Source: GO TO v{definition.sourceVersion} · {definition.sourceChapter} · Page{" "}
-        {(result.rulePages ?? definition.sourcePages).join(", ")}
+        Reference: GO TO v{definition.sourceVersion} · {definition.sourceChapter} · Page{" "}
+        {pages.join(", ")}
         {result.matchedRuleId ? ` · Rule ${result.matchedRuleId}` : ""} — always verify on the
         procedure card.
       </p>
+
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Link
           href={`/procedure/${procedureSlug}`}
@@ -452,8 +490,52 @@ function OutcomePanel({
         >
           Open procedure card
         </Link>
+        <Link
+          href={chapterSlug ? `/chapter/${chapterSlug}` : `/procedure/${procedureSlug}`}
+          className="inline-flex rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+        >
+          View source
+        </Link>
         <CopyTextButton text={summary} label="Copy summary" />
+        <ExportMenu input={summaryInput} />
       </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-1.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">{label}</p>
+      <p className="text-sm font-semibold leading-6 text-ink">{children}</p>
+    </div>
+  );
+}
+
+// Copy the verified outcome in an audience-specific format. Reuses the pure
+// export formatter (no new content, no passenger data).
+function ExportMenu({ input }: { input: OutcomeSummaryInput }) {
+  const [open, setOpen] = useState(false);
+  const kinds: OutcomeExportKind[] = ["customer", "internal", "salesforce", "email"];
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="press inline-flex items-center gap-1 rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+      >
+        Export ▾
+      </button>
+      {open && (
+        <div className="absolute z-10 mt-1 w-44 rounded-md border border-border bg-white p-1 shadow-[var(--shadow-lg)]">
+          {kinds.map((kind) => (
+            <div key={kind} className="[&>button]:w-full [&>button]:justify-start [&>button]:border-0">
+              <CopyTextButton text={formatOutcomeExport(kind, input)} label={OUTCOME_EXPORT_LABELS[kind]} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -22,14 +22,16 @@ export default async function DecisionPage({
   const { data } = await supabase
     .from("procedure_cards")
     .select(
-      "id, title, slug, category, service_code, service_type, summary, keywords, aliases, priority, source_version"
+      "id, title, slug, category, service_code, service_type, summary, keywords, aliases, priority, source_version, last_reviewed_at, chapters(slug)"
     )
     .eq("is_published", true)
     .eq("review_status", "approved")
     .order("priority", { ascending: false })
     .limit(200);
 
-  const cards = ((data ?? []) as RoutableCard[]).filter(Boolean);
+  // The chapters(slug) embed is a to-one relation (single object at runtime),
+  // but Supabase's generated types widen it to an array; cast through unknown.
+  const cards = ((data ?? []) as unknown as RoutableCard[]).filter(Boolean);
   const initialProcedureSlug =
     typeof procedure === "string" && procedure.trim().length > 0 ? procedure.trim() : null;
 

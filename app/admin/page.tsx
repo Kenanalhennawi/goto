@@ -92,6 +92,12 @@ export default async function AdminDashboard() {
               </Link>
             )}
             <Link
+              href="/admin/workflows"
+              className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-ink hover:border-accent"
+            >
+              Workflow QA
+            </Link>
+            <Link
               href="/admin/sync"
               className="bg-accent text-base font-medium rounded-lg px-4 py-2 text-sm hover:bg-accent-dim transition-colors"
             >

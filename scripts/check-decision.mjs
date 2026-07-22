@@ -802,4 +802,30 @@ const wchairIncomplete = evaluate(WCHAIR, { assistance_type: "WCHR" });
 assert.equal(wchairIncomplete.outcome, "Insufficient information");
 assert.ok(wchairIncomplete.missing.length > 0);
 
+// ---- Phase J: structural tree validation must have zero errors ----
+const { validateAllTrees, treeErrors } = await import("../lib/decision-engine/validate-trees.ts");
+const treeIssues = validateAllTrees(DECISION_DEFINITIONS);
+const treeErrs = treeErrors(treeIssues);
+assert.equal(
+  treeErrs.length,
+  0,
+  `tree validation errors: ${treeErrs.map((i) => `${i.slug}: ${i.message}`).join("; ")}`
+);
+
+// ---- Phase J: workflow categories cover every registered tree ----
+const { listWorkflowSummaries, categoryForWorkflow, filterWorkflows, WORKFLOW_CATEGORY_ORDER } =
+  await import("../lib/decision-engine/categories.ts");
+const summaries = listWorkflowSummaries();
+assert.equal(summaries.length, Object.keys(DECISION_DEFINITIONS).length);
+for (const s of summaries) {
+  assert.ok(WORKFLOW_CATEGORY_ORDER.includes(s.category), `category valid for ${s.slug}`);
+  assert.ok(s.questionCount > 0 && s.estimatedSeconds > 0);
+  assert.ok(s.sourcePages.length > 0);
+}
+assert.equal(categoryForWorkflow("pregnancy"), "Medical");
+assert.equal(categoryForWorkflow("name-correction"), "Booking");
+assert.equal(categoryForWorkflow("unknown-slug"), "Special Services");
+assert.equal(filterWorkflows(summaries, "wheelchair").length >= 1, true);
+assert.equal(filterWorkflows(summaries, "zzz-no-match").length, 0);
+
 console.log("Decision router checks passed.");

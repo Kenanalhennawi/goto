@@ -5,6 +5,12 @@ import { useMemo, useState } from "react";
 import { routeIntent } from "@/lib/decision-engine/router";
 import { QUESTION_SETS } from "@/lib/decision-engine/questions";
 import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
+import { DECISION_DEFINITIONS } from "@/lib/decision-engine/definitions";
+import {
+  WORKFLOW_CATEGORY_ORDER,
+  categoryForWorkflow,
+  estimatedMinutesLabel,
+} from "@/lib/decision-engine/categories";
 import { QuestionFlow } from "@/components/decision/QuestionFlow";
 import type { RoutableCard } from "@/lib/decision-engine/types";
 
@@ -24,18 +30,15 @@ export function DecisionIntake({
     slug: string;
     title: string;
     sourceVersion: string | null;
+    chapterSlug: string | null;
   } | null>(null);
-  // A direct /decision?procedure=... link preselects a workflow. The user must
-  // still click to start; questions never auto-run. Dismissing returns to the
-  // general scenario search.
-  const [showPreselect, setShowPreselect] = useState(Boolean(initialProcedureSlug));
+  // A direct /decision?procedure=... link OR a directory click selects a
+  // workflow. The user must still click Start; questions never auto-run.
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(initialProcedureSlug);
 
-  const preselectCard = useMemo(
-    () =>
-      initialProcedureSlug
-        ? cards.find((card) => card.slug === initialProcedureSlug) ?? null
-        : null,
-    [cards, initialProcedureSlug]
+  const selectedCard = useMemo(
+    () => (selectedSlug ? cards.find((card) => card.slug === selectedSlug) ?? null : null),
+    [cards, selectedSlug]
   );
 
   const result = useMemo(
@@ -43,12 +46,12 @@ export function DecisionIntake({
     [submitted, cards]
   );
 
-  if (showPreselect && initialProcedureSlug) {
+  if (selectedSlug) {
     return (
       <PreselectedWorkflow
-        slug={initialProcedureSlug}
-        card={preselectCard}
-        onBack={() => setShowPreselect(false)}
+        slug={selectedSlug}
+        card={selectedCard}
+        onBack={() => setSelectedSlug(null)}
       />
     );
   }
@@ -150,6 +153,7 @@ export function DecisionIntake({
                           slug: result.primary!.slug,
                           title: result.primary!.title,
                           sourceVersion: result.primary!.source_version ?? null,
+                          chapterSlug: result.primary!.chapters?.slug ?? null,
                         })
                     : undefined
                 }
@@ -161,6 +165,7 @@ export function DecisionIntake({
                   procedureTitle={activeFlow.title}
                   questions={QUESTION_SETS[activeFlow.slug]}
                   cardSourceVersion={activeFlow.sourceVersion}
+                  cardChapterSlug={activeFlow.chapterSlug}
                   onClose={() => setActiveFlow(null)}
                 />
               )}
@@ -175,7 +180,102 @@ export function DecisionIntake({
           )}
         </section>
       )}
+
+      <WorkflowDirectory cards={cards} onSelect={setSelectedSlug} />
     </div>
+  );
+}
+
+// Searchable, category-grouped directory of available guided workflows. Reuses
+// the availability helper so only approved/published/version-matched workflows
+// appear; clicking one opens its preview (never auto-starts).
+function WorkflowDirectory({
+  cards,
+  onSelect,
+}: {
+  cards: RoutableCard[];
+  onSelect: (slug: string) => void;
+}) {
+  const [filter, setFilter] = useState("");
+
+  const available = useMemo(() => {
+    const bySlug = new Map(cards.map((card) => [card.slug, card]));
+    return Object.values(DECISION_DEFINITIONS)
+      .map((definition) => {
+        const card = bySlug.get(definition.procedureSlug);
+        const availability = getWorkflowAvailability({
+          slug: definition.procedureSlug,
+          is_published: Boolean(card),
+          review_status: card ? "approved" : "needs_review",
+          source_version: card?.source_version ?? null,
+        });
+        return {
+          slug: definition.procedureSlug,
+          title: definition.procedureTitle,
+          category: categoryForWorkflow(definition.procedureSlug),
+          questionCount: definition.questions.length,
+          estimatedSeconds: definition.questions.length * 8,
+          available: availability.available,
+        };
+      })
+      .filter((w) => w.available);
+  }, [cards]);
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    return q
+      ? available.filter((w) => `${w.title} ${w.slug} ${w.category}`.toLowerCase().includes(q))
+      : available;
+  }, [available, filter]);
+
+  if (available.length === 0) return null;
+
+  return (
+    <section className="content-card mt-5 p-5" aria-label="Guided workflow directory">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-display text-base font-semibold text-ink">Browse guided workflows</h2>
+        <input
+          type="text"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder="Filter workflows…"
+          autoComplete="off"
+          aria-label="Filter workflows"
+          className="w-48 rounded-md border border-border bg-white px-3 py-1.5 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-sky"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="mt-3 text-sm text-ink-muted">No workflows match &ldquo;{filter}&rdquo;.</p>
+      ) : (
+        <div className="mt-3 space-y-4">
+          {WORKFLOW_CATEGORY_ORDER.map((category) => {
+            const items = filtered.filter((w) => w.category === category);
+            if (items.length === 0) return null;
+            return (
+              <div key={category}>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-accent">{category}</p>
+                <div className="mt-1.5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {items.map((w) => (
+                    <button
+                      key={w.slug}
+                      type="button"
+                      onClick={() => onSelect(w.slug)}
+                      className="hover-lift rounded-md border border-border bg-white px-3 py-2.5 text-left transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+                    >
+                      <span className="block truncate text-[13px] font-semibold text-ink">{w.title}</span>
+                      <span className="mt-0.5 block text-[11px] text-ink-faint">
+                        {w.questionCount} questions · {estimatedMinutesLabel(w.estimatedSeconds)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -258,6 +358,7 @@ function PreselectedWorkflow({
 }) {
   const [started, setStarted] = useState(false);
   const hasQuestions = Boolean(QUESTION_SETS[slug]);
+  const definition = DECISION_DEFINITIONS[slug];
   const availability = card
     ? getWorkflowAvailability({
         slug,
@@ -268,6 +369,8 @@ function PreselectedWorkflow({
     : getWorkflowAvailability({ slug });
   const title = card?.title ?? slug;
   const canStart = availability.available && hasQuestions;
+  const questionCount = definition?.questions.length ?? 0;
+  const lastReviewed = formatReviewDate(card?.last_reviewed_at);
 
   return (
     <div className="space-y-4">
@@ -278,10 +381,15 @@ function PreselectedWorkflow({
               Guided decision
             </p>
             <h2 className="mt-1 font-display text-lg font-semibold text-ink">{title}</h2>
-            {canStart ? (
-              <p className="mt-1 text-xs font-medium text-ink-muted">
-                Verified source: GO TO v{card?.source_version} — answer the questions to reach the outcome.
-              </p>
+            {canStart && definition ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <PreviewChip label={`${questionCount} questions`} />
+                <PreviewChip label={estimatedMinutesLabel(questionCount * 8)} />
+                <PreviewChip label={`GO TO v${definition.sourceVersion}`} />
+                <PreviewChip label={`${definition.sourceChapter}`} />
+                <PreviewChip label={`Page ${definition.sourcePages.join(", ")}`} />
+                {lastReviewed && <PreviewChip label={`Reviewed ${lastReviewed}`} />}
+              </div>
             ) : (
               <p className="mt-1 text-sm leading-6 text-ink-muted">
                 {availability.hasTree
@@ -327,9 +435,25 @@ function PreselectedWorkflow({
           procedureTitle={title}
           questions={QUESTION_SETS[slug]}
           cardSourceVersion={card?.source_version ?? null}
+          cardChapterSlug={card?.chapters?.slug ?? null}
           onClose={() => setStarted(false)}
         />
       )}
     </div>
   );
+}
+
+function PreviewChip({ label }: { label: string }) {
+  return (
+    <span className="rounded-sm border border-border bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-muted">
+      {label}
+    </span>
+  );
+}
+
+function formatReviewDate(value: string | null | undefined): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit", year: "numeric" }).format(date);
 }

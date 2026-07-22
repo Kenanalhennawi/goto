@@ -160,6 +160,73 @@ export function formatOutcomeSummary(input: {
   return lines.join("\n");
 }
 
+export type OutcomeExportKind = "customer" | "internal" | "salesforce" | "email";
+
+export type OutcomeSummaryInput = {
+  title: string;
+  outcome: string;
+  nextAction?: string | null;
+  passengerAdvice?: string[] | null;
+  matchedRuleId?: string | null;
+  sourceChapter?: string | null;
+  sourcePages?: number[] | null;
+  sourceVersion?: string | null;
+};
+
+function sourceLine(input: OutcomeSummaryInput): string {
+  const pages = input.sourcePages && input.sourcePages.length > 0 ? input.sourcePages.join(", ") : "";
+  return [
+    input.sourceVersion ? `GO TO v${input.sourceVersion}` : "",
+    input.sourceChapter ?? "",
+    pages ? `Page ${pages}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * Reshape the (already verified) outcome into an audience-specific copy format.
+ * Deterministic; never adds content, never includes passenger data.
+ */
+export function formatOutcomeExport(kind: OutcomeExportKind, input: OutcomeSummaryInput): string {
+  const advice = (input.passengerAdvice ?? []).filter(Boolean);
+  const src = sourceLine(input);
+  if (kind === "customer") {
+    const lines = [`Regarding ${input.title}:`, input.outcome];
+    if (advice.length > 0) lines.push("", "Please note:", ...advice.map((a) => `- ${a}`));
+    return lines.join("\n");
+  }
+  if (kind === "salesforce") {
+    const parts = [
+      `${input.title} | ${input.outcome}`,
+      input.nextAction ? `Action: ${input.nextAction}` : "",
+      input.matchedRuleId ? `Rule: ${input.matchedRuleId}` : "",
+      src ? `Src: ${src}` : "",
+    ].filter(Boolean);
+    return parts.join(" | ");
+  }
+  if (kind === "email") {
+    const lines = [
+      "Hello,",
+      "",
+      `Following your ${input.title.toLowerCase()} query, the applicable outcome is: ${input.outcome}.`,
+    ];
+    if (input.nextAction) lines.push("", input.nextAction);
+    if (advice.length > 0) lines.push("", "Please note:", ...advice.map((a) => `- ${a}`));
+    lines.push("", "Kind regards,", "flydubai Contact Centre");
+    return lines.join("\n");
+  }
+  // internal (full)
+  return formatOutcomeSummary(input);
+}
+
+export const OUTCOME_EXPORT_LABELS: Record<OutcomeExportKind, string> = {
+  customer: "Customer notes",
+  internal: "Internal notes",
+  salesforce: "Salesforce notes",
+  email: "Email",
+};
+
 // ---------------------------------------------------------------------------
 // localStorage wrappers (SSR-safe; never throw)
 // ---------------------------------------------------------------------------

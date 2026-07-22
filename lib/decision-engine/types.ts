@@ -13,6 +13,10 @@ export type RoutableCard = {
   priority: number | null;
   /** GO TO source version of the published card (Phase D freshness check). */
   source_version?: string | null;
+  /** When the card was last reviewed against source (Phase J preview). */
+  last_reviewed_at?: string | null;
+  /** Linked source chapter, for the "View source" deep link (Phase J). */
+  chapters?: { slug: string } | null;
 };
 
 export type MatchedConcept = {

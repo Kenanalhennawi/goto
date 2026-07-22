@@ -463,4 +463,49 @@ assert.ok(summary.includes("Matched rule: single-29-36"));
 assert.ok(summary.includes("Page 259"));
 assert.ok(summary.includes("81.2 (10-Jul-2026)"));
 
+// ---- Phase J: decision analytics (aggregate-only, PII-free) + export ----
+const { reduceAnalytics, summarizeWorkflow } = await import("../lib/decision-analytics.ts");
+const { formatOutcomeExport } = await import("../lib/agent-workspace.ts");
+
+let a = {};
+a = reduceAnalytics(a, { type: "workflow_started", slug: "pregnancy" });
+a = reduceAnalytics(a, { type: "workflow_started", slug: "pregnancy" });
+a = reduceAnalytics(a, {
+  type: "workflow_completed",
+  slug: "pregnancy",
+  outcome: "Can proceed",
+  questions: 3,
+  durationMs: 6000,
+});
+a = reduceAnalytics(a, { type: "workflow_abandoned", slug: "pregnancy", questions: 1, durationMs: 500 });
+const metrics = summarizeWorkflow("pregnancy", a.pregnancy);
+assert.equal(metrics.started, 2);
+assert.equal(metrics.completed, 1);
+assert.equal(metrics.abandoned, 1);
+assert.equal(metrics.completionRate, 0.5);
+assert.equal(metrics.avgQuestions, 3);
+assert.equal(metrics.avgDurationMs, 6000);
+assert.equal(metrics.topOutcome, "Can proceed");
+// Aggregates hold only counts/outcomes — no answer or passenger data can leak.
+assert.deepEqual(Object.keys(a.pregnancy.outcomes), ["Can proceed"]);
+// Events with a missing slug are ignored.
+assert.deepEqual(reduceAnalytics({}, { type: "workflow_started", slug: "" }), {});
+
+// Export formats reshape the same verified content, never adding PII.
+const exportInput = {
+  title: "Pregnancy",
+  outcome: "Requires document",
+  nextAction: "Advise the certificate requirements",
+  passengerAdvice: ["Only the original certificate is accepted"],
+  matchedRuleId: "single-29-36",
+  sourceChapter: "42. Pregnancy",
+  sourcePages: [259],
+  sourceVersion: "81.2 (10-Jul-2026)",
+};
+assert.ok(formatOutcomeExport("customer", exportInput).includes("Only the original certificate is accepted"));
+assert.ok(!formatOutcomeExport("customer", exportInput).includes("single-29-36")); // no internal rule id to customer
+assert.ok(formatOutcomeExport("salesforce", exportInput).includes("Rule: single-29-36"));
+assert.ok(formatOutcomeExport("email", exportInput).startsWith("Hello,"));
+assert.ok(formatOutcomeExport("internal", exportInput).includes("Matched rule: single-29-36"));
+
 console.log("Logic checks passed.");
