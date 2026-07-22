@@ -551,4 +551,101 @@ export const QUESTION_SETS: Record<string, DecisionQuestion[]> = {
       ruleAffected: "Required details table (pp.120, 124)",
     },
   ],
+
+  // ---------- Phase J-D Batch 1: Duplicate Booking (GO TO v81.2 ch.47 pp.268-270) ----------
+  "duplicate-booking": [
+    {
+      id: "match_level",
+      label: "How do the two bookings compare?",
+      answerType: "single_choice",
+      options: ["Identical in every detail", "Only one sector matches", "Not clearly a duplicate"],
+      required: true,
+      reason: "The bookings must match the documented duplicate criteria before the case is handled as a duplicate.",
+      ruleAffected: "Duplicate-booking definition and exact/partial handling (pp.268-270)",
+    },
+    {
+      id: "both_active",
+      label: "Are both bookings fully active (no cancelled, no-show, or used segment)?",
+      answerType: "yes_no",
+      required: true,
+      reason: "A no-show, used, or inactive segment requires exception review.",
+      ruleAffected: "Inactive / no-show handling (p.269)",
+    },
+    {
+      id: "fare_same",
+      label: "Is the total fare the same on both bookings?",
+      answerType: "yes_no",
+      required: false,
+      reason: "For an exact duplicate, same-fare and different-fare cases cancel a different booking.",
+      ruleAffected: "Exact duplicate same/different fare (pp.269-270)",
+    },
+    {
+      id: "other_channel",
+      label: "Was either booking created through a travel agent or GDS?",
+      answerType: "yes_no",
+      required: false,
+      reason: "Cross-channel duplicates require the issuing agent's involvement and approval.",
+      ruleAffected: "Travel agency / GDS duplicate handling (p.269)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 1: Government Deals (GO TO v81.2 ch.69 pp.322-324) ----------
+  "government-deals": [
+    {
+      id: "request_type",
+      label: "What is the request?",
+      answerType: "single_choice",
+      options: [
+        "Create a new discounted booking",
+        "Add an adult or child",
+        "Add an infant",
+        "Modify or cancel an existing deal booking",
+      ],
+      required: true,
+      reason: "Contact Centre authority differs by request type; new deal bookings are travel-shop-only.",
+      ruleAffected: "Government Deal creation / addition / modification (pp.322-324)",
+    },
+    {
+      id: "interline_codeshare",
+      label: "Is the itinerary interline or codeshare?",
+      answerType: "yes_no",
+      required: true,
+      reason: "Government deals are not applicable to interline/codeshare bookings.",
+      ruleAffected: "Government Deals exclusions (p.322)",
+    },
+  ],
+
+  // ---------- Phase J-D Batch 1: Auto Split OD (GO TO v81.2 ch.11 Fare Types pp.49-50) ----------
+  "auto-split-od": [
+    {
+      id: "fz_connection",
+      label: "Is it an eligible FZ-FZ connection (not interline, codeshare or circular)?",
+      answerType: "yes_no",
+      required: true,
+      reason: "Auto Split OD applies only to FZ-FZ connection bookings; other itineraries are excluded.",
+      ruleAffected: "Auto Split OD exclusions (p.50)",
+    },
+    {
+      id: "leg_pattern",
+      label: "Which leg status pattern applies?",
+      answerType: "single_choice",
+      options: [
+        "Leg 1 boarded, Leg 2 no-show",
+        "Leg 1 no-show, Leg 2 boarded",
+        "Other or both same status",
+      ],
+      required: true,
+      reason: "An OD Split occurs only when the two legs have different statuses (boarded / no-show).",
+      ruleAffected: "OD Split status trigger and restriction matrix (pp.49-50)",
+    },
+    {
+      id: "request",
+      label: "What does the customer want to do with the affected leg?",
+      answerType: "single_choice",
+      options: ["Modify the affected leg", "Cancel the affected leg"],
+      required: false,
+      reason: "Modification and cancellation of the no-show leg follow different rules.",
+      ruleAffected: "Auto Split OD modification / cancellation matrix (pp.49-50)",
+    },
+  ],
 };

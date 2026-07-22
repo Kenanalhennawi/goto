@@ -802,6 +802,200 @@ const wchairIncomplete = evaluate(WCHAIR, { assistance_type: "WCHR" });
 assert.equal(wchairIncomplete.outcome, "Insufficient information");
 assert.ok(wchairIncomplete.missing.length > 0);
 
+// ---- Phase J-D Batch 1: Booking workflows (verified: GO TO v81.2 10-Jul-2026) ----
+
+// Every Batch 1 tree is registered, versioned to 81.2 and source-cited.
+for (const slug of ["duplicate-booking", "government-deals", "auto-split-od"]) {
+  assert.ok(DECISION_DEFINITIONS[slug], `definition registered for ${slug}`);
+  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.2 (10-Jul-2026)");
+  assert.ok(DECISION_DEFINITIONS[slug].sourcePages.length > 0, `source pages for ${slug}`);
+  for (const rule of DECISION_DEFINITIONS[slug].rules) {
+    assert.ok((rule.sourceField ?? "").length > 0, `${slug}/${rule.id}: non-empty sourceField`);
+  }
+}
+
+// -- Duplicate Booking (ch.47 pp.268-270): every resolvable case is approval-gated --
+const DUP = DECISION_DEFINITIONS["duplicate-booking"];
+expectRule(
+  DUP,
+  { match_level: "Not clearly a duplicate", both_active: true },
+  "dup-not-clear",
+  "Insufficient information",
+  "Insufficient information"
+);
+expectRule(
+  DUP,
+  { match_level: "Identical in every detail", both_active: false },
+  "dup-not-active",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  DUP,
+  { match_level: "Only one sector matches", both_active: true },
+  "dup-partial",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  DUP,
+  { match_level: "Identical in every detail", both_active: true, other_channel: true },
+  "dup-other-channel",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  DUP,
+  { match_level: "Identical in every detail", both_active: true, fare_same: true, other_channel: false },
+  "dup-exact-same-fare",
+  "Requires supervisor",
+  "Conditional"
+);
+const dupSameFare = evaluate(DUP, {
+  match_level: "Identical in every detail",
+  both_active: true,
+  fare_same: true,
+  other_channel: false,
+});
+assert.deepEqual(dupSameFare.rulePages, [269, 270], "dup-exact-same-fare source pages");
+expectRule(
+  DUP,
+  { match_level: "Identical in every detail", both_active: true, fare_same: false, other_channel: false },
+  "dup-exact-diff-fare",
+  "Requires supervisor",
+  "Conditional"
+);
+// No self-service "Can proceed" outcome exists anywhere in the duplicate tree.
+for (const rule of DUP.rules) {
+  assert.notEqual(rule.outcome, "Can proceed", "duplicate booking never self-services a refund");
+}
+// Incomplete answers -> Insufficient information, no matched rule.
+const dupIncomplete = evaluate(DUP, { match_level: "Identical in every detail" });
+assert.equal(dupIncomplete.outcome, "Insufficient information");
+assert.equal(dupIncomplete.matchedRuleId, null);
+assert.ok(dupIncomplete.missing.length > 0);
+
+// -- Government Deals (ch.69 pp.322-324) --
+const GOV = DECISION_DEFINITIONS["government-deals"];
+expectRule(
+  GOV,
+  { request_type: "Create a new discounted booking", interline_codeshare: true },
+  "gov-interline",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  GOV,
+  { request_type: "Create a new discounted booking", interline_codeshare: false },
+  "gov-create",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  GOV,
+  { request_type: "Add an adult or child", interline_codeshare: false },
+  "gov-add-adult-child",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  GOV,
+  { request_type: "Add an infant", interline_codeshare: false },
+  "gov-add-infant",
+  "Can proceed with conditions",
+  "Conditional"
+);
+expectRule(
+  GOV,
+  { request_type: "Modify or cancel an existing deal booking", interline_codeshare: false },
+  "gov-modify-cancel",
+  "Can proceed with conditions",
+  "Conditional"
+);
+const govIncomplete = evaluate(GOV, { request_type: "Add an infant" });
+assert.equal(govIncomplete.outcome, "Insufficient information");
+assert.equal(govIncomplete.matchedRuleId, null);
+assert.ok(govIncomplete.missing.length > 0);
+
+// -- Auto Split OD (ch.11 Fare Types pp.49-50) --
+const AUTO = DECISION_DEFINITIONS["auto-split-od"];
+expectRule(
+  AUTO,
+  { fz_connection: false, leg_pattern: "Other or both same status" },
+  "auto-split-excluded",
+  "Insufficient information",
+  "Insufficient information"
+);
+expectRule(
+  AUTO,
+  { fz_connection: true, leg_pattern: "Other or both same status" },
+  "auto-split-other-status",
+  "Insufficient information",
+  "Insufficient information"
+);
+expectRule(
+  AUTO,
+  { fz_connection: true, leg_pattern: "Leg 1 no-show, Leg 2 boarded" },
+  "auto-split-noshow-first",
+  "Not permitted",
+  "High confidence"
+);
+expectRule(
+  AUTO,
+  { fz_connection: true, leg_pattern: "Leg 1 boarded, Leg 2 no-show", request: "Cancel the affected leg" },
+  "auto-split-cancel",
+  "Requires supervisor",
+  "Conditional"
+);
+expectRule(
+  AUTO,
+  { fz_connection: true, leg_pattern: "Leg 1 boarded, Leg 2 no-show", request: "Modify the affected leg" },
+  "auto-split-modify",
+  "Can proceed with conditions",
+  "Conditional"
+);
+const autoIncomplete = evaluate(AUTO, { fz_connection: true });
+assert.equal(autoIncomplete.outcome, "Insufficient information");
+assert.equal(autoIncomplete.matchedRuleId, null);
+assert.ok(autoIncomplete.missing.length > 0);
+
+// -- Category mapping: all three Batch 1 workflows are Booking --
+const { categoryForWorkflow: categoryForWorkflowB1 } = await import(
+  "../lib/decision-engine/categories.ts"
+);
+assert.equal(categoryForWorkflowB1("duplicate-booking"), "Booking");
+assert.equal(categoryForWorkflowB1("government-deals"), "Booking");
+assert.equal(categoryForWorkflowB1("auto-split-od"), "Booking");
+
+// -- Availability: duplicate-booking has no card yet -> unavailable but tree exists --
+const dupAvail = getWorkflowAvailability({ slug: "duplicate-booking" });
+assert.equal(dupAvail.hasTree, true);
+assert.equal(dupAvail.available, false);
+assert.equal(dupAvail.status, "unavailable_unpublished");
+// gov / auto-split are gated too until a matching approved+published card exists.
+for (const slug of ["government-deals", "auto-split-od"]) {
+  const gated = getWorkflowAvailability({ slug, is_published: false, review_status: "needs_review" });
+  assert.equal(gated.hasTree, true);
+  assert.equal(gated.available, false);
+  // With an approved, published, version-matched card they become available.
+  const live = getWorkflowAvailability({
+    slug,
+    is_published: true,
+    review_status: "approved",
+    source_version: "81.2 (10-Jul-2026)",
+  });
+  assert.equal(live.status, "available");
+  assert.equal(live.available, true);
+}
+// A version-mismatched card keeps the Batch 1 workflow gated.
+const govMismatch = getWorkflowAvailability({
+  slug: "government-deals",
+  is_published: true,
+  review_status: "approved",
+  source_version: "80.8 (23-Jun-2026)",
+});
+assert.equal(govMismatch.status, "unavailable_source_mismatch");
+
 // ---- Phase J: structural tree validation must have zero errors ----
 const { validateAllTrees, treeErrors } = await import("../lib/decision-engine/validate-trees.ts");
 const treeIssues = validateAllTrees(DECISION_DEFINITIONS);

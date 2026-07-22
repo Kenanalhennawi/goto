@@ -12,6 +12,9 @@ import { MINIMUM_CONNECTION_TIME_DEFINITION } from "./minimum-connection-time.ts
 import { WHEELCHAIR_DEFINITION } from "./wheelchair.ts";
 import { NAME_CORRECTION_DEFINITION } from "./name-correction.ts";
 import { FALCON_HANDLING_DEFINITION } from "./falcon-handling.ts";
+import { DUPLICATE_BOOKING_DEFINITION } from "./duplicate-booking.ts";
+import { GOVERNMENT_DEALS_DEFINITION } from "./government-deals.ts";
+import { AUTO_SPLIT_OD_DEFINITION } from "./auto-split-od.ts";
 
 export const DECISION_DEFINITIONS: Record<string, DecisionDefinition> = {
   pregnancy: PREGNANCY_DEFINITION,
@@ -23,6 +26,9 @@ export const DECISION_DEFINITIONS: Record<string, DecisionDefinition> = {
   wheelchair: WHEELCHAIR_DEFINITION,
   "name-correction": NAME_CORRECTION_DEFINITION,
   "falcon-handling": FALCON_HANDLING_DEFINITION,
+  "duplicate-booking": DUPLICATE_BOOKING_DEFINITION,
+  "government-deals": GOVERNMENT_DEALS_DEFINITION,
+  "auto-split-od": AUTO_SPLIT_OD_DEFINITION,
 };
 
 /**

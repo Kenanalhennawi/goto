@@ -27,6 +27,9 @@ export const WORKFLOW_CATEGORY_ORDER: WorkflowCategory[] = [
 // "Special Services" so nothing is ever hidden from the directory.
 export const WORKFLOW_CATEGORIES: Record<string, WorkflowCategory> = {
   "name-correction": "Booking",
+  "duplicate-booking": "Booking",
+  "government-deals": "Booking",
+  "auto-split-od": "Booking",
   "check-in-olci": "Airport",
   "minimum-connection-time": "Airport",
   "flight-disruption": "Disruption",
