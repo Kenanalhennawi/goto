@@ -474,3 +474,12 @@ body {
     transform: none;
   }
 }
+
+/* Native <details> disclosure chevron (agent) */
+.agent-disclosure > summary .disclosure-chevron {
+  display: inline-block;
+  transition: transform var(--dur-fast) var(--ease-swift);
+}
+.agent-disclosure[open] > summary .disclosure-chevron {
+  transform: rotate(90deg);
+}

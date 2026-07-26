@@ -1,58 +1,58 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
-import { SearchBar } from "@/components/SearchBar";
+import { AgentPage } from "@/components/agent/AgentPage";
+import { OperationalAnswer } from "@/components/agent/OperationalAnswer";
+import { RelatedProcedureRow, MoreResults, type RelatedItem } from "@/components/agent/RelatedProcedures";
+import { SourceReferences, type SourceRef } from "@/components/agent/SourceReferences";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   buildSearchTerms,
-  compactTimingPreview,
-  containsArabic,
-  detectFieldQuery,
-  fieldQueryMessage,
-  isReferenceCard,
   MIN_SEARCH_QUERY_LENGTH,
-  operationalCardPreview,
   plainSnippet,
   rankSearchResults,
-  readableJsonItems,
-  resolveOperationalQuery,
   scoreOperationalCard,
-  timingLabelForCard,
 } from "@/lib/search";
-import type { ChapterSearchResult, OperationalCardSearchResult, SearchResult, UnifiedSearchResult } from "@/lib/types";
 import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
+import { deriveOperationalAnswer } from "@/lib/operational-answer";
+import type { JsonValue, SearchResult } from "@/lib/types";
 
-type ProcedureSearchRow = Parameters<typeof scoreOperationalCard>[0] & {
+export const metadata = {
+  title: "Search results | GO TO",
+  description: "Find the right operational guidance for the customer's request.",
+};
+
+// Full operational card fields needed to derive the operational answer. Scoring
+// is unchanged; this only widens what we carry through to rendering.
+type OperationalRow = {
   id: string;
   title: string;
   slug: string;
   category: string;
-  channels: OperationalCardSearchResult["channels"] | null;
-  passenger_advice: OperationalCardSearchResult["passenger_advice"] | null;
-  system_steps: OperationalCardSearchResult["system_steps"] | null;
-  required_approval: string | null;
-  source_pages: number[] | null;
-  source_version: string | null;
-  summary: string | null;
-};
-
-type InstantAnswerSection = {
-  label: string;
-  text?: string;
-  items?: string[];
-};
-
-type InstantAnswerData = {
-  title: string;
-  slug: string;
   service_code: string | null;
   service_type: string | null;
-  category: string;
+  summary: string | null;
+  when_to_use: string | null;
+  cut_off_time: string | null;
+  channels: JsonValue[] | null;
+  who_can_action: JsonValue[] | null;
+  required_information: JsonValue[] | null;
+  system_steps: JsonValue[] | null;
+  passenger_advice: JsonValue[] | null;
+  allowed: JsonValue[] | null;
+  not_allowed: JsonValue[] | null;
+  escalation_points: JsonValue[] | null;
+  fees_charges: string | null;
+  keywords: string[] | null;
+  aliases: string[] | null;
   source_version: string | null;
-  source_pages: number[];
-  sections: InstantAnswerSection[];
 };
-const EMPTY_SUGGESTIONS = ["MCT", "EXST", "CBBG", "SPEQ", "Falcon", "OLCI Lounge", "FDIS", "WCHR"];
+
+const EXAMPLE_SEARCHES = [
+  "passenger has a plaster cast",
+  "wrong name on the booking",
+  "customer missed the flight",
+  "passenger needs oxygen",
+];
 
 export default async function SearchPage({
   searchParams,
@@ -61,518 +61,286 @@ export default async function SearchPage({
 }) {
   const { q } = await searchParams;
   const query = (q ?? "").trim();
-  const { results, answer } =
+  const { operational, sources } =
     query.length >= MIN_SEARCH_QUERY_LENGTH
-      ? await search(query)
-      : { results: [], answer: null };
-  const fieldMessage = fieldQueryMessage(detectFieldQuery(query));
-  const resolution = query ? resolveOperationalQuery(query) : null;
+      ? await runSearch(query)
+      : { operational: [] as OperationalRow[], sources: [] as SourceRef[] };
+
+  // Derive compact answers + guided availability for every operational result.
+  const derived = operational.map((card) => {
+    const availability = getWorkflowAvailability({
+      slug: card.slug,
+      is_published: true,
+      review_status: "approved",
+      source_version: card.source_version,
+    });
+    return {
+      slug: card.slug,
+      answer: deriveOperationalAnswer(card),
+      guided: { available: availability.available, hasTree: availability.hasTree },
+    };
+  });
+
+  const best = derived[0] ?? null;
+  const relatedItems: RelatedItem[] = derived.slice(1, 4).map(toRelatedItem);
+  const moreItems: RelatedItem[] = derived.slice(4).map(toRelatedItem);
+  const hasSources = sources.length > 0;
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="dashboard-shell flex min-h-full flex-col">
       <SiteHeader />
-
-      <main id="main" className="reveal mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
+      <AgentPage>
         <Link
           href="/"
-          className="mb-5 inline-flex items-center gap-2 rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+          className="agent-secondary touch-target inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold focus-visible:outline-none"
         >
-          &larr; Back to chapters
+          &larr; Back to Home
         </Link>
 
-        <section className="content-card mb-5 border-t-2 border-t-navy p-5">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-            Operational search
-          </p>
-          <h1 className="mb-2 font-display text-2xl font-semibold tracking-tight text-ink">
-            {query ? `Results for "${query}"` : "Search the GO TO guide"}
-          </h1>
-          <p className="mb-4 max-w-2xl text-sm leading-6 text-ink-muted">
-            Search by passenger issue, SSR code, process name, system keyword, or operational shorthand.
-          </p>
-          <SearchBar defaultValue={query} />
-        </section>
-
-        {resolution && (resolution.corrected || resolution.expansions.length > 0) ? (
-          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-white px-4 py-2.5 text-xs">
-            <span className="font-semibold uppercase tracking-wider text-ink-faint">
-              Understanding
-            </span>
-            {resolution.corrections.map((correction) => (
-              <span key={correction.from} className="font-medium text-ink">
-                &ldquo;{correction.from}&rdquo; &rarr;{" "}
-                <span className="font-semibold text-sky">{correction.to}</span>
-              </span>
-            ))}
-            {resolution.expansions.length > 0 && (
-              <span className="font-medium text-ink-muted">
-                also matching:{" "}
-                {resolution.expansions.map((expansion, index) => (
-                  <span key={expansion.term}>
-                    {index > 0 ? ", " : ""}
-                    <span className="font-semibold text-sky">{expansion.term}</span>
-                  </span>
-                ))}
-              </span>
-            )}
+        <h1 className="mt-4 font-display text-2xl font-semibold tracking-tight text-ink">
+          Search results
+        </h1>
+        <form action="/search" method="get" role="search" className="mt-3">
+          <label htmlFor="search-q" className="sr-only">
+            Search the operational guide
+          </label>
+          <div className="flex flex-col gap-2.5 sm:flex-row">
+            <input
+              id="search-q"
+              name="q"
+              type="search"
+              defaultValue={query}
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              enterKeyHint="search"
+              placeholder="Describe the customer's request…"
+              aria-label="Search the operational guide"
+              className="agent-search-input touch-target min-w-0 flex-1 px-4 py-3 text-[15px] text-ink placeholder:text-ink-faint"
+            />
+            <button
+              type="submit"
+              className="agent-primary touch-target inline-flex items-center justify-center rounded-xl px-6 py-3 text-[15px] font-semibold focus-visible:outline-none"
+            >
+              Search
+            </button>
           </div>
-        ) : null}
-
-        {answer ? <InstantAnswerPanel answer={answer} /> : null}
-
-        {fieldMessage && results.length > 0 ? (
-          <p className="mb-4 rounded-md border border-blue-200 bg-sky-soft px-4 py-2.5 text-sm font-semibold text-sky">
-            {fieldMessage}
-          </p>
-        ) : null}
+        </form>
+        <p className="mt-2 text-sm text-ink-muted">
+          Showing the most relevant operational guidance first.
+        </p>
+        <p className="sr-only" role="status" aria-live="polite">
+          {query.length >= MIN_SEARCH_QUERY_LENGTH
+            ? `${operational.length} operational result${operational.length === 1 ? "" : "s"} for ${query}.`
+            : ""}
+        </p>
 
         {query.length < MIN_SEARCH_QUERY_LENGTH ? (
-          <EmptyState message="Type at least two characters to search by issue, SSR, process, or keyword." />
-        ) : results.length === 0 ? (
-          <EmptyState
-            message={
-              containsArabic(query)
-                ? "Search works best with English service names or SSR codes. Try EXST, CBBG, MCT, SPEQ, FDIS, WCHR."
-                : "No matching results found. Try a shorter keyword, process name, or SSR code."
-            }
-          />
+          <StartState />
+        ) : best ? (
+          <>
+            <div className="mt-6">
+              <OperationalAnswer
+                answer={best.answer}
+                slug={best.slug}
+                guided={best.guided}
+                hasSourceRefs={hasSources}
+              />
+            </div>
+
+            {relatedItems.length > 0 && (
+              <section className="mt-8" aria-label="Related procedures">
+                <h2 className="font-display text-base font-semibold text-ink">Related procedures</h2>
+                <div className="mt-3 space-y-2.5">
+                  {relatedItems.map((item) => (
+                    <RelatedProcedureRow key={`rel-${item.slug}`} item={item} />
+                  ))}
+                </div>
+                <MoreResults items={moreItems} />
+              </section>
+            )}
+
+            <SourceReferences refs={sources} />
+          </>
+        ) : hasSources ? (
+          <NoOperationalMatch query={query} sources={sources} />
         ) : (
-          <div className="space-y-3">
-            {results.map((result) => (
-              result.type === "operational_card" ? (
-                <OperationalCardResult key={`card-${result.id}`} result={result} query={query} />
-              ) : (
-                <SearchResultCard key={`chapter-${result.id}`} result={result} />
-              )
-            ))}
-          </div>
+          <NoResults />
         )}
-      </main>
+      </AgentPage>
     </div>
   );
 }
 
-async function search(
-  query: string
-): Promise<{ results: UnifiedSearchResult[]; answer: InstantAnswerData | null }> {
-  const supabase = await createServerSupabaseClient();
-  const terms = buildSearchTerms(query);
-
-  if (!terms) return { results: [], answer: null };
-
-  const { results: cardResults, answer } = await searchOperationalCards(supabase, query);
-  const { data, error } = await supabase.rpc("search_chapters", {
-    query: terms,
-  });
-
-  if (error || !data) return { results: cardResults, answer };
-
-  const results = data as SearchResult[];
-  const ids = results.map((result) => result.id).filter(Boolean);
-  if (ids.length === 0) return { results: cardResults, answer };
-
-  const { data: chapters } = await supabase
-    .from("chapters")
-    .select("id, page_start, page_end, search_keywords, source_version, body_text")
-    .in("id", ids);
-
-  const metadata = new Map(
-    (chapters ?? []).map((chapter) => [
-      chapter.id,
-      {
-        page_start: chapter.page_start,
-        page_end: chapter.page_end,
-        search_keywords: chapter.search_keywords,
-        source_version: chapter.source_version,
-        body_text: chapter.body_text,
-      },
-    ])
-  );
-
-  const chapterResults = rankSearchResults(
-    results.map((result) => ({ ...result, ...metadata.get(result.id) })),
-    query
-  ).map((result) => {
-    const chapter = { ...result, type: "chapter" as const };
-    delete chapter.body_text;
-    return chapter;
-  });
-
-  return { results: [...cardResults, ...chapterResults].slice(0, 24), answer };
+function toRelatedItem(entry: {
+  slug: string;
+  answer: ReturnType<typeof deriveOperationalAnswer>;
+  guided: { available: boolean; hasTree: boolean };
+}): RelatedItem {
+  return {
+    slug: entry.slug,
+    title: entry.answer.title,
+    summary: entry.answer.summary,
+    deadline: entry.answer.deadline,
+    criticalBlocker: entry.answer.criticalBlocker,
+    guidedAvailable: entry.guided.available,
+  };
 }
 
-async function searchOperationalCards(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+async function runSearch(
   query: string
-): Promise<{ results: OperationalCardSearchResult[]; answer: InstantAnswerData | null }> {
-  const { data } = await supabase
+): Promise<{ operational: OperationalRow[]; sources: SourceRef[] }> {
+  const supabase = await createServerSupabaseClient();
+  const terms = buildSearchTerms(query);
+  if (!terms) return { operational: [], sources: [] };
+
+  // Operational cards — same published+approved filter, same scoreOperationalCard
+  // ranking, same threshold and cap as the existing search. Only the returned
+  // shape is widened so the operational answer can be derived.
+  const { data: cardData } = await supabase
     .from("procedure_cards")
     .select(
       [
-        "id",
-        "title",
-        "slug",
-        "category",
-        "service_code",
-        "service_type",
-        "cut_off_time",
-        "channels",
-        "who_can_action",
-        "required_information",
-        "system_steps",
-        "passenger_advice",
-        "allowed",
-        "not_allowed",
-        "escalation_points",
-        "fees_charges",
-        "required_approval",
-        "keywords",
-        "aliases",
-        "summary",
-        "when_to_use",
-        "source_pages",
+        "id", "title", "slug", "category", "service_code", "service_type",
+        "summary", "when_to_use", "cut_off_time", "channels", "who_can_action",
+        "required_information", "system_steps", "passenger_advice", "allowed",
+        "not_allowed", "escalation_points", "fees_charges", "keywords", "aliases",
         "source_version",
-        "priority",
       ].join(", ")
     )
     .eq("is_published", true)
     .eq("review_status", "approved")
     .limit(100);
 
-  const scored = ((data ?? []) as unknown as ProcedureSearchRow[])
+  const operational = ((cardData ?? []) as unknown as OperationalRow[])
     .map((card) => ({ card, score: scoreOperationalCard(card, query) }))
     .filter(({ score }) => score >= 2500)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 10);
+    .slice(0, 8)
+    .map(({ card }) => card);
 
-  const answer = scored.length > 0 ? buildInstantAnswer(scored[0].card, query) : null;
+  // Source/manual chapters — unchanged ranking; mapped to plain reference rows.
+  const { data: chapterHits, error } = await supabase.rpc("search_chapters", { query: terms });
+  if (error || !chapterHits) return { operational, sources: [] };
 
-  const results = scored.map(({ card, score }) => ({
-      type: "operational_card" as const,
-      id: card.id,
-      title: card.title,
-      slug: card.slug,
-      rank: score,
-      service_code: card.service_code ?? null,
-      service_type: card.service_type ?? null,
-      category: card.category,
-      cut_off_time: card.cut_off_time ?? null,
-      channels: card.channels ?? [],
-      passenger_advice: card.passenger_advice ?? [],
-      system_steps: card.system_steps ?? [],
-      source_pages: card.source_pages ?? [],
-      source_version: card.source_version ?? null,
-      summary: card.summary ?? null,
-      snippet: operationalCardPreview(card),
+  const results = chapterHits as SearchResult[];
+  const ids = results.map((r) => r.id).filter(Boolean);
+  if (ids.length === 0) return { operational, sources: [] };
+
+  const { data: chapters } = await supabase
+    .from("chapters")
+    .select("id, page_start, page_end, search_keywords, source_version, body_text")
+    .in("id", ids);
+  const metadata = new Map(
+    (chapters ?? []).map((c) => [
+      c.id,
+      { page_start: c.page_start, page_end: c.page_end, search_keywords: c.search_keywords, source_version: c.source_version, body_text: c.body_text },
+    ])
+  );
+
+  const sources: SourceRef[] = rankSearchResults(
+    results.map((r) => ({ ...r, ...metadata.get(r.id) })),
+    query
+  )
+    .slice(0, 6)
+    .map((r) => ({
+      slug: r.slug,
+      title: r.title,
+      excerpt: plainSnippet(r.snippet).slice(0, 200),
+      page: pageLabel(r.page_start, r.page_end),
     }));
 
-  return { results, answer };
+  return { operational, sources };
 }
 
-// Instant answer: shows the exact card field the agent asked about, or a
-// compact decision summary for exact service-code queries. Values are taken
-// verbatim from approved+published card fields; sections with no data are
-// omitted entirely.
-function buildInstantAnswer(card: ProcedureSearchRow, query: string): InstantAnswerData | null {
-  const fieldKind = detectFieldQuery(query);
-  const compactQuery = query.trim().replace(/\s+/g, "").toUpperCase();
-  const isExactCode = Boolean(card.service_code && card.service_code.toUpperCase() === compactQuery);
-
-  if (!fieldKind && !isExactCode) return null;
-
-  const sections: InstantAnswerSection[] = [];
-  const timingLabel = timingLabelForCard(card);
-  const channels = readableJsonItems(card.channels);
-  const whoCanAction = readableJsonItems(card.who_can_action);
-
-  if (fieldKind === "cut_off" && card.cut_off_time?.trim()) {
-    sections.push({ label: timingLabel, text: card.cut_off_time.trim() });
-  } else if (fieldKind === "restrictions") {
-    const items = readableJsonItems(card.not_allowed);
-    if (items.length) sections.push({ label: "Restrictions / not allowed", items });
-  } else if (fieldKind === "passenger_advice") {
-    const items = readableJsonItems(card.passenger_advice);
-    if (items.length) sections.push({ label: "Passenger advice", items });
-  } else if (fieldKind === "who_can_action") {
-    if (whoCanAction.length) sections.push({ label: "Who can action", items: whoCanAction });
-  } else if (fieldKind === "channel") {
-    if (channels.length) sections.push({ label: "Channels", items: channels });
-  } else if (fieldKind === "approval" && card.required_approval?.trim()) {
-    sections.push({ label: "Required approval", text: card.required_approval.trim() });
-  } else if (isExactCode) {
-    if (card.cut_off_time?.trim()) sections.push({ label: timingLabel, text: card.cut_off_time.trim() });
-    if (whoCanAction.length) sections.push({ label: "Who can action", items: whoCanAction.slice(0, 4) });
-    if (channels.length) sections.push({ label: "Channels", items: channels.slice(0, 4) });
-  }
-
-  if (sections.length === 0) return null;
-
-  return {
-    title: card.title,
-    slug: card.slug,
-    service_code: card.service_code ?? null,
-    service_type: card.service_type ?? null,
-    category: card.category,
-    source_version: card.source_version ?? null,
-    source_pages: card.source_pages ?? [],
-    sections,
-  };
+function pageLabel(start?: number | null, end?: number | null): string | null {
+  if (!start && !end) return null;
+  if (start && end && start !== end) return `Pages ${start}–${end}`;
+  return `Page ${start ?? end}`;
 }
 
-function InstantAnswerPanel({ answer }: { answer: InstantAnswerData }) {
-  const pages = sourcePagesLabel(answer.source_pages);
-
+function StartState() {
   return (
-    <section className="content-card mb-5 border-t-2 border-t-accent p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-            Instant answer
-          </p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {answer.service_code && (
-              <span className="rounded-sm border border-orange-200 bg-orange-50 px-2 py-0.5 font-mono text-xs font-bold text-accent">
-                {answer.service_code}
-              </span>
-            )}
-            <h2 className="font-display text-lg font-semibold leading-snug text-ink">
-              {answer.title}
-            </h2>
-          </div>
-        </div>
-        <Link
-          href={`/procedure/${answer.slug}`}
-          className="inline-flex shrink-0 items-center justify-center rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
-        >
-          Open full card
-        </Link>
-      </div>
-
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        {answer.sections.map((section) => (
-          <div
-            key={section.label}
-            className="rounded-md border border-border bg-slate-50/60 px-3.5 py-3"
-          >
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-sky">
-              {section.label}
-            </p>
-            {section.text ? (
-              <p className="mt-1.5 whitespace-pre-line text-sm font-semibold leading-6 text-ink">
-                {section.text}
-              </p>
-            ) : (
-              <ul className="mt-1.5 space-y-1.5">
-                {(section.items ?? []).map((item) => (
-                  <li key={item} className="flex gap-2 text-sm font-medium leading-5 text-ink">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky" aria-hidden="true" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {(answer.source_version || pages) && (
-        <p className="mt-3 text-[11px] font-medium text-ink-faint">
-          Source: {[answer.source_version, pages].filter(Boolean).join(" · ")} — always verify on the full card.
-        </p>
-      )}
-    </section>
-  );
-}
-
-function OperationalCardResult({ result, query }: { result: OperationalCardSearchResult; query: string }) {
-  const channels = readableJsonItems(result.channels).slice(0, 3);
-  const pages = sourcePagesLabel(result.source_pages);
-  const timingLabel = timingLabelForCard(result);
-  const openLabel = isReferenceCard(result) ? "Open card" : "Open service";
-  const timingLines = result.cut_off_time ? compactTimingPreview(result.cut_off_time, result, 2) : [];
-  const matchLabel = operationalMatchLabel(result, query);
-  // Search only returns approved+published cards, so availability reduces to a
-  // tree existing and the card version matching the tree.
-  const guided = getWorkflowAvailability({
-    slug: result.slug,
-    is_published: true,
-    review_status: "approved",
-    source_version: result.source_version,
-  });
-
-  return (
-    <article className="content-card hover-lift p-4 hover:border-accent">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
-            <Badge tone="blue">Operational Card</Badge>
-            <Badge tone="neutral">{matchLabel}</Badge>
-            {result.service_code ? <Badge tone="orange">{result.service_code}</Badge> : null}
-            <Badge tone="neutral">{result.service_type || result.category}</Badge>
-            {pages ? <Badge tone="neutral">{pages}</Badge> : null}
-            {result.source_version ? <Badge tone="neutral">{result.source_version}</Badge> : null}
-          </div>
-          <h2 className="font-display text-lg font-semibold leading-snug text-ink">
-            {result.title}
-          </h2>
-          {result.cut_off_time ? (
-            <div className="mt-3 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-ink">
-              <p className="text-accent">{timingLabel}:</p>
-              <ul className="mt-1 space-y-1">
-                {timingLines.map((line) => (
-                  <li key={line} className="text-xs leading-5 text-ink">
-                    {line}
-                  </li>
-                ))}
-              </ul>
-              {isReferenceCard(result) ? (
-                <p className="mt-2 text-[11px] font-semibold text-accent">Open card for full rule</p>
-              ) : null}
-            </div>
-          ) : null}
-          {result.snippet ? (
-            <p className="mt-3 max-w-4xl text-sm leading-6 text-ink-muted">{result.snippet}</p>
-          ) : null}
-          {channels.length ? (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {channels.map((channel) => (
-                <span
-                  key={channel}
-                  className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-[11px] font-semibold text-sky"
-                >
-                  {channel}
-                </span>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {guided.available && (
-            <Link
-              href={guided.href}
-              className="inline-flex items-center justify-center rounded border border-sky bg-sky-soft px-3.5 py-2 text-xs font-semibold text-sky transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky focus-visible:ring-offset-1"
-            >
-              Guided decision
-            </Link>
-          )}
-          {!guided.available && guided.hasTree && (
-            <span className="inline-flex items-center rounded border border-dashed border-border px-2.5 py-1 text-[11px] font-semibold text-ink-faint">
-              Guided workflow under review
-            </span>
-          )}
-          <Link
-            href={`/procedure/${result.slug}`}
-            className="inline-flex items-center justify-center rounded bg-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-dim"
-          >
-            {openLabel}
-          </Link>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function SearchResultCard({ result }: { result: ChapterSearchResult }) {
-  const snippet = plainSnippet(result.snippet);
-  const pages = pageLabel(result.page_start, result.page_end);
-
-  return (
-    <article className="content-card quick-card hover-lift p-4 hover:border-accent">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
-            <Badge tone="blue">Chapter</Badge>
-            <Badge tone="neutral">Source chapter</Badge>
-            <Badge tone="orange">Ch. {String(result.chapter_number).padStart(2, "0")}</Badge>
-            {pages ? <Badge tone="neutral">{pages}</Badge> : null}
-            {result.source_version ? <Badge tone="neutral">{result.source_version}</Badge> : null}
-          </div>
-          <h2 className="font-display text-lg font-semibold leading-snug text-ink">
-            {result.title}
-          </h2>
-          {snippet ? (
-            <p className="mt-3 max-w-4xl text-sm leading-6 text-ink-muted">{snippet}</p>
-          ) : null}
-          {result.search_keywords?.length ? (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {result.search_keywords.slice(0, 8).map((keyword) => (
-                <span
-                  key={keyword}
-                  className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-[11px] font-semibold text-sky"
-                >
-                  {keyword}
-                </span>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        <Link
-          href={`/chapter/${result.slug}`}
-          className="inline-flex shrink-0 items-center justify-center rounded bg-navy px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent"
-        >
-          Open chapter
-        </Link>
-      </div>
-    </article>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="content-card p-6">
-      <p className="text-sm font-semibold text-ink">{message}</p>
-      <p className="mt-2 text-sm text-ink-muted">Try one of these common operational searches:</p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {EMPTY_SUGGESTIONS.map((example) => (
-          <Link
-            key={example}
-            href={`/search?q=${encodeURIComponent(example)}`}
-            className="rounded border border-border bg-white px-2.5 py-1 text-xs font-semibold text-sky transition-colors hover:border-accent hover:text-accent"
-          >
-            {example}
-          </Link>
-        ))}
-      </div>
+    <div className="mt-8 rounded-2xl border border-dashed border-border bg-white/60 px-6 py-10 text-center">
+      <p className="font-display text-base font-semibold text-ink">
+        Describe what the customer is asking about
+      </p>
+      <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-ink-muted">
+        Type at least two characters. For example:
+      </p>
+      <ExampleLinks />
     </div>
   );
 }
 
-function operationalMatchLabel(result: OperationalCardSearchResult, query: string) {
-  const normalized = query.trim().toLowerCase();
-  if (result.service_code && normalized === result.service_code.toLowerCase()) return "Exact match";
-  if (detectFieldQuery(query)) return "Field match";
-  return "Operational match";
-}
-
-function Badge({
-  children,
-  tone,
-}: {
-  children: ReactNode;
-  tone: "orange" | "blue" | "neutral";
-}) {
-  const tones = {
-    orange: "bg-orange-50 text-accent border-orange-200",
-    blue: "bg-sky-soft text-sky border-blue-200",
-    neutral: "bg-slate-50 text-ink-muted border-border",
-  };
+function NoOperationalMatch({ query, sources }: { query: string; sources: SourceRef[] }) {
   return (
-    <span className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tones[tone]}`}>
-      {children}
-    </span>
+    <>
+      <div className="mt-6 rounded-2xl border border-border bg-white p-6">
+        <h2 className="font-display text-lg font-semibold text-ink">
+          No reviewed operational answer was found
+        </h2>
+        <p className="mt-1.5 text-sm leading-6 text-ink-muted">
+          You can review the related source material below or try a more specific description.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2.5">
+          <Link
+            href="/decision"
+            className="agent-primary touch-target inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold focus-visible:outline-none"
+          >
+            Start guided decision
+          </Link>
+          <a
+            href="#source-references"
+            className="agent-secondary touch-target inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
+          >
+            View source references
+          </a>
+        </div>
+      </div>
+      <SourceReferences refs={sources} />
+      <p className="sr-only">No operational procedure matched {query}.</p>
+    </>
   );
 }
 
-function pageLabel(start?: number | null, end?: number | null) {
-  if (!start && !end) return "";
-  if (start && end && start !== end) return `Pages ${start}-${end}`;
-  return `Page ${start ?? end}`;
+function NoResults() {
+  return (
+    <div className="mt-6 rounded-2xl border border-border bg-white p-6">
+      <h2 className="font-display text-lg font-semibold text-ink">
+        We couldn&rsquo;t find a matching procedure
+      </h2>
+      <ul className="mt-2 space-y-1.5 text-sm leading-6 text-ink-muted">
+        <li>Describe the customer&rsquo;s request in different words.</li>
+        <li>Search using a service name.</li>
+        <li>Try a known code if you have one.</li>
+        <li>Or start a guided decision.</li>
+      </ul>
+      <div className="mt-4">
+        <Link
+          href="/decision"
+          className="agent-primary touch-target inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold focus-visible:outline-none"
+        >
+          Start guided decision
+        </Link>
+      </div>
+      <ExampleLinks />
+    </div>
+  );
 }
 
-function sourcePagesLabel(pages: number[]) {
-  if (!pages.length) return "";
-  const sorted = [...new Set(pages)].sort((a, b) => a - b);
-  if (sorted.length === 1) return `Page ${sorted[0]}`;
-  const contiguous = sorted.every((page, index) => index === 0 || page === sorted[index - 1] + 1);
-  return contiguous ? `Pages ${sorted[0]}-${sorted[sorted.length - 1]}` : `Pages ${sorted.join(", ")}`;
+function ExampleLinks() {
+  return (
+    <div className="mt-4 flex flex-wrap justify-center gap-2">
+      {EXAMPLE_SEARCHES.map((example) => (
+        <Link
+          key={example}
+          href={`/search?q=${encodeURIComponent(example)}`}
+          className="agent-tile touch-target inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold text-ink focus-visible:outline-none"
+        >
+          {example}
+        </Link>
+      ))}
+    </div>
+  );
 }
