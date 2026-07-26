@@ -49,15 +49,16 @@ assert.ok(!page.includes("/decision?procedure="), "homepage must not deep-link a
 
 // ---- Common tasks: valid, plain-language, safe destinations ----
 assert.ok(page.includes("COMMON_TASKS"), "COMMON_TASKS missing");
+// Common-task set (kept in sync with app/page.tsx; updated in UX-R1G).
 for (const label of [
   "Name correction",
-  "Wheelchair assistance",
+  "Change or cancel a flight",
+  "Refund and voucher",
   "Baggage",
-  "Flight disruption",
   "Check-in",
+  "Wheelchair and medical assistance",
   "Travel documents",
-  "Medical assistance",
-  "Government deals",
+  "Flight disruption",
 ]) {
   assert.ok(page.includes(label), `common task '${label}' missing`);
 }

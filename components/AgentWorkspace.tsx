@@ -84,7 +84,22 @@ export function AgentWorkspace() {
     mostUsed.length > 0 ||
     continueItems.length > 0;
 
-  if (!hasAnything) return null;
+  // Adaptive (UX-R1G): always render one compact "Your workspace" section so the
+  // homepage never leaves an empty gap. When there is nothing yet, show a calm
+  // one-line hint instead of three empty boxes.
+  if (!hasAnything) {
+    return (
+      <section className="content-card reveal p-4" aria-label="Your workspace">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">Your workspace</p>
+        <p className="mt-2 text-sm text-ink-muted">
+          Your recent procedures and favorites will appear here.{" "}
+          <Link href="/services" className="font-semibold text-sky hover:text-accent">
+            Browse services
+          </Link>
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section className="content-card reveal p-4" aria-label="Your workspace">
