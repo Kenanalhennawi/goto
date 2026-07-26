@@ -9,12 +9,13 @@ export function OperationalAnswer({
   answer,
   slug,
   guided,
-  hasSourceRefs,
+  sourceChapterSlug = null,
 }: {
   answer: Answer;
   slug: string;
   guided: { available: boolean; hasTree: boolean };
-  hasSourceRefs: boolean;
+  /** Linked source chapter slug — enables a real "View source" chapter link. */
+  sourceChapterSlug?: string | null;
 }) {
   return (
     <section className="agent-hero p-5 sm:p-6" aria-label="Best operational match">
@@ -55,13 +56,13 @@ export function OperationalAnswer({
         >
           Open full procedure
         </Link>
-        {hasSourceRefs ? (
-          <a
-            href="#source-references"
+        {sourceChapterSlug ? (
+          <Link
+            href={`/chapter/${encodeURIComponent(sourceChapterSlug)}`}
             className="agent-secondary touch-target inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
           >
             View source
-          </a>
+          </Link>
         ) : null}
       </div>
 
@@ -69,6 +70,9 @@ export function OperationalAnswer({
         <p className="mt-2.5 text-xs font-medium text-ink-faint">
           Guided questions are not currently available. Use the full procedure.
         </p>
+      ) : null}
+      {!sourceChapterSlug ? (
+        <p className="mt-2.5 text-xs font-medium text-ink-faint">Source reference is not linked yet.</p>
       ) : null}
 
       {answer.hasDetails ? (

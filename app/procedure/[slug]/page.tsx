@@ -248,7 +248,9 @@ function SourceReference({ procedure }: { procedure: ProcedureCardWithChapter })
           >
             Open source chapter
           </Link>
-        ) : null}
+        ) : (
+          <p className="mt-3 text-xs font-medium text-ink-faint">Source reference is not linked yet.</p>
+        )}
       </div>
     </details>
   );

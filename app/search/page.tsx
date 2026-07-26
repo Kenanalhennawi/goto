@@ -45,7 +45,16 @@ type OperationalRow = {
   keywords: string[] | null;
   aliases: string[] | null;
   source_version: string | null;
+  // Linked source chapter (to-one embed; Supabase may widen the type to array).
+  chapters: { slug: string } | { slug: string }[] | null;
 };
+
+function chapterSlugOf(card: OperationalRow): string | null {
+  const rel = card.chapters;
+  if (!rel) return null;
+  const first = Array.isArray(rel) ? rel[0] : rel;
+  return first?.slug ?? null;
+}
 
 const EXAMPLE_SEARCHES = [
   "passenger has a plaster cast",
@@ -78,6 +87,7 @@ export default async function SearchPage({
       slug: card.slug,
       answer: deriveOperationalAnswer(card),
       guided: { available: availability.available, hasTree: availability.hasTree },
+      chapterSlug: chapterSlugOf(card),
     };
   });
 
@@ -144,7 +154,7 @@ export default async function SearchPage({
                 answer={best.answer}
                 slug={best.slug}
                 guided={best.guided}
-                hasSourceRefs={hasSources}
+                sourceChapterSlug={best.chapterSlug}
               />
             </div>
 
@@ -205,7 +215,7 @@ async function runSearch(
         "summary", "when_to_use", "cut_off_time", "channels", "who_can_action",
         "required_information", "system_steps", "passenger_advice", "allowed",
         "not_allowed", "escalation_points", "fees_charges", "keywords", "aliases",
-        "source_version",
+        "source_version", "chapters(slug)",
       ].join(", ")
     )
     .eq("is_published", true)
@@ -290,12 +300,14 @@ function NoOperationalMatch({ query, sources }: { query: string; sources: Source
           >
             Start guided decision
           </Link>
-          <a
-            href="#source-references"
-            className="agent-secondary touch-target inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
-          >
-            View source references
-          </a>
+          {sources[0] ? (
+            <Link
+              href={`/chapter/${encodeURIComponent(sources[0].slug)}`}
+              className="agent-secondary touch-target inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
+            >
+              Open source reference
+            </Link>
+          ) : null}
         </div>
       </div>
       <SourceReferences refs={sources} />
