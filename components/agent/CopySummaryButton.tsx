@@ -2,11 +2,19 @@
 
 import { useState } from "react";
 
-// Copy the quick operational summary (UX-R1C). The text is built on the server
-// from source-backed card fields only and passed in as a prop, so this client
-// component never touches source/review metadata, chapter text, or user answers.
-// Provides accessible success feedback via an aria-live region.
-export function CopySummaryButton({ text }: { text: string }) {
+// Copy a source-safe summary (UX-R1C, reused in UX-R1D). The text is built from
+// source-backed fields only and passed in as a prop, so this client component
+// never touches source/review metadata, chapter text, user answers, or personal
+// data. Provides accessible success feedback via an aria-live region.
+export function CopySummaryButton({
+  text,
+  label = "Copy quick summary",
+  announce = "Quick summary copied",
+}: {
+  text: string;
+  label?: string;
+  announce?: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -38,10 +46,10 @@ export function CopySummaryButton({ text }: { text: string }) {
             />
           )}
         </svg>
-        {copied ? "Copied" : "Copy quick summary"}
+        {copied ? "Copied" : label}
       </button>
       <span role="status" aria-live="polite" className="sr-only">
-        {copied ? "Quick summary copied" : ""}
+        {copied ? announce : ""}
       </span>
     </span>
   );

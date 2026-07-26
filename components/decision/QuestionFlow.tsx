@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { answeredCount, nextQuestion, validateAnswer } from "@/lib/decision-engine/session";
 import { evaluate } from "@/lib/decision-engine/evaluator";
 import { DECISION_DEFINITIONS, sourceVersionMatches } from "@/lib/decision-engine/definitions";
 import { CopyTextButton } from "@/components/CopyTextButton";
+import { CopySummaryButton } from "@/components/agent/CopySummaryButton";
 import {
   recordRecentWorkflow,
   recordDecisionOutcome,
@@ -26,9 +27,8 @@ type StoredDecisionSession = {
 };
 
 // Pure, SSR-safe reader for the non-sensitive guided-decision session.
-// Never throws during render, so a lazy state initializer can call it
-// directly. Returns an empty session for missing, corrupt, non-object,
-// array, or mismatched-procedure storage.
+// Never throws during render. Returns an empty session for missing, corrupt,
+// non-object, array, or mismatched-procedure storage. (Unchanged from prior.)
 function readStoredSession(procedureSlug: string): {
   answers: DecisionAnswers;
   startedAt: number | null;
@@ -59,9 +59,9 @@ function readStoredSession(procedureSlug: string): {
   }
 }
 
-// Guided clarifying-question stepper (Phase B).
-// Collects non-sensitive operational context; outcomes arrive with the
-// Phase C decision trees. Session survives reloads via sessionStorage.
+// Guided clarifying-question stepper (UX-R1D presentation rebuild).
+// One question per screen, keyboard-first, accessible outcome. Session model,
+// evaluator, analytics and source-freshness guard are unchanged.
 export function QuestionFlow({
   procedureSlug,
   procedureTitle,
@@ -73,17 +73,10 @@ export function QuestionFlow({
   procedureSlug: string;
   procedureTitle: string;
   questions: DecisionQuestion[];
-  /** source_version of the published card, used for the freshness guard. */
   cardSourceVersion?: string | null;
-  /** linked source chapter slug for the "View source" deep link. */
   cardChapterSlug?: string | null;
   onClose: () => void;
 }) {
-  // Single lazy session state: answers plus a stable startedAt. The lazy
-  // initializer is the only place a clock is read (allowed: it runs once on
-  // mount, not on every render/update). A changing procedureSlug remounts
-  // this component via a `key` at the call site, so the initializer re-runs
-  // cleanly instead of relying on setState inside an effect.
   const [session, setSession] = useState<StoredDecisionSession>(() => {
     const stored = readStoredSession(procedureSlug);
     return {
@@ -96,7 +89,7 @@ export function QuestionFlow({
 
   const answers = session.answers;
 
-  // Synchronize state outward to sessionStorage only. Never calls setState.
+  // Persist outward to sessionStorage only (non-sensitive modeled answers).
   useEffect(() => {
     try {
       window.sessionStorage.setItem(
@@ -112,8 +105,8 @@ export function QuestionFlow({
     }
   }, [procedureSlug, session]);
 
-  // Record the started workflow for the homepage/palette "recent" lists
-  // (slug + title only, device-local) and fire the started analytics event.
+  // Record the started workflow (slug + title only) and fire the started
+  // analytics event. Once per mounted procedure — never double-fires.
   useEffect(() => {
     recordRecentWorkflow(procedureSlug, procedureTitle);
     recordAnalyticsEvent({ type: "workflow_started", slug: procedureSlug });
@@ -121,85 +114,39 @@ export function QuestionFlow({
 
   const current = useMemo(() => nextQuestion(questions, answers), [questions, answers]);
   const done = answeredCount(questions, answers);
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
-      const inField =
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable);
-      if (event.key === "Escape") {
-        onClose();
-        return;
-      }
-      // ArrowLeft edits the previous answer (reopens the last answered question),
-      // unless the agent is typing in a field.
-      if (event.key === "ArrowLeft" && !inField) {
-        const answered = questions.filter((question) => question.id in answers);
-        const last = answered[answered.length - 1];
-        if (last) {
-          event.preventDefault();
-          reopen(last.id);
-        }
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-    // reopen is stable enough; answers/questions drive which question is reopened.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose, questions, answers]);
-
-  // Source-freshness guard (Phase D): when the published card's source
-  // version no longer matches the version this tree was verified against,
-  // disable the guided workflow rather than risk a stale outcome.
   const definition = DECISION_DEFINITIONS[procedureSlug];
+
+  // Options for the current question (drives clicks AND keyboard shortcuts).
+  const optionList = useMemo<{ label: string; value: AnswerValue }[]>(() => {
+    if (!current) return [];
+    if (current.answerType === "yes_no") {
+      return [
+        { label: "Yes", value: true },
+        { label: "No", value: false },
+      ];
+    }
+    if (current.answerType === "single_choice") {
+      return (current.options ?? []).map((option) => ({ label: option, value: option }));
+    }
+    return [];
+  }, [current]);
+
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  optionRefs.current = [];
+  const headingRef = useRef<HTMLElement | null>(null);
+
   const stale =
     definition !== undefined &&
     cardSourceVersion !== undefined &&
     !sourceVersionMatches(cardSourceVersion, definition.sourceVersion);
 
-  if (stale) {
-    return (
-      <section className="content-card reveal mt-4 overflow-hidden border-t-2 border-t-warn" aria-live="polite">
-        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-warn">
-              Guided decision · unavailable
-            </p>
-            <p className="text-sm font-semibold text-ink">{procedureTitle}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded border border-border bg-white px-2.5 py-1 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
-          >
-            Close (Esc)
-          </button>
-        </div>
-        <div className="p-5">
-          <div className="rounded-md border border-amber-200 bg-amber-soft px-4 py-3">
-            <p className="text-sm font-bold text-ink">
-              Guided decision temporarily unavailable because the operational source requires review.
-            </p>
-            <p className="mt-1 text-sm leading-6 text-ink-muted">
-              This workflow was verified against GO TO v{definition.sourceVersion}, but the
-              published card cites {cardSourceVersion ? `v${cardSourceVersion}` : "no source version"}.
-              Verify the case against the full procedure card instead.
-            </p>
-            <Link
-              href={`/procedure/${procedureSlug}`}
-              className="mt-2 inline-flex rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
-            >
-              Open procedure card
-            </Link>
-          </div>
-        </div>
-      </section>
-    );
-  }
+  // Move focus to the current question heading / outcome heading after each
+  // advance, so keyboard and screen-reader users track the change.
+  const screenKey = stale ? "__stale__" : current ? current.id : "__outcome__";
+  useEffect(() => {
+    const id = window.setTimeout(() => headingRef.current?.focus(), 0);
+    return () => window.clearTimeout(id);
+  }, [screenKey]);
 
   function record(question: DecisionQuestion, value: AnswerValue) {
     const problem = validateAnswer(question, value);
@@ -207,181 +154,301 @@ export function QuestionFlow({
       setError(problem);
       return;
     }
-    // Update answers only; startedAt stays stable and the storage effect
-    // persists after commit.
-    setSession((current) => ({
-      ...current,
-      answers: { ...current.answers, [question.id]: value },
-    }));
+    setSession((cur) => ({ ...cur, answers: { ...cur.answers, [question.id]: value } }));
     setDraft("");
     setError(null);
   }
 
   function reopen(questionId: string) {
-    setSession((current) => {
-      const next = { ...current.answers };
+    setSession((cur) => {
+      const next = { ...cur.answers };
       delete next[questionId];
-      return { ...current, answers: next };
+      return { ...cur, answers: next };
     });
     setError(null);
   }
 
-  return (
-    <section className="content-card reveal mt-4 overflow-hidden border-t-2 border-t-sky" aria-live="polite">
-      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-sky">
-            Guided decision · preview
-          </p>
-          <p className="text-sm font-semibold text-ink">{procedureTitle}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-sm bg-sky-soft px-2 py-0.5 text-[11px] font-bold text-sky">
-            {done}/{questions.length}
-          </span>
+  function reopenLast() {
+    const answered = questions.filter((question) => question.id in answers);
+    const last = answered[answered.length - 1];
+    if (last) reopen(last.id);
+  }
+
+  // Keyboard shortcuts — guarded so they never fire while typing in a field.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const inField =
+        !!target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (inField) return;
+
+      // On the outcome screen only "go back to edit" applies.
+      if (!current) {
+        if (event.key === "ArrowLeft" || event.key === "Backspace") {
+          event.preventDefault();
+          reopenLast();
+        }
+        return;
+      }
+
+      // Number keys select the corresponding visible option.
+      if (/^[1-9]$/.test(event.key)) {
+        const index = Number(event.key) - 1;
+        const option = optionList[index];
+        if (option) {
+          event.preventDefault();
+          record(current, option.value);
+        }
+        return;
+      }
+
+      const buttons = optionRefs.current.filter((el): el is HTMLButtonElement => el !== null);
+      if (event.key === "ArrowDown" && buttons.length) {
+        event.preventDefault();
+        const active = document.activeElement;
+        const idx = buttons.findIndex((b) => b === active);
+        (buttons[idx + 1] ?? buttons[0]).focus();
+        return;
+      }
+      if (event.key === "ArrowUp" && buttons.length) {
+        event.preventDefault();
+        const active = document.activeElement;
+        const idx = buttons.findIndex((b) => b === active);
+        (buttons[idx - 1] ?? buttons[buttons.length - 1]).focus();
+        return;
+      }
+      if (event.key === "ArrowLeft" || event.key === "Backspace") {
+        event.preventDefault();
+        reopenLast();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, answers, optionList, onClose]);
+
+  // Source-freshness guard (unchanged): disable the flow rather than risk a
+  // stale outcome. No internal reason is exposed to ordinary agents.
+  if (stale) {
+    return (
+      <section className="agent-hero mt-4 p-5" aria-live="polite">
+        <div className="flex items-center justify-between gap-3">
+          <h2 ref={headingRef as RefObject<HTMLHeadingElement>} tabIndex={-1} className="font-display text-lg font-semibold text-ink focus-visible:outline-none">
+            {procedureTitle}
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded border border-border bg-white px-2.5 py-1 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
+            className="agent-secondary touch-target inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold"
           >
-            Close (Esc)
+            Close
           </button>
         </div>
+        <p className="mt-3 text-sm leading-6 text-ink-muted">
+          Guided questions are not currently available. Use the full procedure instead.
+        </p>
+        <Link
+          href={`/procedure/${procedureSlug}`}
+          className="agent-primary touch-target mt-3 inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-semibold"
+        >
+          Open full procedure
+        </Link>
+      </section>
+    );
+  }
+
+  const total = questions.length;
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  return (
+    <section className="agent-hero mt-4 p-5 sm:p-6">
+      {/* Progress */}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky" aria-live="polite">
+          {current ? `Question ${Math.min(done + 1, total)} of ${total}` : "Result"}
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="agent-secondary touch-target inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold focus-visible:outline-none"
+        >
+          Close
+        </button>
+      </div>
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border" aria-hidden="true">
+        <div className="h-full rounded-full bg-sky transition-[width] duration-300" style={{ width: `${current ? percent : 100}%` }} />
       </div>
 
-      <div className="p-5">
-        {Object.keys(answers).length > 0 && (
-          <ul className="mb-4 space-y-1.5">
-            {questions
-              .filter((question) => question.id in answers)
-              .map((question) => (
-                <li
-                  key={question.id}
-                  className="flex items-center justify-between gap-3 rounded-md border border-border bg-slate-50 px-3 py-2"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-xs font-medium text-ink-muted">
-                      {question.label}
-                    </span>
-                    <span className="block text-sm font-semibold text-ink">
-                      {formatAnswer(answers[question.id])}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => reopen(question.id)}
-                    className="shrink-0 text-xs font-semibold text-sky transition-colors hover:text-accent"
-                  >
-                    Edit
-                  </button>
-                </li>
-              ))}
-          </ul>
-        )}
-
-        {current ? (
-          <div>
-            <p className="font-display text-base font-semibold text-ink">{current.label}</p>
-            <p className="mt-0.5 text-xs text-ink-muted">{current.reason}</p>
-
-            <div className="mt-3">
-              {current.answerType === "yes_no" && (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => record(current, true)}
-                    className="press rounded-md border border-border bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:border-sky hover:text-sky"
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => record(current, false)}
-                    className="press rounded-md border border-border bg-white px-5 py-2 text-sm font-semibold text-ink transition-colors hover:border-sky hover:text-sky"
-                  >
-                    No
-                  </button>
-                </div>
-              )}
-              {current.answerType === "single_choice" && (
-                <div className="flex flex-wrap gap-2">
-                  {(current.options ?? []).map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => record(current, option)}
-                      className="press rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-sky hover:text-sky"
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {current.answerType === "number" && (
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    record(current, Number(draft));
-                  }}
-                  className="flex gap-2"
-                >
-                  <input
-                    type="number"
-                    value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
-                    min={current.min}
-                    max={current.max}
-                    autoFocus
-                    className="w-36 rounded-md border border-border bg-white px-3 py-2 text-sm text-ink outline-none focus:border-sky"
-                    aria-label={current.label}
-                  />
-                  <button
-                    type="submit"
-                    className="press rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent"
-                  >
-                    Continue &crarr;
-                  </button>
-                </form>
-              )}
-            </div>
-            {error && <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>}
-          </div>
-        ) : DECISION_DEFINITIONS[procedureSlug] ? (
-          <OutcomePanel
-            definition={DECISION_DEFINITIONS[procedureSlug]}
-            answers={answers}
-            procedureSlug={procedureSlug}
-            chapterSlug={cardChapterSlug}
-            startedAt={session.startedAt}
-            questionsAnswered={done}
-          />
-        ) : (
-          <div className="rounded-md border border-blue-200 bg-sky-soft px-4 py-3">
-            <p className="text-sm font-bold text-ink">Context captured</p>
-            <p className="mt-1 text-sm leading-6 text-ink-muted">
-              Decision rules for this procedure arrive in the next phase. Until then, verify the
-              case against the full procedure card — your answers above stay on this device only.
-            </p>
-            <Link
-              href={`/procedure/${procedureSlug}`}
-              className="mt-2 inline-flex rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
+      {current ? (
+        <fieldset className="mt-5 border-0 p-0">
+          <legend className="p-0">
+            <span
+              ref={headingRef as RefObject<HTMLSpanElement>}
+              tabIndex={-1}
+              className="block font-display text-lg font-semibold leading-snug text-ink focus-visible:outline-none sm:text-xl"
             >
-              Open procedure card
-            </Link>
+              {current.label}
+            </span>
+          </legend>
+          {current.reason ? (
+            <p id={`help-${current.id}`} className="mt-1.5 text-sm leading-6 text-ink-muted">
+              {current.reason}
+            </p>
+          ) : null}
+
+          <div className="mt-4 space-y-2.5" aria-describedby={current.reason ? `help-${current.id}` : undefined}>
+            {current.answerType === "number" ? (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  record(current, Number(draft));
+                }}
+                className="flex flex-col gap-2.5 sm:flex-row"
+              >
+                <input
+                  type="number"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  min={current.min}
+                  max={current.max}
+                  autoFocus
+                  aria-label={current.label}
+                  className="agent-search-input touch-target w-full px-4 py-3 text-[15px] text-ink sm:w-48"
+                />
+                <button
+                  type="submit"
+                  className="agent-primary touch-target inline-flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold focus-visible:outline-none"
+                >
+                  Continue
+                </button>
+              </form>
+            ) : (
+              optionList.map((option, index) => (
+                <button
+                  key={option.label}
+                  ref={(el) => {
+                    optionRefs.current[index] = el;
+                  }}
+                  type="button"
+                  onClick={() => record(current, option.value)}
+                  className="group flex min-h-[48px] w-full items-center gap-3 rounded-xl border border-border bg-white px-4 py-3 text-left transition-colors hover:border-sky hover:bg-sky-soft/40 focus-visible:border-sky focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky/40"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-slate-50 text-xs font-bold text-ink-muted group-hover:border-sky group-hover:text-sky">
+                    {index + 1}
+                  </span>
+                  <span className="text-[15px] font-semibold text-ink">{option.label}</span>
+                </button>
+              ))
+            )}
           </div>
-        )}
-      </div>
+          {error ? <p className="mt-2 text-sm font-semibold text-warn">{error}</p> : null}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {done > 0 ? (
+              <button
+                type="button"
+                onClick={reopenLast}
+                className="agent-secondary touch-target inline-flex items-center rounded-lg px-3.5 py-2 text-xs font-semibold focus-visible:outline-none"
+              >
+                &larr; Back
+              </button>
+            ) : null}
+            <p className="hidden text-xs text-ink-faint sm:block">
+              Press <Kbd>1</Kbd>–<Kbd>9</Kbd> to choose · <Kbd>↑</Kbd><Kbd>↓</Kbd> to move · <Kbd>Enter</Kbd> to select
+            </p>
+          </div>
+
+          {done > 0 ? <ReviewAnswers questions={questions} answers={answers} onEdit={reopen} /> : null}
+        </fieldset>
+      ) : definition ? (
+        <OutcomeScreen
+          definition={definition}
+          answers={answers}
+          procedureSlug={procedureSlug}
+          chapterSlug={cardChapterSlug}
+          startedAt={session.startedAt}
+          questionsAnswered={done}
+          headingRef={headingRef as RefObject<HTMLHeadingElement>}
+          onStartAgain={() => setSession((cur) => ({ ...cur, answers: {} }))}
+        />
+      ) : null}
     </section>
   );
 }
 
-function OutcomePanel({
+function Kbd({ children }: { children: ReactNode }) {
+  return (
+    <kbd className="mx-0.5 rounded border border-border bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-muted">
+      {children}
+    </kbd>
+  );
+}
+
+function ReviewAnswers({
+  questions,
+  answers,
+  onEdit,
+}: {
+  questions: DecisionQuestion[];
+  answers: DecisionAnswers;
+  onEdit: (id: string) => void;
+}) {
+  const answered = questions.filter((question) => question.id in answers);
+  if (answered.length === 0) return null;
+  return (
+    <details className="agent-disclosure mt-4 border-t border-border pt-3">
+      <summary className="touch-target flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-sky focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky">
+        <span className="disclosure-chevron" aria-hidden="true">▸</span>
+        Review answers ({answered.length})
+      </summary>
+      <ul className="mt-3 space-y-2">
+        {answered.map((question) => (
+          <li key={question.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-white px-3 py-2">
+            <span className="min-w-0">
+              <span className="block truncate text-xs text-ink-muted">{question.label}</span>
+              <span className="block text-sm font-semibold text-ink">{formatAnswer(answers[question.id])}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => onEdit(question.id)}
+              className="shrink-0 text-xs font-semibold text-sky transition-colors hover:text-accent"
+            >
+              Edit
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+const OUTCOME_STYLE: Record<string, { badge: string; icon: string }> = {
+  "Can proceed": { badge: "border-good/30 bg-mint-soft text-good", icon: "✓" },
+  "Can proceed with conditions": { badge: "border-good/30 bg-mint-soft text-good", icon: "✓" },
+  "Requires document": { badge: "border-blue-200 bg-sky-soft text-sky", icon: "▤" },
+  "Requires supervisor": { badge: "border-blue-200 bg-sky-soft text-sky", icon: "↑" },
+  "Not permitted": { badge: "border-red-200 bg-red-50 text-red-700", icon: "✕" },
+  "Insufficient information": { badge: "border-amber-200 bg-amber-soft text-warn", icon: "?" },
+};
+
+function OutcomeScreen({
   definition,
   answers,
   procedureSlug,
   chapterSlug = null,
   startedAt,
   questionsAnswered,
+  headingRef,
+  onStartAgain,
 }: {
   definition: (typeof DECISION_DEFINITIONS)[string];
   answers: DecisionAnswers;
@@ -389,14 +456,19 @@ function OutcomePanel({
   chapterSlug?: string | null;
   startedAt?: number;
   questionsAnswered?: number;
+  headingRef: RefObject<HTMLHeadingElement>;
+  onStartAgain: () => void;
 }) {
   const result = evaluate(definition, answers);
   const pages = result.rulePages ?? definition.sourcePages;
-  const showAdvice = result.outcome !== "Insufficient information" && definition.notes.length > 0;
+  const insufficient = result.outcome === "Insufficient information";
+  const showNotes = !insufficient && definition.notes.length > 0;
+  const matchedRule = definition.rules.find((rule) => rule.id === result.matchedRuleId);
+  const sourceField = matchedRule?.sourceField ?? null;
+  const style = OUTCOME_STYLE[result.outcome] ?? OUTCOME_STYLE["Insufficient information"];
 
-  // Log the reached outcome to device-local decision history (slug + outcome +
-  // timestamp only — never passenger data) and fire the completed analytics
-  // event (aggregates only). Records once per completed panel.
+  // Log outcome to device-local history + fire the completed analytics event.
+  // Runs exactly once per completed outcome panel (never double-fires).
   useEffect(() => {
     recordDecisionOutcome({
       slug: procedureSlug,
@@ -418,7 +490,7 @@ function OutcomePanel({
     title: definition.procedureTitle,
     outcome: result.outcome,
     nextAction: result.nextAction,
-    passengerAdvice: showAdvice ? definition.notes : null,
+    passengerAdvice: showNotes ? definition.notes : null,
     matchedRuleId: result.matchedRuleId,
     sourceChapter: definition.sourceChapter,
     sourcePages: pages,
@@ -426,94 +498,128 @@ function OutcomePanel({
   };
   const summary = formatOutcomeSummary(summaryInput);
 
-  const tone =
-    result.outcome === "Not permitted"
-      ? "border-red-200 border-l-4 border-l-red-500 bg-red-50"
-      : result.outcome === "Can proceed"
-        ? "border-good/30 border-l-4 border-l-good bg-mint-soft"
-        : result.outcome === "Insufficient information"
-          ? "border-amber-200 border-l-4 border-l-warn bg-amber-soft"
-          : "border-blue-200 border-l-4 border-l-sky bg-sky-soft";
-
   return (
-    <div className={`rounded-md border px-4 py-3.5 ${tone}`}>
-      {/* Result */}
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="font-display text-base font-bold text-ink">{result.outcome}</p>
-        <span className="rounded-sm border border-border bg-white px-1.5 py-0.5 text-[10px] font-bold text-ink-muted">
-          {result.confidence}
-        </span>
-      </div>
-      <p className="mt-1.5 text-sm leading-6 text-ink">{result.explanation}</p>
+    <div className="mt-5" aria-live="polite">
+      {insufficient ? (
+        <>
+          <h2 ref={headingRef} tabIndex={-1} className="font-display text-xl font-semibold text-ink focus-visible:outline-none">
+            More information is needed
+          </h2>
+          <p className="mt-1.5 text-sm leading-6 text-ink-muted">{result.explanation}</p>
+          {result.missing.length > 0 ? (
+            <div className="mt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Still needed</p>
+              <ul className="mt-1.5 space-y-1.5">
+                {result.missing.map((item) => (
+                  <li key={item} className="flex gap-2 text-sm leading-6 text-ink">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-warn" aria-hidden="true" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky">Result</p>
+          <div className="mt-1 flex items-center gap-2.5">
+            <span
+              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${style.badge}`}
+              aria-hidden="true"
+            >
+              {style.icon}
+            </span>
+            <h2 ref={headingRef} tabIndex={-1} className="font-display text-xl font-semibold text-ink focus-visible:outline-none sm:text-2xl">
+              {result.outcome}
+            </h2>
+          </div>
 
-      {/* Required action */}
-      {result.nextAction && (
-        <Field label="Required action">{result.nextAction}</Field>
-      )}
-      {result.derived && (
-        <p className="mt-1.5 rounded-sm border border-ink/10 bg-white/60 px-2 py-1.5 font-mono text-xs leading-5 text-ink">
-          {result.derived}
-        </p>
-      )}
-      {result.missing.length > 0 && (
-        <p className="mt-1.5 text-xs font-medium text-ink-muted">
-          Missing: {result.missing.join(" · ")}
-        </p>
-      )}
-
-      {/* Notes / advice */}
-      {showAdvice && (
-        <div className="mt-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Notes</p>
-          <ul className="mt-1 space-y-1">
-            {definition.notes.map((note) => (
-              <li key={note.slice(0, 24)} className="text-xs leading-5 text-ink-muted">
-                {note}
-              </li>
-            ))}
-          </ul>
-        </div>
+          <OutcomeField label="What this means">{result.explanation}</OutcomeField>
+          {result.nextAction ? <OutcomeField label="Required action">{result.nextAction}</OutcomeField> : null}
+          {result.derived ? (
+            <p className="mt-1.5 rounded-md border border-border bg-white/70 px-3 py-2 text-sm leading-6 text-ink">
+              {result.derived}
+            </p>
+          ) : null}
+          {showNotes ? (
+            <div className="mt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Notes</p>
+              <ul className="mt-1.5 space-y-1.5">
+                {definition.notes.map((note) => (
+                  <li key={note.slice(0, 28)} className="flex gap-2 text-sm leading-6 text-ink">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sky" aria-hidden="true" />
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </>
       )}
 
-      {/* Reference */}
-      <p className="mt-2.5 border-t border-ink/10 pt-2 text-[11px] font-medium text-ink-muted">
-        Reference: GO TO v{definition.sourceVersion} · {definition.sourceChapter} · Page{" "}
-        {pages.join(", ")}
-        {result.matchedRuleId ? ` · Rule ${result.matchedRuleId}` : ""} — always verify on the
-        procedure card.
-      </p>
+      {/* Source — collapsed, no source version / freshness on the agent screen */}
+      <details className="agent-disclosure mt-4 border-t border-border pt-3">
+        <summary className="touch-target flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-sky focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky">
+          <span className="disclosure-chevron" aria-hidden="true">▸</span>
+          Source &amp; reference
+        </summary>
+        <dl className="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+          <SourceFact label="Source chapter" value={definition.sourceChapter} />
+          <SourceFact label="Pages" value={pages.join(", ")} />
+          {sourceField ? <SourceFact label="Source field" value={sourceField} /> : null}
+        </dl>
+      </details>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="mt-5 flex flex-wrap items-center gap-2.5">
         <Link
           href={`/procedure/${procedureSlug}`}
-          className="inline-flex rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
+          className="agent-primary touch-target inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold focus-visible:outline-none"
         >
-          Open procedure card
+          Open full procedure
         </Link>
-        <Link
-          href={chapterSlug ? `/chapter/${chapterSlug}` : `/procedure/${procedureSlug}`}
-          className="inline-flex rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+        <button
+          type="button"
+          onClick={onStartAgain}
+          className="agent-secondary touch-target inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
         >
-          View source
-        </Link>
-        <CopyTextButton text={summary} label="Copy summary" />
+          Start again
+        </button>
+        <CopySummaryButton text={summary} label="Copy outcome summary" announce="Outcome summary copied" />
+        {chapterSlug ? (
+          <Link
+            href={`/chapter/${chapterSlug}`}
+            className="agent-secondary touch-target inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
+          >
+            View source
+          </Link>
+        ) : null}
         <ExportMenu input={summaryInput} />
       </div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function OutcomeField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="mt-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">{label}</p>
-      <p className="text-sm font-semibold leading-6 text-ink">{children}</p>
+    <div className="mt-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{label}</p>
+      <p className="mt-0.5 text-sm leading-6 text-ink">{children}</p>
+    </div>
+  );
+}
+
+function SourceFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-border/60 pb-1.5 last:border-0">
+      <dt className="text-ink-muted">{label}</dt>
+      <dd className="text-right font-semibold text-ink">{value}</dd>
     </div>
   );
 }
 
 // Copy the verified outcome in an audience-specific format. Reuses the pure
-// export formatter (no new content, no passenger data).
+// export formatter (no new content, no passenger data). Unchanged behavior.
 function ExportMenu({ input }: { input: OutcomeSummaryInput }) {
   const [open, setOpen] = useState(false);
   const kinds: OutcomeExportKind[] = ["customer", "internal", "salesforce", "email"];
@@ -523,12 +629,12 @@ function ExportMenu({ input }: { input: OutcomeSummaryInput }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="press inline-flex items-center gap-1 rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+        className="agent-secondary touch-target inline-flex items-center gap-1 rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
       >
-        Export ▾
+        Copy for… ▾
       </button>
       {open && (
-        <div className="absolute z-10 mt-1 w-44 rounded-md border border-border bg-white p-1 shadow-[var(--shadow-lg)]">
+        <div className="absolute z-10 mt-1 w-48 rounded-md border border-border bg-white p-1 shadow-[var(--shadow-lg)]">
           {kinds.map((kind) => (
             <div key={kind} className="[&>button]:w-full [&>button]:justify-start [&>button]:border-0">
               <CopyTextButton text={formatOutcomeExport(kind, input)} label={OUTCOME_EXPORT_LABELS[kind]} />

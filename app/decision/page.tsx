@@ -1,4 +1,5 @@
 import { SiteHeader } from "@/components/SiteHeader";
+import { AgentPage } from "@/components/agent/AgentPage";
 import { DecisionIntake } from "@/components/decision/DecisionIntake";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import type { RoutableCard } from "@/lib/decision-engine/types";
@@ -38,35 +39,11 @@ export default async function DecisionPage({
   return (
     <div className="dashboard-shell flex min-h-full flex-col">
       <SiteHeader />
-      <main id="main" className="reveal mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
-        <div className="mb-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-            Decision assistant
-          </p>
-          <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-            Route an operational question
-          </h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-ink-muted">
-            Deterministic routing to verified, published procedures — never generated policy.
-            Official approvals (supervisor, medical, airport, immigration) always stand.
-          </p>
-        </div>
-
-        {cards.length === 0 && !initialProcedureSlug ? (
-          <div className="content-card p-6">
-            <p className="text-sm font-bold text-ink">No published procedures available yet.</p>
-            <p className="mt-1 text-sm text-ink-muted">
-              The assistant routes only to approved and published operational cards. Publish
-              cards from the admin review queue to enable routing.
-            </p>
-          </div>
-        ) : (
-          // A direct ?procedure= link must still show its preselected availability
-          // state (safe message if the card is unpublished) even when no cards are
-          // published yet; DecisionIntake handles an unmatched slug gracefully.
-          <DecisionIntake cards={cards} initialProcedureSlug={initialProcedureSlug} />
-        )}
-      </main>
+      <AgentPage>
+        {/* DecisionIntake owns the "Guided decision" header and gracefully
+            handles an empty card set and direct ?procedure= preselect. */}
+        <DecisionIntake cards={cards} initialProcedureSlug={initialProcedureSlug} />
+      </AgentPage>
     </div>
   );
 }

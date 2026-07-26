@@ -6,17 +6,20 @@ import { routeIntent } from "@/lib/decision-engine/router";
 import { QUESTION_SETS } from "@/lib/decision-engine/questions";
 import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
 import { DECISION_DEFINITIONS } from "@/lib/decision-engine/definitions";
-import {
-  WORKFLOW_CATEGORY_ORDER,
-  categoryForWorkflow,
-  estimatedMinutesLabel,
-} from "@/lib/decision-engine/categories";
+import { WORKFLOW_CATEGORY_ORDER, categoryForWorkflow } from "@/lib/decision-engine/categories";
 import { QuestionFlow } from "@/components/decision/QuestionFlow";
 import type { RoutableCard } from "@/lib/decision-engine/types";
 
-// Phase A intake: routes an operational question to verified procedures.
-// Runs fully client-side over already-public card data; nothing typed
-// here is stored or sent anywhere.
+type ActiveFlow = {
+  slug: string;
+  title: string;
+  sourceVersion: string | null;
+  chapterSlug: string | null;
+};
+
+// Guided decision landing (UX-R1D). Describe a scenario → confirm the likely
+// workflow → run the guided questions. Routing runs client-side over the same
+// approved+published cards; no scoring change. Nothing auto-starts.
 export function DecisionIntake({
   cards,
   initialProcedureSlug = null,
@@ -26,180 +29,327 @@ export function DecisionIntake({
 }) {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
-  const [activeFlow, setActiveFlow] = useState<{
-    slug: string;
-    title: string;
-    sourceVersion: string | null;
-    chapterSlug: string | null;
-  } | null>(null);
-  // A direct /decision?procedure=... link OR a directory click selects a
-  // workflow. The user must still click Start; questions never auto-run.
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(initialProcedureSlug);
-
-  const selectedCard = useMemo(
-    () => (selectedSlug ? cards.find((card) => card.slug === selectedSlug) ?? null : null),
-    [cards, selectedSlug]
-  );
+  const [activeFlow, setActiveFlow] = useState<ActiveFlow | null>(null);
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const [selectedSlug] = useState<string | null>(initialProcedureSlug);
 
   const result = useMemo(
     () => (submitted.trim().length >= 3 ? routeIntent(submitted, cards) : null),
     [submitted, cards]
   );
 
-  if (selectedSlug) {
-    return (
-      <PreselectedWorkflow
-        slug={selectedSlug}
-        card={selectedCard}
-        onBack={() => setSelectedSlug(null)}
-      />
-    );
+  function availabilityFor(slug: string) {
+    const card = cards.find((c) => c.slug === slug);
+    return getWorkflowAvailability({
+      slug,
+      is_published: Boolean(card),
+      review_status: card ? "approved" : "needs_review",
+      source_version: card?.source_version ?? null,
+    });
   }
+
+  function startFlow(card: RoutableCard) {
+    setActiveFlow({
+      slug: card.slug,
+      title: card.title,
+      sourceVersion: card.source_version ?? null,
+      chapterSlug: card.chapters?.slug ?? null,
+    });
+  }
+
+  // Direct /decision?procedure=<slug> preselect.
+  if (selectedSlug) {
+    return <PreselectedWorkflow slug={selectedSlug} card={cards.find((c) => c.slug === selectedSlug) ?? null} />;
+  }
+
+  const matches = result
+    ? [result.primary, ...result.related].filter((c): c is NonNullable<typeof c> => Boolean(c))
+    : [];
+  const multiple = Boolean(result?.needsClarification) && matches.length > 1;
 
   return (
     <div>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky">Guided decision</p>
+      <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+        Describe the customer&rsquo;s request
+      </h1>
+      <p className="mt-1.5 max-w-xl text-sm leading-6 text-ink-muted">
+        We&rsquo;ll guide you through the relevant operational questions.
+      </p>
+
       <form
         onSubmit={(event) => {
           event.preventDefault();
           setSubmitted(query);
+          setActiveFlow(null);
         }}
-        className="content-card border-t-2 border-t-navy p-5"
+        role="search"
+        className="mt-4"
       >
-        <label htmlFor="decision-question" className="block font-display text-lg font-semibold text-ink">
-          What is the operational situation?
+        <label htmlFor="decision-scenario" className="sr-only">
+          Describe the customer&rsquo;s request
         </label>
-        <p className="mt-1 text-sm text-ink-muted">
-          Describe the case in operational terms, e.g. &ldquo;passenger cannot walk&rdquo; or
-          &ldquo;customer missed flight after online check-in&rdquo;.
-        </p>
-        <div className="mt-3 flex gap-2">
+        <div className="flex flex-col gap-2.5 sm:flex-row">
           <input
-            id="decision-question"
-            type="text"
+            id="decision-scenario"
+            type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             autoComplete="off"
             spellCheck={false}
-            placeholder="passenger is pregnant and wants to change the flight..."
-            className="min-w-0 flex-1 rounded-md border border-border bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-sky"
+            enterKeyHint="search"
+            placeholder="Passenger has a plaster cast and wants to travel"
+            className="agent-search-input touch-target min-w-0 flex-1 px-4 py-3 text-[15px] text-ink placeholder:text-ink-faint"
           />
           <button
             type="submit"
-            className="press rounded-md bg-navy px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent"
+            className="agent-primary touch-target inline-flex items-center justify-center rounded-xl px-6 py-3 text-[15px] font-semibold focus-visible:outline-none"
           >
-            Route
+            Find guidance
           </button>
         </div>
-        <p className="mt-3 rounded-md border border-amber-200 bg-amber-soft px-3 py-2 text-xs font-medium text-warn">
-          Do not enter personal passenger information. Use operational facts only — no names,
-          PNRs, passport numbers, phone numbers, or documents.
-        </p>
       </form>
+      <p className="mt-2 rounded-md border border-amber-200 bg-amber-soft px-3 py-2 text-xs font-medium text-warn">
+        Use operational facts only — no names, PNRs, passport numbers, or documents.
+      </p>
 
-      {result && (
-        <section className="reveal mt-5 space-y-4" aria-live="polite">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`rounded-sm border px-2 py-0.5 text-[11px] font-bold ${
-                result.confidence === "High confidence"
-                  ? "border-good/30 bg-mint-soft text-good"
-                  : result.confidence === "Possible workflows"
-                    ? "border-blue-200 bg-sky-soft text-sky"
-                    : "border-amber-200 bg-amber-soft text-warn"
-              }`}
-            >
-              {result.confidence}
-            </span>
-            {result.matchedConcepts.map((concept) => (
-              <span
-                key={`${concept.intent}-${concept.phrase}`}
-                className="rounded-sm border border-border bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-muted"
-              >
-                {concept.intent}: &ldquo;{concept.phrase}&rdquo;
-              </span>
-            ))}
-          </div>
-
-          {result.needsClarification && (
-            <p className="rounded-md border border-blue-200 bg-sky-soft px-4 py-2.5 text-sm font-semibold text-sky">
-              More than one workflow may apply. Review the matched procedures below and pick the
-              one that fits the case.
-            </p>
-          )}
-
+      {result ? (
+        <div className="mt-6">
           {!result.primary ? (
-            <div className="content-card p-5">
-              <p className="text-sm font-bold text-ink">Insufficient verified guidance</p>
-              <p className="mt-1 text-sm text-ink-muted">
-                No approved operational card matches this question yet. Try different operational
-                wording, search the guide directly, or check the source chapters.
-              </p>
-              <Link
-                href={`/search?q=${encodeURIComponent(submitted)}`}
-                className="mt-3 inline-flex rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
-              >
-                Search the guide
-              </Link>
-            </div>
+            <NoMatch query={submitted} onBrowse={() => setBrowseOpen(true)} />
+          ) : multiple ? (
+            <section aria-label="Possible guided topics">
+              <h2 className="font-display text-base font-semibold text-ink">Possible guided topics</h2>
+              <p className="mt-1 text-sm text-ink-muted">Pick the one that fits the case.</p>
+              <div className="mt-3 space-y-2.5">
+                {matches.slice(0, 3).map((card) => (
+                  <TopicOption
+                    key={card.slug}
+                    card={card}
+                    available={availabilityFor(card.slug).available}
+                    hasQuestions={Boolean(QUESTION_SETS[card.slug])}
+                    onStart={() => startFlow(card)}
+                  />
+                ))}
+              </div>
+            </section>
           ) : (
-            <>
-              <ProcedureMatch
-                card={result.primary}
-                primary
-                onStartFlow={
-                  QUESTION_SETS[result.primary.slug]
-                    ? () =>
-                        setActiveFlow({
-                          slug: result.primary!.slug,
-                          title: result.primary!.title,
-                          sourceVersion: result.primary!.source_version ?? null,
-                          chapterSlug: result.primary!.chapters?.slug ?? null,
-                        })
-                    : undefined
-                }
-              />
-              {activeFlow && QUESTION_SETS[activeFlow.slug] && (
-                <QuestionFlow
-                  key={activeFlow.slug}
-                  procedureSlug={activeFlow.slug}
-                  procedureTitle={activeFlow.title}
-                  questions={QUESTION_SETS[activeFlow.slug]}
-                  cardSourceVersion={activeFlow.sourceVersion}
-                  cardChapterSlug={activeFlow.chapterSlug}
-                  onClose={() => setActiveFlow(null)}
-                />
-              )}
-              {result.related.length > 0 && (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {result.related.map((card) => (
-                    <ProcedureMatch key={card.id} card={card} />
-                  ))}
-                </div>
-              )}
-            </>
+            <MatchConfirmation
+              card={result.primary}
+              availability={availabilityFor(result.primary.slug)}
+              hasQuestions={Boolean(QUESTION_SETS[result.primary.slug])}
+              onStart={() => startFlow(result.primary!)}
+              onSearchDifferent={() => {
+                setSubmitted("");
+                setQuery("");
+              }}
+            />
           )}
-        </section>
-      )}
+        </div>
+      ) : null}
 
-      <WorkflowDirectory cards={cards} onSelect={setSelectedSlug} />
+      {activeFlow && QUESTION_SETS[activeFlow.slug] ? (
+        <QuestionFlow
+          key={activeFlow.slug}
+          procedureSlug={activeFlow.slug}
+          procedureTitle={activeFlow.title}
+          questions={QUESTION_SETS[activeFlow.slug]}
+          cardSourceVersion={activeFlow.sourceVersion}
+          cardChapterSlug={activeFlow.chapterSlug}
+          onClose={() => setActiveFlow(null)}
+        />
+      ) : null}
+
+      <BrowseTopics cards={cards} open={browseOpen} onToggle={() => setBrowseOpen((v) => !v)} onStart={startFlow} />
     </div>
   );
 }
 
-// Searchable, category-grouped directory of available guided workflows. Reuses
-// the availability helper so only approved/published/version-matched workflows
-// appear; clicking one opens its preview (never auto-starts).
-function WorkflowDirectory({
+function MatchConfirmation({
+  card,
+  availability,
+  hasQuestions,
+  onStart,
+  onSearchDifferent,
+}: {
+  card: RoutableCard;
+  availability: ReturnType<typeof getWorkflowAvailability>;
+  hasQuestions: boolean;
+  onStart: () => void;
+  onSearchDifferent: () => void;
+}) {
+  const canStart = availability.available && hasQuestions;
+  return (
+    <section className="agent-hero p-5 sm:p-6" aria-label="Suggested guided topic">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky">This looks like</p>
+      <h2 className="mt-1 font-display text-xl font-semibold leading-snug text-ink sm:text-2xl">{card.title}</h2>
+      {card.summary ? <p className="mt-1.5 text-sm leading-6 text-ink-muted">{card.summary}</p> : null}
+      <div className="mt-4 flex flex-wrap gap-2.5">
+        {canStart ? (
+          <button
+            type="button"
+            onClick={onStart}
+            className="agent-primary touch-target inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold focus-visible:outline-none"
+          >
+            Start guided questions
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onSearchDifferent}
+          className="agent-secondary touch-target inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
+        >
+          Search a different scenario
+        </button>
+        <Link
+          href={`/procedure/${card.slug}`}
+          className="agent-secondary touch-target inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
+        >
+          Open full procedure
+        </Link>
+      </div>
+      {!canStart && availability.hasTree ? (
+        <p className="mt-2.5 text-xs font-medium text-ink-faint">Guided questions are not currently available.</p>
+      ) : null}
+    </section>
+  );
+}
+
+function TopicOption({
+  card,
+  available,
+  hasQuestions,
+  onStart,
+}: {
+  card: RoutableCard;
+  available: boolean;
+  hasQuestions: boolean;
+  onStart: () => void;
+}) {
+  return (
+    <article className="rounded-xl border border-border bg-white p-4">
+      <h3 className="font-display text-[15px] font-semibold text-ink">{card.title}</h3>
+      {card.summary ? <p className="mt-0.5 text-sm leading-6 text-ink-muted">{card.summary}</p> : null}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {available && hasQuestions ? (
+          <button
+            type="button"
+            onClick={onStart}
+            className="agent-primary touch-target inline-flex items-center justify-center rounded-lg px-4 py-2 text-xs font-semibold focus-visible:outline-none"
+          >
+            Start
+          </button>
+        ) : null}
+        <Link
+          href={`/procedure/${card.slug}`}
+          className="agent-secondary touch-target inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-xs font-semibold focus-visible:outline-none"
+        >
+          Open procedure
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function NoMatch({ query, onBrowse }: { query: string; onBrowse: () => void }) {
+  return (
+    <section className="rounded-2xl border border-border bg-white p-6" aria-label="No guided workflow found">
+      <h2 className="font-display text-lg font-semibold text-ink">
+        We couldn&rsquo;t identify a guided workflow for this scenario
+      </h2>
+      <p className="mt-1.5 text-sm leading-6 text-ink-muted">Try different wording, or search the procedures directly.</p>
+      <div className="mt-4 flex flex-wrap gap-2.5">
+        <Link
+          href={`/search?q=${encodeURIComponent(query)}`}
+          className="agent-primary touch-target inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold focus-visible:outline-none"
+        >
+          Search operational procedures
+        </Link>
+        <button
+          type="button"
+          onClick={onBrowse}
+          className="agent-secondary touch-target inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
+        >
+          Browse guided topics
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// Preselected workflow for /decision?procedure=<slug>. Never auto-starts.
+function PreselectedWorkflow({ slug, card }: { slug: string; card: RoutableCard | null }) {
+  const [started, setStarted] = useState(false);
+  const hasQuestions = Boolean(QUESTION_SETS[slug]);
+  const availability = card
+    ? getWorkflowAvailability({ slug, is_published: true, review_status: "approved", source_version: card.source_version ?? null })
+    : getWorkflowAvailability({ slug });
+  const title = card?.title ?? slug;
+  const canStart = availability.available && hasQuestions;
+
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky">Guided decision</p>
+      <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{title}</h1>
+      <p className="mt-1.5 max-w-xl text-sm leading-6 text-ink-muted">
+        {canStart
+          ? "Verified operational questions based on the reviewed procedure."
+          : "Guided questions are not currently available. Use the full procedure instead."}
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-2.5">
+        {canStart && !started ? (
+          <button
+            type="button"
+            onClick={() => setStarted(true)}
+            className="agent-primary touch-target inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold focus-visible:outline-none"
+          >
+            Start guided questions
+          </button>
+        ) : null}
+        <Link
+          href={`/procedure/${slug}`}
+          className="agent-secondary touch-target inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
+        >
+          Open full procedure
+        </Link>
+        <Link
+          href="/decision"
+          className="agent-secondary touch-target inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
+        >
+          Look up a different scenario
+        </Link>
+      </div>
+
+      {canStart && started ? (
+        <QuestionFlow
+          key={slug}
+          procedureSlug={slug}
+          procedureTitle={title}
+          questions={QUESTION_SETS[slug]}
+          cardSourceVersion={card?.source_version ?? null}
+          cardChapterSlug={card?.chapters?.slug ?? null}
+          onClose={() => setStarted(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// Secondary "Browse guided topics" — grouped, collapsible, availability-gated.
+function BrowseTopics({
   cards,
-  onSelect,
+  open,
+  onToggle,
+  onStart,
 }: {
   cards: RoutableCard[];
-  onSelect: (slug: string) => void;
+  open: boolean;
+  onToggle: () => void;
+  onStart: (card: RoutableCard) => void;
 }) {
-  const [filter, setFilter] = useState("");
-
+  const bySlug = useMemo(() => new Map(cards.map((c) => [c.slug, c])), [cards]);
   const available = useMemo(() => {
-    const bySlug = new Map(cards.map((card) => [card.slug, card]));
     return Object.values(DECISION_DEFINITIONS)
       .map((definition) => {
         const card = bySlug.get(definition.procedureSlug);
@@ -212,248 +362,68 @@ function WorkflowDirectory({
         return {
           slug: definition.procedureSlug,
           title: definition.procedureTitle,
+          summary: card?.summary ?? null,
           category: categoryForWorkflow(definition.procedureSlug),
-          questionCount: definition.questions.length,
-          estimatedSeconds: definition.questions.length * 8,
-          available: availability.available,
+          card,
+          available: availability.available && Boolean(QUESTION_SETS[definition.procedureSlug]),
         };
       })
       .filter((w) => w.available);
-  }, [cards]);
-
-  const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    return q
-      ? available.filter((w) => `${w.title} ${w.slug} ${w.category}`.toLowerCase().includes(q))
-      : available;
-  }, [available, filter]);
-
-  if (available.length === 0) return null;
+  }, [bySlug]);
 
   return (
-    <section className="content-card mt-5 p-5" aria-label="Guided workflow directory">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-base font-semibold text-ink">Browse guided workflows</h2>
-        <input
-          type="text"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder="Filter workflows…"
-          autoComplete="off"
-          aria-label="Filter workflows"
-          className="w-48 rounded-md border border-border bg-white px-3 py-1.5 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-sky"
-        />
-      </div>
+    <section className="mt-8" aria-label="Browse guided topics">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="agent-secondary touch-target inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold focus-visible:outline-none"
+      >
+        <span className="disclosure-chevron" aria-hidden="true" style={{ transform: open ? "rotate(90deg)" : undefined }}>
+          ▸
+        </span>
+        Browse guided topics
+      </button>
 
-      {filtered.length === 0 ? (
-        <p className="mt-3 text-sm text-ink-muted">No workflows match &ldquo;{filter}&rdquo;.</p>
-      ) : (
-        <div className="mt-3 space-y-4">
-          {WORKFLOW_CATEGORY_ORDER.map((category) => {
-            const items = filtered.filter((w) => w.category === category);
-            if (items.length === 0) return null;
-            return (
-              <div key={category}>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-accent">{category}</p>
-                <div className="mt-1.5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {items.map((w) => (
-                    <button
-                      key={w.slug}
-                      type="button"
-                      onClick={() => onSelect(w.slug)}
-                      className="hover-lift rounded-md border border-border bg-white px-3 py-2.5 text-left transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
-                    >
-                      <span className="block truncate text-[13px] font-semibold text-ink">{w.title}</span>
-                      <span className="mt-0.5 block text-[11px] text-ink-faint">
-                        {w.questionCount} questions · {estimatedMinutesLabel(w.estimatedSeconds)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {open ? (
+        available.length === 0 ? (
+          <p className="mt-3 text-sm text-ink-muted">No guided topics are available yet.</p>
+        ) : (
+          <div className="mt-3 space-y-2.5">
+            {WORKFLOW_CATEGORY_ORDER.map((category) => {
+              const items = available.filter((w) => w.category === category);
+              if (items.length === 0) return null;
+              return (
+                <details key={category} className="agent-disclosure rounded-xl border border-border bg-white p-4">
+                  <summary className="touch-target flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky">
+                    <span className="disclosure-chevron text-sky" aria-hidden="true">▸</span>
+                    {category} ({items.length})
+                  </summary>
+                  <ul className="mt-3 space-y-2">
+                    {items.map((w) => (
+                      <li key={w.slug} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
+                        <span className="min-w-0">
+                          <span className="block truncate text-[15px] font-semibold text-ink">{w.title}</span>
+                          {w.summary ? (
+                            <span className="mt-0.5 block truncate text-xs text-ink-muted">{w.summary}</span>
+                          ) : null}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => w.card && onStart(w.card)}
+                          className="agent-primary touch-target inline-flex shrink-0 items-center justify-center rounded-lg px-4 py-2 text-xs font-semibold focus-visible:outline-none"
+                        >
+                          Start
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              );
+            })}
+          </div>
+        )
+      ) : null}
     </section>
   );
-}
-
-function ProcedureMatch({
-  card,
-  primary = false,
-  onStartFlow,
-}: {
-  card: RoutableCard & { viaIntent: boolean };
-  primary?: boolean;
-  onStartFlow?: () => void;
-}) {
-  return (
-    <article
-      className={`content-card hover-lift p-4 ${primary ? "border-t-2 border-t-accent" : ""}`}
-    >
-      <div className="flex flex-wrap items-center gap-1.5">
-        {primary && (
-          <span className="rounded-sm bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-            Primary match
-          </span>
-        )}
-        {card.service_code && (
-          <span className="rounded-sm border border-orange-200 bg-orange-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-accent">
-            {card.service_code}
-          </span>
-        )}
-        <span className="rounded-sm border border-blue-200 bg-sky-soft px-1.5 py-0.5 text-[10px] font-semibold text-sky">
-          {card.service_type || card.category}
-        </span>
-        {card.viaIntent && (
-          <span className="rounded-sm border border-border bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">
-            Intent match
-          </span>
-        )}
-      </div>
-      <h2 className={`mt-2 font-display font-semibold leading-snug text-ink ${primary ? "text-lg" : "text-sm"}`}>
-        {card.title}
-      </h2>
-      {primary && card.summary && (
-        <p className="mt-1.5 text-sm leading-6 text-ink-muted">{card.summary}</p>
-      )}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Link
-          href={`/procedure/${card.slug}`}
-          className="press inline-flex rounded bg-navy px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
-        >
-          Open procedure
-        </Link>
-        {onStartFlow ? (
-          <button
-            type="button"
-            onClick={onStartFlow}
-            className="press inline-flex rounded border border-sky bg-sky-soft px-3.5 py-1.5 text-xs font-semibold text-sky transition-colors hover:bg-white"
-          >
-            Start guided decision
-          </button>
-        ) : (
-          <span className="rounded border border-dashed border-border px-2.5 py-1 text-[11px] font-medium text-ink-faint">
-            Guided decision coming soon
-          </span>
-        )}
-      </div>
-    </article>
-  );
-}
-
-// Direct-entry panel for /decision?procedure=<slug>. Preselects the workflow,
-// shows its verified source state, and lets the agent start it (never auto-run)
-// or return to general scenario search. Unsupported or unavailable slugs fall
-// back to a safe message without crashing.
-function PreselectedWorkflow({
-  slug,
-  card,
-  onBack,
-}: {
-  slug: string;
-  card: RoutableCard | null;
-  onBack: () => void;
-}) {
-  const [started, setStarted] = useState(false);
-  const hasQuestions = Boolean(QUESTION_SETS[slug]);
-  const definition = DECISION_DEFINITIONS[slug];
-  const availability = card
-    ? getWorkflowAvailability({
-        slug,
-        is_published: true,
-        review_status: "approved",
-        source_version: card.source_version ?? null,
-      })
-    : getWorkflowAvailability({ slug });
-  const title = card?.title ?? slug;
-  const canStart = availability.available && hasQuestions;
-  const questionCount = definition?.questions.length ?? 0;
-  const lastReviewed = formatReviewDate(card?.last_reviewed_at);
-
-  return (
-    <div className="space-y-4">
-      <section className="content-card border-t-2 border-t-navy p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-              Guided decision
-            </p>
-            <h2 className="mt-1 font-display text-lg font-semibold text-ink">{title}</h2>
-            {canStart && definition ? (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <PreviewChip label={`${questionCount} questions`} />
-                <PreviewChip label={estimatedMinutesLabel(questionCount * 8)} />
-                <PreviewChip label={`GO TO v${definition.sourceVersion}`} />
-                <PreviewChip label={`${definition.sourceChapter}`} />
-                <PreviewChip label={`Page ${definition.sourcePages.join(", ")}`} />
-                {lastReviewed && <PreviewChip label={`Reviewed ${lastReviewed}`} />}
-              </div>
-            ) : (
-              <p className="mt-1 text-sm leading-6 text-ink-muted">
-                {availability.hasTree
-                  ? availability.safeMessage
-                  : "This procedure does not have a guided decision. Use the operational card or look up a scenario."}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onBack}
-            className="press inline-flex shrink-0 items-center rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
-          >
-            Look up a different scenario
-          </button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {canStart && !started && (
-            <button
-              type="button"
-              onClick={() => setStarted(true)}
-              className="press inline-flex items-center rounded-md bg-sky px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky focus-visible:ring-offset-2"
-            >
-              Start guided decision
-            </button>
-          )}
-          {card && (
-            <Link
-              href={`/procedure/${slug}`}
-              className="inline-flex items-center rounded border border-border bg-white px-3.5 py-2 text-xs font-semibold text-ink transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
-            >
-              Open procedure card
-            </Link>
-          )}
-        </div>
-      </section>
-
-      {canStart && started && (
-        <QuestionFlow
-          key={slug}
-          procedureSlug={slug}
-          procedureTitle={title}
-          questions={QUESTION_SETS[slug]}
-          cardSourceVersion={card?.source_version ?? null}
-          cardChapterSlug={card?.chapters?.slug ?? null}
-          onClose={() => setStarted(false)}
-        />
-      )}
-    </div>
-  );
-}
-
-function PreviewChip({ label }: { label: string }) {
-  return (
-    <span className="rounded-sm border border-border bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-muted">
-      {label}
-    </span>
-  );
-}
-
-function formatReviewDate(value: string | null | undefined): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit", year: "numeric" }).format(date);
 }
