@@ -6,12 +6,18 @@ import { usePathname } from "next/navigation";
 export type SidebarNavItem = {
   label: string;
   href: string;
-  icon: "home" | "grid" | "book" | "folder" | "shield" | "list" | "user";
+  icon: "home" | "grid" | "book" | "folder" | "shield" | "list" | "user" | "search" | "compass";
 };
 
 const ICONS: Record<SidebarNavItem["icon"], React.ReactNode> = {
   home: (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1v-9z" />
+  ),
+  search: (
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0z" />
+  ),
+  compass: (
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 21a9 9 0 100-18 9 9 0 000 18zm3.5-12.5l-2 5-5 2 2-5 5-2z" />
   ),
   grid: (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z" />

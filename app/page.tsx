@@ -1,657 +1,88 @@
-import Link from "next/link";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { SiteHeader } from "@/components/SiteHeader";
-import { SearchTrigger } from "@/components/SearchTrigger";
+import { AgentPage } from "@/components/agent/AgentPage";
+import { AgentSection } from "@/components/agent/AgentSection";
+import { PrimarySearch } from "@/components/agent/PrimarySearch";
+import { TaskShortcut } from "@/components/agent/TaskShortcut";
 import { AgentWorkspace } from "@/components/AgentWorkspace";
-import { ChapterDirectory } from "@/components/ChapterDirectory";
-import { DecisionFlow, type DecisionFlowArea } from "@/components/DecisionFlow";
-import { WORK_AREAS, groupForCard } from "@/lib/work-areas";
-import type { Chapter, JsonValue } from "@/lib/types";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 export const revalidate = 60;
 
-type HomeChapter = Pick<
-  Chapter,
-  | "id"
-  | "chapter_number"
-  | "title"
-  | "slug"
-  | "search_keywords"
-  | "word_count"
-  | "updated_at"
-  | "source_version"
->;
-
-type HomeServiceCard = {
-  id: string;
-  title: string;
-  slug: string;
-  category: string;
-  service_code: string | null;
-  service_type: string | null;
-  cut_off_time: string | null;
-  channels: JsonValue[] | null;
-  who_can_action: JsonValue[] | null;
-  system_steps: JsonValue[] | null;
-  priority: number | null;
-  homepage_order: number | null;
+export const metadata = {
+  title: "GO TO | flydubai Contact Centre",
+  description: "Describe what the customer is asking about and get the right operational answer.",
 };
 
-const HERO_SHORTCUTS = [
-  ["MCT", "MCT"],
-  ["EXST", "EXST"],
-  ["CBBG", "CBBG"],
-  ["SPEQ", "SPEQ"],
-  ["FDIS", "FDIS"],
-  ["WCHR", "WCHR"],
-  ["OLCI Lounge", "OLCI lounge"],
-  ["Falcon", "Falcon"],
-  ["Dubai Stopover", "Dubai Stopover"],
-  ["Name Correction", "Name Correction"],
+// Plain-language common tasks. Each routes to the best safe destination decided
+// on the server: a published procedure card when one exists, otherwise a normal
+// search query. No guided workflow is linked here, so nothing unavailable can be
+// started from the homepage.
+const COMMON_TASKS: { label: string; hint: string; slug?: string; query: string }[] = [
+  { label: "Name correction", hint: "Fix a name on a booking", slug: "name-correction", query: "name correction" },
+  { label: "Wheelchair assistance", hint: "Mobility support", slug: "wheelchair", query: "wheelchair" },
+  { label: "Baggage", hint: "Allowances and bags", query: "baggage" },
+  { label: "Flight disruption", hint: "Delays and cancellations", slug: "flight-disruption", query: "flight disruption" },
+  { label: "Check-in", hint: "Online and airport check-in", slug: "check-in-olci", query: "check-in" },
+  { label: "Travel documents", hint: "Visa and residency", slug: "travel-requirements", query: "travel documents" },
+  { label: "Medical assistance", hint: "Medical and special needs", query: "medical assistance" },
+  { label: "Government deals", hint: "Esaad, Al Saada and similar", slug: "government-deals", query: "government deals" },
 ];
 
-const WORK_MODES = [
-  {
-    title: "Booking & Changes",
-    line: "PNR, fares, names, seats.",
-    query: "booking changes PNR name correction seat",
-    chips: ["PNR", "Names", "Seats"],
-  },
-  {
-    title: "Airport / Check-in",
-    line: "OLCI, DCS, boarding, terminals.",
-    query: "airport check-in OLCI DCS terminal",
-    chips: ["OLCI", "DCS", "Terminal"],
-  },
-  {
-    title: "Baggage & SSR",
-    line: "Bags, SSRs, special handling.",
-    query: "baggage SSR WorldTracer SPEQ",
-    chips: ["Baggage", "SSR", "WT"],
-  },
-  {
-    title: "Disruption",
-    line: "FDIS, schedule changes, recovery.",
-    query: "FDIS flight disruption schedule change",
-    chips: ["FDIS", "Delay", "Recovery"],
-  },
-  {
-    title: "Special Assistance",
-    line: "Wheelchair, medical, service cases.",
-    query: "WCHR WCHS WCHC MEDA DPNA",
-    chips: ["WCHR", "MEDA", "DPNA"],
-  },
-  {
-    title: "References",
-    line: "Contacts, files, source material.",
-    query: "contact details references files",
-    chips: ["Contacts", "Files", "Source"],
-  },
-];
-
-const CRITICAL_SHORTCUTS = [
-  ["MCT", "MCT"],
-  ["EXST / CBBG", "EXST CBBG extra seat"],
-  ["SPEQ", "SPEQ sporting equipment"],
-  ["Falcon", "falcon handling"],
-  ["Lounge OLCI", "lounge access OLCI"],
-  ["FDIS", "FDIS flight disruption"],
-  ["WCHR", "WCHR WCHS WCHC wheelchair"],
-  ["Dubai Stopover", "Dubai Stopover"],
-  ["Name Correction", "name correction"],
-  ["Baggage Upgrade", "baggage upgrade"],
-];
-
-const QUICK_CHECKS = [
-  ["What is the cut-off?", "cut off time"],
-  ["Can Contact Centre add it?", "contact centre add service"],
-  ["What should I tell passenger?", "passenger advice"],
-  ["Is approval required?", "approval required"],
-  ["What is not allowed?", "not allowed"],
-  ["Which channel handles it?", "channel service"],
-];
-
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: Promise<{ group?: string }>;
-}) {
-  const { group } = await searchParams;
+export default async function Home() {
   const supabase = await createServerSupabaseClient();
-  const { data: chapters } = await supabase
-    .from("chapters")
-    .select("id, chapter_number, title, slug, search_keywords, word_count, updated_at, source_version")
-    .order("chapter_number", { ascending: true });
-  const { data: serviceCards } = await supabase
-    .from("procedure_cards")
-    .select("id, title, slug, category, service_code, service_type, cut_off_time, channels, who_can_action, system_steps, priority, homepage_order")
-    .eq("is_published", true)
-    .eq("review_status", "approved")
-    .eq("show_on_homepage", true)
-    .order("homepage_order", { ascending: true })
-    .order("title", { ascending: true })
-    .limit(2);
-  const { data: directoryCards } = await supabase
-    .from("procedure_cards")
-    .select("id, title, slug, category, service_code, service_type, priority")
-    .eq("is_published", true)
-    .eq("review_status", "approved")
-    .order("priority", { ascending: false })
-    .order("title", { ascending: true });
 
-  const list = ((chapters ?? []) as HomeChapter[]).filter(Boolean);
-  const services = ((serviceCards ?? []) as HomeServiceCard[]).filter(Boolean);
-  const recentlyUpdated = [...list]
-    .filter((chapter) => Boolean(chapter.updated_at))
-    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-    .slice(0, 5);
-  const sourceVersion = latestSourceVersion(list);
-  const lastUpdated = recentlyUpdated[0]?.updated_at;
-  const decisionAreas = buildDecisionAreas(directoryCards ?? []);
+  // Only slugs of cards that are approved AND published are eligible to deep-link
+  // to a procedure page; everything else falls back to search. This mirrors the
+  // published+approved visibility used elsewhere and never leaks internal state.
+  const { data: publishedCards } = await supabase
+    .from("procedure_cards")
+    .select("slug")
+    .eq("is_published", true)
+    .eq("review_status", "approved");
+  const publishedSlugs = new Set(
+    ((publishedCards ?? []) as { slug: string }[]).map((card) => card.slug)
+  );
+
+  const tasks = COMMON_TASKS.map((task) => ({
+    label: task.label,
+    hint: task.hint,
+    href:
+      task.slug && publishedSlugs.has(task.slug)
+        ? `/procedure/${task.slug}`
+        : `/search?q=${encodeURIComponent(task.query)}`,
+  }));
 
   return (
     <div className="dashboard-shell flex min-h-full flex-col">
       <SiteHeader />
 
-      <main id="main" className="reveal mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
-        <section className="hero-panel reveal relative z-20 mb-5 overflow-visible rounded-lg">
-          <div className="hero-main p-4 sm:p-5">
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-              <div>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-                    Agent task console
-                  </p>
-                  <MetaStrip
-                    chapters={list.length}
-                    sourceVersion={sourceVersion}
-                    lastUpdated={lastUpdated}
-                  />
-                </div>
-                <h1 className="mt-2 font-display text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-3xl">
-                  GO TO Contact Centre Guide
-                </h1>
-                <p className="hero-helper-text mt-1 max-w-2xl text-sm">
-                  Search by service, SSR code, passenger issue, cut-off time, or process.
-                </p>
-
-                <div className="relative z-30 mt-4">
-                  <SearchTrigger variant="hero" />
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {HERO_SHORTCUTS.map(([label, query]) => (
-                    <ShortcutChip key={label} label={label} query={query} />
-                  ))}
-                </div>
-              </div>
-
-              <aside className="answer-panel rounded-lg border border-border bg-white p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-                  Answer fast
-                </p>
-                <div className="mt-3 grid gap-1.5">
-                  {QUICK_CHECKS.map(([label, query]) => (
-                    <Link
-                      key={label}
-                      href={`/search?q=${encodeURIComponent(query)}`}
-                      className="rounded-md border border-border bg-white px-3 py-2 text-[13px] font-semibold text-ink transition-colors hover:border-accent hover:text-accent"
-                    >
-                      {label}
-                    </Link>
-                  ))}
-                </div>
-              </aside>
-            </div>
+      <AgentPage>
+        <section className="agent-hero p-5 sm:p-7">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+            What is the customer asking about?
+          </h1>
+          <p className="mt-1.5 max-w-xl text-sm leading-6 text-ink-muted sm:text-[15px]">
+            Describe the passenger&rsquo;s request or problem in your own words.
+          </p>
+          <div className="mt-5">
+            <PrimarySearch />
           </div>
         </section>
 
-        {list.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <div className="reveal-stagger space-y-6">
-            <AgentWorkspace />
-
-            <GuidedDecisionPanel />
-
-            <DecisionFlow areas={decisionAreas} />
-
-            <section>
-              <div className="content-card service-console-panel p-4 sm:p-5">
-                <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-                      Quick access
-                    </p>
-                    <h2 className="font-display text-lg font-semibold text-ink">
-                      Featured Operational Cards
-                    </h2>
-                  </div>
-                  <span className="text-xs font-semibold text-ink-faint">
-                    Featured by admin
-                  </span>
-                </div>
-
-                {services.length > 0 ? (
-                  <div className={`grid grid-cols-1 gap-4 ${services.length > 1 ? "lg:grid-cols-2" : ""}`}>
-                    {services.map((service) => (
-                      <ServiceCard key={service.id} service={service} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-blue-200 bg-sky-soft/50 p-5 text-sm text-ink-muted">
-                    <p className="font-semibold text-ink">No featured operational cards yet.</p>
-                    <p className="mt-1">
-                      Use search or direct procedure links while cards are selected for the homepage.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="content-card p-4">
-              <h2 className="mb-3 font-display text-base font-semibold text-ink">
-                Operational shortcuts
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                {CRITICAL_SHORTCUTS.map(([label, query]) => (
-                  <ShortcutChip key={label} label={label} query={query} />
-                ))}
-              </div>
-            </section>
-
-            <details className="content-card group overflow-hidden">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5">
-                <span>
-                  <span className="block font-display text-base font-semibold text-ink">
-                    Manual / chapter browser
-                  </span>
-                  <span className="mt-0.5 block text-xs text-ink-muted">
-                    Last-resort manual browsing, work areas, and recent chapter updates.
-                  </span>
-                </span>
-                <span className="rounded border border-border bg-white px-3 py-1 text-xs font-semibold text-sky group-open:text-accent">
-                  Open
-                </span>
-              </summary>
-              <div className="space-y-5 border-t border-border p-4">
-                <details className="rounded-lg border border-border bg-white">
-                  <summary className="cursor-pointer px-4 py-3 font-display text-sm font-semibold text-ink">
-                    Browse by work area
-                  </summary>
-                  <div className="grid grid-cols-1 gap-3 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {WORK_MODES.map((mode) => (
-                      <WorkModeCard key={mode.title} mode={mode} />
-                    ))}
-                  </div>
-                </details>
-
-                {recentlyUpdated.length > 0 && (
-                  <details className="rounded-lg border border-border bg-white">
-                    <summary className="cursor-pointer px-4 py-3 font-display text-sm font-semibold text-ink">
-                      Recent chapter updates
-                    </summary>
-                    <div className="divide-y divide-border border-t border-border">
-                      {recentlyUpdated.map((chapter) => (
-                        <Link
-                          key={chapter.id}
-                          href={`/chapter/${chapter.slug}`}
-                          className="grid gap-2 px-4 py-3 text-sm transition-colors hover:bg-panel-hover sm:grid-cols-[72px_1fr_auto]"
-                        >
-                          <span className="font-mono text-xs font-semibold text-accent">
-                            Ch. {String(chapter.chapter_number).padStart(2, "0")}
-                          </span>
-                          <span className="font-semibold text-ink">{chapter.title}</span>
-                          <span className="text-xs text-ink-faint">{compactDate(chapter.updated_at)}</span>
-                        </Link>
-                      ))}
-                    </div>
-                  </details>
-                )}
-
-                <h2 className="font-display text-base font-semibold text-ink">Browse all chapters</h2>
-                <ChapterDirectory chapters={list} activeGroupId={group} />
-              </div>
-            </details>
-          </div>
-        )}
-      </main>
-
-      <footer className="border-t border-border bg-white py-4">
-        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 text-xs text-ink-faint sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <span>Internal flydubai contact centre reference. Not for external distribution.</span>
-          <span className="font-mono">{sourceVersion ?? "Source version shown per chapter"}</span>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-function GuidedDecisionPanel() {
-  const examples: [string, string][] = [
-    ["Passenger cannot walk", "/decision"],
-    ["Pregnant passenger travelling tomorrow", "/decision?procedure=pregnancy"],
-    ["Missed flight after online check-in", "/decision?procedure=check-in-olci"],
-  ];
-
-  return (
-    <section className="content-card overflow-hidden border-l-4 border-l-sky">
-      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky">
-            Guided operational decision
-          </p>
-          <h2 className="mt-1 font-display text-lg font-semibold text-ink">
-            Describe the passenger scenario and follow verified operational questions.
-          </h2>
-          <p className="mt-1 text-sm text-ink-muted">
-            Deterministic guidance from reviewed operational rules — not every scenario is covered.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {examples.map(([label, href]) => (
-              <Link
-                key={label}
-                href={href}
-                className="rounded border border-border bg-white px-2.5 py-1 text-xs font-semibold text-sky transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky focus-visible:ring-offset-1"
-              >
-                {label}
-              </Link>
+        <AgentSection title="Common tasks">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {tasks.map((task) => (
+              <TaskShortcut key={task.label} label={task.label} href={task.href} hint={task.hint} />
             ))}
           </div>
+        </AgentSection>
+
+        {/* Personal workspace (favorites / recent / continue). Device-local and
+            self-hiding when empty; renders nothing for a brand-new agent. */}
+        <div className="mt-8">
+          <AgentWorkspace />
         </div>
-        <Link
-          href="/decision"
-          className="inline-flex shrink-0 items-center justify-center rounded-md bg-sky px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky focus-visible:ring-offset-2"
-        >
-          Start guided decision
-        </Link>
-      </div>
-    </section>
-  );
-}
-
-function ServiceCard({ service }: { service: HomeServiceCard }) {
-  const channels = readableItems(service.channels).slice(0, 3);
-  const whoCanAction = readableItems(service.who_can_action);
-  const steps = readableItems(service.system_steps);
-  const serviceMeta = service.service_type || service.category;
-  const timingLabel = getTimingLabel(service);
-  const openLabel = isReferenceCard(service) ? "Open card" : "Open service";
-
-  return (
-    <article className="service-card hover-lift flex flex-col rounded-lg border border-border bg-white p-4 hover:border-accent">
-      <span>
-        <span className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="flex flex-wrap gap-1.5">
-          {service.service_code && (
-            <span className="rounded-sm border border-orange-200 bg-orange-50 px-2 py-0.5 font-mono text-xs font-bold text-accent">
-              {service.service_code}
-            </span>
-          )}
-            <span className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-xs font-semibold text-sky">
-              {serviceMeta}
-            </span>
-          </span>
-          <Link
-            href={`/procedure/${service.slug}`}
-            className="rounded bg-accent px-3 py-1 text-xs font-bold text-white transition-colors hover:bg-accent-dim"
-          >
-            {openLabel}
-          </Link>
-        </span>
-        <h3 className="font-display text-base font-semibold leading-snug text-ink sm:text-lg">
-          {service.title}
-        </h3>
-        {service.cut_off_time && (
-          <TimingDisplay label={timingLabel} value={service.cut_off_time} />
-        )}
-      </span>
-
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        <QuickFact label="Channels" value={channels.length ? channels.join(", ") : "Check service"} />
-        <QuickFact
-          label="Who can action"
-          value={whoCanAction[0] ?? "Action guide"}
-        />
-        <QuickFact
-          label="Steps"
-          value={steps.length ? `${steps.length} steps` : "Action guide"}
-        />
-      </div>
-
-      <span className="mt-3 flex flex-wrap gap-1.5">
-          {channels.map((channel) => (
-            <span
-              key={channel}
-              className="rounded-sm border border-blue-200 bg-sky-soft/70 px-1.5 py-0.5 text-[10px] font-semibold text-sky"
-            >
-              {channel}
-            </span>
-          ))}
-      </span>
-    </article>
-  );
-}
-
-function TimingDisplay({ label, value }: { label: string; value: string }) {
-  const preview = timingPreview(value, label);
-  const isStructured = preview.lines.length > 1 || preview.isTruncated;
-
-  return (
-    <div className="mt-3 max-h-36 overflow-hidden rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800">
-      <p className="font-bold">{label}:</p>
-      {isStructured ? (
-        <ul className="mt-1 space-y-1">
-          {preview.lines.map((line) => (
-            <li key={line} className="text-xs font-semibold leading-5 text-ink">
-              {line}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-1 font-semibold text-ink">{value}</p>
-      )}
-      <p className="mt-2 text-[11px] font-semibold text-orange-700">
-        {label === "MCT rule" || label.includes("rule")
-          ? "Open card for full rule"
-          : "Open service for full details"}
-      </p>
+      </AgentPage>
     </div>
   );
-}
-
-function getTimingLabel(card: Pick<HomeServiceCard, "service_code" | "service_type" | "category">) {
-  if (card.service_code?.toUpperCase() === "MCT") return "MCT rule";
-  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
-  if (type.includes("reference")) return "Reference rule";
-  if (type.includes("rule")) return "Timing rule";
-  return "Cut-off";
-}
-
-function isReferenceCard(card: Pick<HomeServiceCard, "service_code" | "service_type" | "category">) {
-  const type = `${card.service_type ?? ""} ${card.category ?? ""}`.toLowerCase();
-  return card.service_code?.toUpperCase() === "MCT" || type.includes("reference") || type.includes("rule");
-}
-
-function timingPreview(value: string, label: string) {
-  const text = value.trim();
-  const rawLines = text.includes("\n") ? text.split(/\r?\n/) : text.includes(";") ? text.split(";") : [text];
-  const meaningful = rawLines.map((line) => line.trim()).filter(Boolean);
-
-  if (label === "MCT rule") {
-    const preferred = [
-      combineHeadingWithNext(meaningful, "T2 -> T2"),
-      combineHeadingWithNext(meaningful, "T3 -> T3"),
-      combineHeadingWithNext(meaningful, "T2/T3 -> T1"),
-    ].filter(Boolean);
-
-    if (preferred.length > 0) {
-      return { lines: preferred.slice(0, 3), isTruncated: meaningful.length > preferred.length };
-    }
-  }
-
-  const lines = meaningful.slice(0, text.includes(";") ? 3 : 3);
-  return { lines, isTruncated: meaningful.length > lines.length };
-}
-
-function combineHeadingWithNext(lines: string[], heading: string) {
-  const index = lines.findIndex((line) => line.toLowerCase() === heading.toLowerCase());
-  if (index === -1) return "";
-  const next = lines[index + 1];
-  return next ? `${lines[index]} ${next}` : lines[index];
-}
-
-function QuickFact({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="rounded-md border border-border bg-sky-soft/40 px-2.5 py-1.5">
-      <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">
-        {label}
-      </span>
-      <span className="mt-1 block truncate text-xs font-semibold text-ink">{value}</span>
-    </span>
-  );
-}
-
-function MetaStrip({
-  chapters,
-  sourceVersion,
-  lastUpdated,
-}: {
-  chapters: number;
-  sourceVersion: string | null;
-  lastUpdated?: string | null;
-}) {
-  const items = [
-    ["Chapters", String(chapters || "-")],
-    ["Source", sourceVersion ?? "-"],
-    ["Updated", lastUpdated ? compactDate(lastUpdated) : "-"],
-  ];
-
-  return (
-    <dl className="flex flex-wrap gap-2 text-xs">
-      {items.map(([label, value]) => (
-        <div
-          key={label}
-          className="rounded border border-border bg-white px-2.5 py-1"
-        >
-          <dt className="inline text-ink-faint">{label}: </dt>
-          <dd className="inline font-semibold text-ink">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-function readableItems(value: JsonValue[] | null) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      if (typeof item === "string") return item.trim();
-      if (item && typeof item === "object" && !Array.isArray(item)) {
-        const record = item as Record<string, JsonValue>;
-        const text = record.label ?? record.text ?? record.value ?? record.title;
-        return typeof text === "string" ? text.trim() : "";
-      }
-      return "";
-    })
-    .filter(Boolean);
-}
-
-function WorkModeCard({
-  mode,
-}: {
-  mode: {
-    title: string;
-    line: string;
-    query: string;
-    chips: string[];
-  };
-}) {
-  return (
-    <Link
-      href={`/search?q=${encodeURIComponent(mode.query)}`}
-      className="content-card quick-card group flex min-h-36 flex-col justify-between p-4 transition-all hover:-translate-y-0.5 hover:border-accent"
-    >
-      <span>
-        <span className="block font-display text-base font-semibold text-ink group-hover:text-accent">
-          {mode.title}
-        </span>
-        <span className="mt-2 block text-sm text-ink-muted">{mode.line}</span>
-      </span>
-      <span className="mt-4 flex flex-wrap gap-1.5">
-        {mode.chips.slice(0, 3).map((chip) => (
-          <span
-            key={chip}
-            className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-[10px] font-semibold text-sky"
-          >
-            {chip}
-          </span>
-        ))}
-      </span>
-    </Link>
-  );
-}
-
-function ShortcutChip({ label, query }: { label: string; query: string }) {
-  return (
-    <Link
-      href={`/search?q=${encodeURIComponent(query)}`}
-      className="rounded border border-border bg-white px-2.5 py-1 text-xs font-semibold text-sky transition-colors hover:border-accent hover:text-accent"
-    >
-      {label}
-    </Link>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="content-card p-12 text-center">
-      <p className="font-display text-lg font-semibold text-ink">No chapters loaded yet</p>
-      <p className="mx-auto mt-2 max-w-md text-sm text-ink-muted">
-        Once the database is connected and a PDF sync has run, the manual will appear here.
-      </p>
-    </div>
-  );
-}
-
-type DirectoryCardRow = {
-  id: string;
-  title: string;
-  slug: string;
-  category: string;
-  service_code: string | null;
-  service_type: string | null;
-  priority: number | null;
-};
-
-function buildDecisionAreas(cards: DirectoryCardRow[]): DecisionFlowArea[] {
-  const groups = new Map<string, DirectoryCardRow[]>(WORK_AREAS.map((area) => [area, []]));
-  for (const card of cards) {
-    groups.get(groupForCard(card))?.push(card);
-  }
-  return WORK_AREAS.map((area) => ({
-    name: area,
-    cards: (groups.get(area) ?? []).map((card) => ({
-      id: card.id,
-      title: card.title,
-      slug: card.slug,
-      service_code: card.service_code,
-      service_type: card.service_type,
-    })),
-  }));
-}
-
-function latestSourceVersion(chapters: HomeChapter[]) {
-  return chapters.find((chapter) => chapter.source_version?.trim())?.source_version ?? null;
-}
-
-function compactDate(value?: string | null) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-  }).format(date);
 }

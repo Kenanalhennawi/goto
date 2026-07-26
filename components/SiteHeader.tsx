@@ -25,18 +25,18 @@ export async function SiteHeader() {
   const displayName = role?.full_name ?? user?.email ?? null;
   const showAdmin = canAccessAdmin(roleName);
 
+  // Agent Mode navigation: plain-language, task-first labels only. No admin
+  // terminology, chapter/source metadata, or internal statuses.
   const navItems: SidebarNavItem[] = [
-    { label: "Command center", href: "/", icon: "home" },
-    { label: "Decision", href: "/decision", icon: "shield" },
-    { label: "Services", href: "/services", icon: "grid" },
-    { label: "Files", href: "/files", icon: "folder" },
+    { label: "Home", href: "/", icon: "home" },
+    { label: "Search", href: "/search", icon: "search" },
+    { label: "Guided decision", href: "/decision", icon: "compass" },
+    { label: "Browse services", href: "/services", icon: "grid" },
   ];
+  // Admins use the same simplified agent homepage; a single Admin entry routes
+  // into the existing (unchanged) admin surface.
   const adminItems: SidebarNavItem[] = showAdmin
-    ? [
-        { label: "Procedures", href: "/admin/procedures", icon: "list" },
-        { label: "Quality", href: "/admin/quality", icon: "book" },
-        { label: "Admin", href: "/admin", icon: "shield" },
-      ]
+    ? [{ label: "Admin", href: "/admin", icon: "shield" }]
     : [];
 
   return (
@@ -115,12 +115,12 @@ export async function SiteHeader() {
             <span className="font-display text-sm font-semibold text-white">GO TO</span>
           </Link>
           <SearchTrigger variant="topbar" />
-          <nav className="flex items-center gap-0.5">
+          <nav className="flex items-center gap-0.5" aria-label="Primary">
+            <Link href="/decision" className="rounded-md px-2 py-1.5 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white">
+              Guided
+            </Link>
             <Link href="/services" className="rounded-md px-2 py-1.5 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white">
               Services
-            </Link>
-            <Link href="/files" className="rounded-md px-2 py-1.5 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white">
-              Files
             </Link>
             {showAdmin && (
               <Link href="/admin" className="rounded-md px-2 py-1.5 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white">
