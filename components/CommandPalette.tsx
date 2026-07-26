@@ -31,7 +31,7 @@ const SUGGESTIONS = ["MCT", "EXST", "WCHR", "FDIS", "Dubai Stopover", "Name Corr
 
 type PaletteItem = {
   key: string;
-  group: "Guided decisions" | "Operational cards" | "Source chapters";
+  group: "Guided decisions" | "Procedures" | "Source manual";
   title: string;
   href: string;
   badge: string | null;
@@ -259,7 +259,7 @@ export function CommandPalette() {
             role="combobox"
             aria-expanded={items.length > 0}
             aria-controls="palette-results"
-            aria-label="Search services, SSR codes, processes"
+            aria-label="Search procedures, guidance, or a topic"
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}
@@ -274,7 +274,7 @@ export function CommandPalette() {
               }
             }}
             onKeyDown={onInputKeyDown}
-            placeholder="Search services, SSR codes, passenger issues..."
+            placeholder="Search procedures, guidance, or a topic..."
             className="min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-faint"
           />
           <kbd className="shrink-0 rounded border border-border bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-faint">
@@ -293,7 +293,7 @@ export function CommandPalette() {
                 }}
                 className="mb-3 flex w-full items-center justify-between gap-3 rounded-md border border-sky/40 bg-sky-soft px-3 py-2 text-left transition-colors hover:border-sky"
               >
-                <span className="text-sm font-semibold text-sky">Open Decision Assistant</span>
+                <span className="text-sm font-semibold text-sky">Guided decision</span>
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-sky/80">
                   Guided
                 </span>
@@ -343,7 +343,7 @@ export function CommandPalette() {
                       >
                         <span className="truncate">{wf.title}</span>
                         <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-sky/80">
-                          Decision
+                          Guided
                         </span>
                       </button>
                     ))}
@@ -479,7 +479,7 @@ function buildItems(results: UnifiedSearchResult[], query: string): PaletteItem[
       const channels = readableJsonItems(result.channels).slice(0, 2).join(", ");
       cards.push({
         key: `card-${result.id}`,
-        group: "Operational cards",
+        group: "Procedures",
         title: result.title,
         href: `/procedure/${result.slug}`,
         badge: result.service_code,
@@ -510,7 +510,7 @@ function buildItems(results: UnifiedSearchResult[], query: string): PaletteItem[
     } else {
       chapters.push({
         key: `chapter-${result.id}`,
-        group: "Source chapters",
+        group: "Source manual",
         title: result.title,
         href: `/chapter/${result.slug}`,
         badge: `Ch. ${String(result.chapter_number ?? "-").padStart(2, "0")}`,

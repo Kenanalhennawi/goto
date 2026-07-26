@@ -1,185 +1,196 @@
-import { SiteHeader } from "@/components/SiteHeader";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { canReviewProcedures } from "@/lib/permissions";
-import { WORK_AREAS, groupForCard, type WorkArea } from "@/lib/work-areas";
-import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
-import { FavoriteButton } from "@/components/FavoriteButton";
-import type { JsonValue } from "@/lib/types";
 import Link from "next/link";
+import { SiteHeader } from "@/components/SiteHeader";
+import { AgentPage } from "@/components/agent/AgentPage";
+import { RelatedProcedureRow, type RelatedItem } from "@/components/agent/RelatedProcedures";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
+import { deriveOperationalAnswer } from "@/lib/operational-answer";
+import type { JsonValue } from "@/lib/types";
 
 export const revalidate = 60;
 
-type SearchParams = {
-  q?: string;
-  area?: string;
-  code?: string;
+export const metadata = {
+  title: "Browse services | GO TO",
+  description: "Browse operational services by plain-language category.",
 };
 
-type ServiceCard = {
+// Plain-language service groups (presentation only — derived from card fields,
+// no backend/category change).
+const SERVICE_GROUPS = [
+  "Booking changes",
+  "Baggage",
+  "Check-in & airport",
+  "Medical & assistance",
+  "Travel documents",
+  "Disruption",
+  "Special services",
+  "Payment & refunds",
+] as const;
+type ServiceGroup = (typeof SERVICE_GROUPS)[number];
+
+const GROUP_RULES: { re: RegExp; group: ServiceGroup }[] = [
+  { re: /baggage|worldtracer|blue ribbon|excess bag|wrapping/, group: "Baggage" },
+  { re: /payment|refund|voucher/, group: "Payment & refunds" },
+  { re: /disruption|fdis|delay|cancel|schedule change/, group: "Disruption" },
+  { re: /medical|meda|wheelchair|dpna|oxygen|pregnan|plaster|cast|leg brace|death case|assist/, group: "Medical & assistance" },
+  { re: /visa|oktb|ok to board|residency|emirates id|travel document|travel requirement/, group: "Travel documents" },
+  { re: /check.?in|olci|airport|boarding|lounge|connection|\bmct\b|meet.?assist|city check/, group: "Check-in & airport" },
+  { re: /name correction|government deal|auto.?split|duplicate|fare|\bbooking\b/, group: "Booking changes" },
+  { re: /falcon|service animal|human remains|extra seat|cbbg|exst|sporting/, group: "Special services" },
+];
+
+type ServiceRow = {
   id: string;
   title: string;
   slug: string;
   category: string;
-  service_code: string | null;
   service_type: string | null;
+  summary: string | null;
+  when_to_use: string | null;
   cut_off_time: string | null;
-  channels: JsonValue[];
-  priority: number;
+  who_can_action: JsonValue[] | null;
+  required_information: JsonValue[] | null;
+  system_steps: JsonValue[] | null;
+  passenger_advice: JsonValue[] | null;
+  allowed: JsonValue[] | null;
+  not_allowed: JsonValue[] | null;
+  escalation_points: JsonValue[] | null;
+  fees_charges: string | null;
   source_version: string | null;
 };
+
+function serviceGroup(card: ServiceRow): ServiceGroup {
+  const haystack = `${card.category} ${card.service_type ?? ""} ${card.title} ${card.slug}`.toLowerCase();
+  for (const rule of GROUP_RULES) {
+    if (rule.re.test(haystack)) return rule.group;
+  }
+  return "Special services";
+}
 
 export default async function ServicesPage({
   searchParams,
 }: {
-  searchParams: Promise<SearchParams>;
+  searchParams: Promise<{ q?: string; cat?: string }>;
 }) {
-  const filters = await searchParams;
+  const { q, cat } = await searchParams;
+  const query = (q ?? "").trim();
+  const activeCat = SERVICE_GROUPS.includes((cat ?? "") as ServiceGroup) ? (cat as ServiceGroup) : null;
+
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data: role } = user
-    ? await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .single()
-    : { data: null };
-
-  const canReview = canReviewProcedures(role?.role);
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from("procedure_cards")
-    .select("id, title, slug, category, service_code, service_type, cut_off_time, channels, priority, source_version")
+    .select(
+      [
+        "id", "title", "slug", "category", "service_type", "summary", "when_to_use",
+        "cut_off_time", "who_can_action", "required_information", "system_steps",
+        "passenger_advice", "allowed", "not_allowed", "escalation_points", "fees_charges", "source_version",
+      ].join(", ")
+    )
     .eq("is_published", true)
     .eq("review_status", "approved")
-    .order("priority", { ascending: false })
     .order("title", { ascending: true });
 
-  const cards = error ? [] : ((data ?? []) as ServiceCard[]);
-  const visibleCards = filterCards(cards, filters);
-  const grouped = groupCards(visibleCards);
+  const cards = (data ?? []) as unknown as ServiceRow[];
+
+  const filtered = cards.filter((card) => {
+    if (activeCat && serviceGroup(card) !== activeCat) return false;
+    if (!query) return true;
+    const hay = `${card.title} ${card.summary ?? ""} ${card.category}`.toLowerCase();
+    return hay.includes(query.toLowerCase());
+  });
+
+  // Group into plain-language sections.
+  const grouped = new Map<ServiceGroup, RelatedItem[]>();
+  for (const card of filtered) {
+    const answer = deriveOperationalAnswer(card);
+    const availability = getWorkflowAvailability({
+      slug: card.slug,
+      is_published: true,
+      review_status: "approved",
+      source_version: card.source_version,
+    });
+    const item: RelatedItem = {
+      slug: card.slug,
+      title: card.title,
+      summary: answer.summary,
+      deadline: answer.deadline,
+      criticalBlocker: answer.criticalBlocker,
+      guidedAvailable: availability.available,
+    };
+    const group = serviceGroup(card);
+    const list = grouped.get(group) ?? [];
+    list.push(item);
+    grouped.set(group, list);
+  }
 
   return (
     <div className="dashboard-shell flex min-h-full flex-col">
       <SiteHeader />
+      <AgentPage>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky">Browse services</p>
+        <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+          Browse services
+        </h1>
+        <p className="mt-1.5 max-w-xl text-sm leading-6 text-ink-muted">
+          When you&rsquo;re not sure what to search, browse operational services by topic.
+        </p>
 
-      <main id="main" className="reveal mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-10">
-        <section className="hero-panel mb-5 overflow-hidden rounded-lg">
-          <div className="hero-main p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-              Agent services
-            </p>
-            <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <h1 className="font-display text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-3xl">
-                  Service Directory
-                </h1>
-                <p className="mt-1.5 max-w-2xl text-sm leading-6 text-ink-muted">
-                  Browse operational services by work area.
-                </p>
-              </div>
-              <Link
-                href="/"
-                className="rounded border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-accent"
-              >
-                Back to guide
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        <section className="content-card mb-5 p-4">
-          <form action="/services" className="grid gap-2.5 lg:grid-cols-[1fr_220px_auto]">
-            <label className="sr-only" htmlFor="service-filter">
-              Filter services
-            </label>
+        <form action="/services" method="get" role="search" className="mt-4">
+          <label htmlFor="services-q" className="sr-only">Filter services</label>
+          {activeCat ? <input type="hidden" name="cat" value={activeCat} /> : null}
+          <div className="flex flex-col gap-2.5 sm:flex-row">
             <input
-              id="service-filter"
+              id="services-q"
               name="q"
-              defaultValue={filters.q ?? ""}
-              placeholder="Filter services..."
+              type="search"
+              defaultValue={query}
               autoComplete="off"
-              className="rounded-md border border-border bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-sky"
+              spellCheck={false}
+              placeholder="Filter by name or topic…"
+              className="agent-search-input touch-target min-w-0 flex-1 px-4 py-3 text-[15px] text-ink placeholder:text-ink-faint"
             />
-            <select
-              name="area"
-              defaultValue={filters.area ?? ""}
-              className="rounded-md border border-border bg-white px-3.5 py-2.5 text-sm font-semibold text-ink outline-none transition-colors focus:border-sky"
-            >
-              <option value="">All work areas</option>
-              {WORK_AREAS.map((area) => (
-                <option key={area} value={area}>
-                  {area}
-                </option>
-              ))}
-            </select>
             <button
               type="submit"
-              className="rounded-md bg-navy px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent"
+              className="agent-primary touch-target inline-flex items-center justify-center rounded-xl px-6 py-3 text-[15px] font-semibold focus-visible:outline-none"
             >
               Filter
             </button>
-          </form>
-
-          <div className="mt-3.5 flex flex-wrap gap-1.5 border-t border-border pt-3.5">
-            <FilterChip href="/services" active={!filters.area && !filters.q}>
-              All
-            </FilterChip>
-            {WORK_AREAS.map((area) => (
-              <FilterChip
-                key={area}
-                href={`/services?area=${encodeURIComponent(area)}`}
-                active={filters.area === area}
-              >
-                {area}
-              </FilterChip>
-            ))}
           </div>
-        </section>
+        </form>
 
-        {canReview && cards.length < 3 && (
-          <div className="mb-6 rounded-xl border border-warn/20 bg-warn/10 px-4 py-3 text-sm font-semibold text-warn">
-            Review and publish cards from Admin Procedures.
-          </div>
-        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <CategoryChip href={buildHref(query, null)} active={!activeCat}>All</CategoryChip>
+          {SERVICE_GROUPS.map((group) => (
+            <CategoryChip key={group} href={buildHref(query, group)} active={activeCat === group}>
+              {group}
+            </CategoryChip>
+          ))}
+        </div>
 
-        {cards.length === 0 ? (
-          <section className="content-card p-8 text-center">
-            <h2 className="font-display text-xl font-semibold text-ink">
-              No published operational services yet.
-            </h2>
-            <p className="mt-2 text-sm text-ink-muted">
-              Approved service cards will appear here once published.
+        {filtered.length === 0 ? (
+          <div className="mt-8 rounded-2xl border border-dashed border-border bg-white/60 px-6 py-10 text-center">
+            <p className="font-display text-base font-semibold text-ink">No services match yet</p>
+            <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-ink-muted">
+              Try a different topic or clear the filter.
             </p>
-          </section>
-        ) : visibleCards.length === 0 ? (
-          <section className="content-card p-8 text-center">
-            <h2 className="font-display text-xl font-semibold text-ink">
-              No services match this filter.
-            </h2>
-            <Link href="/services" className="mt-3 inline-flex text-sm font-semibold text-sky hover:text-accent">
-              Clear filters
+            <Link
+              href="/services"
+              className="agent-secondary touch-target mt-4 inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-semibold"
+            >
+              Clear filter
             </Link>
-          </section>
+          </div>
         ) : (
-          <div className="space-y-6">
-            {WORK_AREAS.map((area) => {
-              const areaCards = grouped[area] ?? [];
-              if (areaCards.length === 0) return null;
-
+          <div className="mt-6 space-y-8">
+            {SERVICE_GROUPS.map((group) => {
+              const items = grouped.get(group);
+              if (!items || items.length === 0) return null;
               return (
-                <section key={area} className="section-band p-4">
-                  <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-                    <h2 className="font-display text-lg font-semibold text-ink">{area}</h2>
-                    <span className="rounded border border-border bg-white px-2.5 py-0.5 text-xs font-semibold text-ink-muted">
-                      {areaCards.length} card{areaCards.length === 1 ? "" : "s"}
-                    </span>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {areaCards.map((card) => (
-                      <ServiceDirectoryCard key={card.id} card={card} />
+                <section key={group} aria-label={group}>
+                  <h2 className="font-display text-base font-semibold text-ink">{group}</h2>
+                  <div className="mt-3 space-y-2.5">
+                    {items.map((item) => (
+                      <RelatedProcedureRow key={item.slug} item={item} />
                     ))}
                   </div>
                 </section>
@@ -187,198 +198,29 @@ export default async function ServicesPage({
             })}
           </div>
         )}
-      </main>
+      </AgentPage>
     </div>
   );
 }
 
-function ServiceDirectoryCard({ card }: { card: ServiceCard }) {
-  const timing = compactTiming(card.cut_off_time);
-  const timingLabel = getTimingLabel(card);
-  const channels = jsonItems(card.channels).slice(0, 3);
-  // Directory only lists approved+published cards, so availability reduces to a
-  // tree existing and the card version matching the tree.
-  const guided = getWorkflowAvailability({
-    slug: card.slug,
-    is_published: true,
-    review_status: "approved",
-    source_version: card.source_version,
-  });
-
-  return (
-    <article className="content-card quick-card hover-lift flex flex-col p-4 hover:border-accent">
-      <div className="flex flex-wrap gap-1.5">
-        {card.service_code && (
-          <span className="rounded-sm border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-accent">
-            {card.service_code}
-          </span>
-        )}
-        {(card.service_type || card.category) && (
-          <span className="rounded-sm border border-blue-200 bg-sky-soft px-2 py-0.5 text-[11px] font-semibold text-sky">
-            {card.service_type ?? card.category}
-          </span>
-        )}
-      </div>
-
-      <h3 className="mt-2.5 font-display text-base font-semibold leading-snug text-ink">{card.title}</h3>
-
-      {timing && (
-        <div className="mt-3 rounded-md border border-border bg-slate-50 px-3 py-2.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
-            {timingLabel}
-          </p>
-          <p className="mt-1 line-clamp-3 whitespace-pre-line text-[13px] font-semibold leading-5 text-ink">
-            {timing}
-          </p>
-        </div>
-      )}
-
-      {channels.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {channels.map((channel) => (
-            <span
-              key={channel}
-              className="rounded-sm border border-border bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-muted"
-            >
-              {channel}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
-        <Link
-          href={`/procedure/${card.slug}`}
-          className="inline-flex rounded bg-navy px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent"
-        >
-          Open
-        </Link>
-        {guided.available && (
-          <Link
-            href={guided.href}
-            className="inline-flex rounded border border-sky bg-sky-soft px-3.5 py-1.5 text-xs font-semibold text-sky transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky focus-visible:ring-offset-1"
-          >
-            Guided decision
-          </Link>
-        )}
-        <FavoriteButton
-          kind="service"
-          slug={card.slug}
-          title={card.title}
-          code={card.service_code}
-          size="sm"
-        />
-      </div>
-    </article>
-  );
+function buildHref(query: string, group: ServiceGroup | null): string {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (group) params.set("cat", group);
+  const qs = params.toString();
+  return qs ? `/services?${qs}` : "/services";
 }
 
-function FilterChip({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
+function CategoryChip({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
   return (
     <Link
       href={href}
-      className={`rounded border px-2.5 py-1 text-xs font-semibold transition-colors ${
-        active
-          ? "border-navy bg-navy text-white"
-          : "border-border bg-white text-ink-muted hover:border-accent hover:text-accent"
+      aria-current={active ? "true" : undefined}
+      className={`touch-target inline-flex items-center rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors focus-visible:outline-none ${
+        active ? "border-sky bg-sky text-white" : "border-border bg-white text-ink-muted hover:border-sky hover:text-sky"
       }`}
     >
       {children}
     </Link>
   );
-}
-
-function filterCards(cards: ServiceCard[], filters: SearchParams) {
-  const q = normalize(filters.q ?? "");
-  const area = filters.area;
-  const code = normalize(filters.code ?? "");
-
-  return cards.filter((card) => {
-    if (area && groupForCard(card) !== area) return false;
-    if (code && normalize(card.service_code ?? "") !== code) return false;
-    if (!q) return true;
-
-    const haystack = normalize(
-      [
-        card.title,
-        card.slug,
-        card.category,
-        card.service_code ?? "",
-        card.service_type ?? "",
-        ...jsonItems(card.channels),
-      ].join(" ")
-    );
-    return haystack.includes(q);
-  });
-}
-
-function groupCards(cards: ServiceCard[]) {
-  const groups = Object.fromEntries(WORK_AREAS.map((area) => [area, [] as ServiceCard[]])) as Record<
-    WorkArea,
-    ServiceCard[]
-  >;
-
-  for (const card of cards) {
-    groups[groupForCard(card)].push(card);
-  }
-
-  return groups;
-}
-
-function getTimingLabel(card: ServiceCard) {
-  const type = normalize(`${card.service_type ?? ""} ${card.category}`);
-  if (card.service_code?.toUpperCase() === "MCT") return "Timing rule";
-  if (type.includes("reference") || type.includes("rule") || type.includes("timing")) return "Timing rule";
-  return "Cut-off";
-}
-
-function compactTiming(value: string | null) {
-  if (!value?.trim()) return "";
-  const text = value.trim();
-  const lines = text.includes("\n")
-    ? text.split(/\r?\n/)
-    : text.includes(";")
-      ? text.split(";")
-      : [text];
-
-  return lines
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 3)
-    .join("\n");
-}
-
-function jsonItems(value: JsonValue[] | null | undefined) {
-  if (!Array.isArray(value)) return [];
-  return value.map(readableJsonItem).filter((item): item is string => Boolean(item));
-}
-
-function readableJsonItem(item: JsonValue) {
-  if (typeof item === "string") return item.trim();
-  if (typeof item === "number" || typeof item === "boolean") return String(item);
-  if (!item || Array.isArray(item) || typeof item !== "object") return "";
-
-  const record = item as Record<string, JsonValue>;
-  for (const key of ["label", "text", "value", "title", "description"]) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-
-  return "";
-}
-
-function normalize(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
