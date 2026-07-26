@@ -14,7 +14,32 @@ import {
 } from "@/lib/search";
 import { getWorkflowAvailability } from "@/lib/decision-engine/availability";
 import { deriveOperationalAnswer } from "@/lib/operational-answer";
+import { resolveOperationalIntelligence } from "@/lib/operational-intelligence/resolve";
 import type { JsonValue, SearchResult } from "@/lib/types";
+
+// Plain-language guidance for queries the intelligence layer flags as unsafe to
+// answer definitively, or as genuinely ambiguous. Shown as guidance ABOVE the
+// results — never as a result, never with internal IDs / safety codes / scores.
+const APPROVAL_MSG =
+  "This scenario may require document validation or approval. Open the relevant procedure or guided questions.";
+
+function searchGuidance(query: string): { tone: "unsafe" | "ambiguous"; message: string } | null {
+  if (query.length < MIN_SEARCH_QUERY_LENGTH) return null;
+  const intel = resolveOperationalIntelligence(query);
+  if (intel.safety === "unsafe_immigration" || intel.safety === "unsafe_medical") {
+    return { tone: "unsafe", message: intel.safeMessage ?? APPROVAL_MSG };
+  }
+  if (intel.safety === "unsafe_approval") {
+    return { tone: "unsafe", message: intel.safeMessage ?? APPROVAL_MSG };
+  }
+  if (intel.ambiguity && intel.candidateSlugs.length > 1) {
+    return {
+      tone: "ambiguous",
+      message: "This could relate to more than one procedure. Possible matches are shown below — pick the one that fits.",
+    };
+  }
+  return null;
+}
 
 export const metadata = {
   title: "Search results | GO TO",
@@ -95,6 +120,7 @@ export default async function SearchPage({
   const relatedItems: RelatedItem[] = derived.slice(1, 4).map(toRelatedItem);
   const moreItems: RelatedItem[] = derived.slice(4).map(toRelatedItem);
   const hasSources = sources.length > 0;
+  const guidance = searchGuidance(query);
 
   return (
     <div className="dashboard-shell flex min-h-full flex-col">
@@ -144,6 +170,19 @@ export default async function SearchPage({
             ? `${operational.length} operational result${operational.length === 1 ? "" : "s"} for ${query}.`
             : ""}
         </p>
+
+        {guidance ? (
+          <div
+            role="note"
+            className={`mt-5 rounded-xl border px-4 py-3 text-sm leading-6 ${
+              guidance.tone === "unsafe"
+                ? "border-amber-300 bg-amber-50 text-amber-900"
+                : "border-border bg-white/70 text-ink-muted"
+            }`}
+          >
+            {guidance.message}
+          </div>
+        ) : null}
 
         {query.length < MIN_SEARCH_QUERY_LENGTH ? (
           <StartState />

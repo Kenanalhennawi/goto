@@ -40,7 +40,11 @@ export function routeIntent(rawQuery: string, cards: RoutableCard[]): IntentRout
 
   const primary = scored[0] ?? null;
   const related = scored.slice(1, 5);
-  const needsClarification = intentsMatched.size > 1;
+  // Clarification is driven by the number of distinct candidate workflows, so a
+  // single AMBIGUOUS concept (many target slugs) also asks to clarify. For every
+  // existing fixture this is identical to counting matched intents.
+  void intentsMatched;
+  const needsClarification = intentSlugs.size > 1;
 
   let confidence: IntentRouteResult["confidence"];
   if (!primary) {

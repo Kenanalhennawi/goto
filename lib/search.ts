@@ -1,4 +1,10 @@
 import { resolveOperationalQuery } from "./search-intel.ts";
+import { conceptExpansionTerms } from "./operational-intelligence/resolve.ts";
+
+// OI-1: additive reviewed-vocabulary expansion. Bounded (matches the resolver's
+// own cap) so the tsquery and alias-boost set stay small; never removes or
+// reorders existing behaviour.
+const MAX_CONCEPT_TERMS = 8;
 
 export const MIN_SEARCH_QUERY_LENGTH = 2;
 export const MAX_SEARCH_QUERY_LENGTH = 120;
@@ -218,6 +224,14 @@ export function buildSearchTerms(query: string) {
       .join(" | ");
   }
 
+  // Additive reviewed-vocabulary terms (empty for broad/unsafe/no-match).
+  const conceptTs = conceptExpansionTerms(trimmed)
+    .slice(0, MAX_CONCEPT_TERMS)
+    .map((term) => phraseToTsQuery(term))
+    .filter(Boolean);
+
+  // Legacy alias matches keep their exact behaviour (fixtures depend on it);
+  // reviewed-concept expansion only augments queries the alias table misses.
   const aliasPhrases = findSearchAlias(trimmed);
   if (aliasPhrases) {
     return dedupeJoin([
@@ -226,7 +240,7 @@ export function buildSearchTerms(query: string) {
     ]);
   }
 
-  return dedupeJoin([phraseToTsQuery(trimmed), ...expansionTs.slice(0, 3)]);
+  return dedupeJoin([phraseToTsQuery(trimmed), ...expansionTs.slice(0, 3), ...conceptTs]);
 }
 
 function dedupeJoin(parts: string[]) {
@@ -299,6 +313,8 @@ export function scoreOperationalCard(card: RankableOperationalCard, rawQuery: st
   const aliasPhrases = [
     ...(code ? phrasesForCode(code).slice(1) : findSearchAlias(query) ?? []),
     ...resolved.expansions.map((expansion) => expansion.term),
+    // Additive reviewed-vocabulary phrases (empty for broad/unsafe/no-match).
+    ...(code ? [] : conceptExpansionTerms(query).slice(0, MAX_CONCEPT_TERMS)),
   ];
   const serviceCode = (card.service_code ?? "").toUpperCase();
   const title = normalize(card.title);
