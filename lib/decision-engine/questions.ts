@@ -24,13 +24,9 @@ export const QUESTION_SETS: Record<string, DecisionQuestion[]> = {
       required: true,
       reason: "Eligibility windows are defined by week of pregnancy.",
     },
-    {
-      id: "certificate_available",
-      label: "Is a medical certificate available?",
-      answerType: "yes_no",
-      required: false,
-      reason: "Some weeks require a medical certificate.",
-    },
+    // Note: no separate "certificate available?" step. Weeks 29-36 (single) /
+    // 29-32 (multiple) always resolve to "Requires document"; the certificate
+    // requirement is carried in that outcome, its next action, and the notes.
   ],
   // Wheelchair and name-correction question sets are defined in the Phase H
   // section below (real deterministic trees replaced the Phase B placeholders).
@@ -386,20 +382,10 @@ export const QUESTION_SETS: Record<string, DecisionQuestion[]> = {
       reason: "Battery wheelchairs require 48-hour notification and extra handling.",
       ruleAffected: "Battery notification and handling (pp.167-168)",
     },
-    {
-      id: "battery_type",
-      label: "What battery type is it?",
-      answerType: "single_choice",
-      options: [
-        "WCBD (dry-cell / gel)",
-        "WCLB (lithium)",
-        "WCBW (wet-cell)",
-        "Not battery-powered",
-      ],
-      required: false,
-      reason: "Lithium is carried in the cabin with Wh limits; wet/dry cells go in the hold.",
-      ruleAffected: "Battery packaging conditions (pp.167-169)",
-    },
+    // Note: no separate "battery type" step. The outcome does not branch on
+    // chemistry — every accepted battery wheelchair resolves to "Requires
+    // document"; the lithium (cabin, Wh limits) vs wet/dry (hold) handling is
+    // carried in that outcome's next action (pp.167-169).
     {
       id: "battery_damaged",
       label: "Does the battery show any sign of damage or leaking?",

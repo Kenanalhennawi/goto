@@ -51,12 +51,9 @@ export function PrimarySearch() {
   // cards only; chapter/source results are ignored in the preview.
   useEffect(() => {
     const trimmed = query.trim();
-    if (trimmed.length < MIN_CHARS) {
-      setSuggestions([]);
-      setOpen(false);
-      setActive(-1);
-      return;
-    }
+    // Short queries are cleared in the input change handler; nothing to fetch
+    // here (and no synchronous state updates inside the effect).
+    if (trimmed.length < MIN_CHARS) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
@@ -93,7 +90,10 @@ export function PrimarySearch() {
   }, []);
 
   const listId = "search-ahead-list";
-  const showList = open && suggestions.length > 0;
+  // Derive the closed state from query length so a short query never shows
+  // suggestions, even if the suggestions state has not been cleared yet.
+  const belowMin = query.trim().length < MIN_CHARS;
+  const showList = open && suggestions.length > 0 && !belowMin;
   const countMessage = useMemo(
     () => (showList ? `${suggestions.length} likely match${suggestions.length === 1 ? "" : "es"}` : ""),
     [showList, suggestions.length]
@@ -143,7 +143,17 @@ export function PrimarySearch() {
             spellCheck={false}
             enterKeyHint="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value;
+              setQuery(value);
+              // Reset the preview from the change handler (not the effect) when
+              // the query drops below the minimum, e.g. on clearing the input.
+              if (value.trim().length < MIN_CHARS) {
+                setSuggestions([]);
+                setOpen(false);
+                setActive(-1);
+              }
+            }}
             onFocus={() => suggestions.length > 0 && setOpen(true)}
             onKeyDown={onKeyDown}
             placeholder={placeholder}

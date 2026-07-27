@@ -67,7 +67,7 @@ const { nextQuestion, missingRequired, validateAnswer } = await import("../lib/d
 const pregnancyQs = QUESTION_SETS["pregnancy"];
 assert.equal(nextQuestion(pregnancyQs, {}).id, "pregnancy_type");
 assert.equal(nextQuestion(pregnancyQs, { pregnancy_type: "Single" }).id, "pregnancy_week");
-assert.equal(nextQuestion(pregnancyQs, { pregnancy_type: "Single", pregnancy_week: 28, certificate_available: true }), null);
+assert.equal(nextQuestion(pregnancyQs, { pregnancy_type: "Single", pregnancy_week: 28 }), null);
 assert.equal(missingRequired(pregnancyQs, { pregnancy_type: "Single" }).length, 1);
 
 const weekQ = pregnancyQs.find((q) => q.id === "pregnancy_week");
@@ -83,7 +83,7 @@ const { evaluate } = await import("../lib/decision-engine/evaluator.ts");
 const { PREGNANCY_DEFINITION } = await import("../lib/decision-engine/definitions/pregnancy.ts");
 
 function preg(type, week) {
-  return evaluate(PREGNANCY_DEFINITION, { pregnancy_type: type, pregnancy_week: week, certificate_available: true });
+  return evaluate(PREGNANCY_DEFINITION, { pregnancy_type: type, pregnancy_week: week });
 }
 assert.equal(preg("Single", 28).outcome, "Can proceed");
 assert.equal(preg("Single", 29).outcome, "Requires document");
@@ -644,7 +644,6 @@ const wchairBase = {
   assistance_type: "WCHR",
   hours_before_departure: 20,
   battery_powered: false,
-  battery_type: "Not battery-powered",
   battery_damaged: false,
   companion_available: false,
   medical_certificate_available: false,
@@ -693,21 +692,21 @@ expectRule(
 );
 expectRule(
   WCHAIR,
-  { ...wchairBase, battery_powered: true, battery_type: "WCLB (lithium)", hours_before_departure: 30 },
+  { ...wchairBase, battery_powered: true, hours_before_departure: 30 },
   "wchr-battery-late",
   "Not permitted",
   "High confidence"
 );
 expectRule(
   WCHAIR,
-  { ...wchairBase, battery_powered: true, battery_type: "WCLB (lithium)", battery_damaged: true, hours_before_departure: 60 },
+  { ...wchairBase, battery_powered: true, battery_damaged: true, hours_before_departure: 60 },
   "wchr-battery-damaged",
   "Not permitted",
   "High confidence"
 );
 expectRule(
   WCHAIR,
-  { ...wchairBase, battery_powered: true, battery_type: "WCLB (lithium)", battery_damaged: false, hours_before_departure: 60 },
+  { ...wchairBase, battery_powered: true, battery_damaged: false, hours_before_departure: 60 },
   "wchr-battery-ok",
   "Requires document",
   "Conditional"

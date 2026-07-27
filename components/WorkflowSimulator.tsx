@@ -19,7 +19,9 @@ export function WorkflowSimulator() {
   const [error, setError] = useState<string | null>(null);
 
   const definition = DECISION_DEFINITIONS[slug];
-  const questions = QUESTION_SETS[slug] ?? [];
+  // Stable per slug so it is a safe useMemo dependency (a bare `?? []` would
+  // allocate a new empty array every render and defeat the memo below).
+  const questions = useMemo(() => QUESTION_SETS[slug] ?? [], [slug]);
   const current = useMemo(() => nextQuestion(questions, answers), [questions, answers]);
   const result = current ? null : definition ? evaluate(definition, answers) : null;
 

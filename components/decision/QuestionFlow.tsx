@@ -132,8 +132,15 @@ export function QuestionFlow({
   }, [current]);
 
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  optionRefs.current = [];
   const headingRef = useRef<HTMLElement | null>(null);
+
+  // Callback refs (below) fill this array during commit; unmounted option
+  // buttons null their own slot. After each option-set change we truncate any
+  // trailing slots left by a longer previous question, so keyboard navigation
+  // never targets a stale option. Done in an effect — never during render.
+  useEffect(() => {
+    optionRefs.current.length = optionList.length;
+  }, [optionList]);
 
   const stale =
     definition !== undefined &&
