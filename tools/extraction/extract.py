@@ -27,6 +27,14 @@ from typing import Any
 
 EXTRACTOR_VERSION = "upd2-1"
 
+# Windows consoles default to cp1252, which cannot encode text extracted from
+# the manual. Force UTF-8 on our own streams so reporting never crashes.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):  # pragma: no cover - older interpreters
+        pass
+
 # Chapter headings look like:  "        29. Firearms and Carry of Ammunition"
 # Sub-chapters ("29.1 ...") are body content, not separate chapters.
 CHAPTER_RE = re.compile(r"^[ \t]*(\d{1,3})\.\s+([A-Z][^\n]{2,120})$")
@@ -37,6 +45,15 @@ VERSION_RE = re.compile(r"Version\s+(\d+\.\d+)\s+(\d{1,2}-[A-Za-z]{3}-\d{4})")
 FOOTER_RE = re.compile(r"^\s*copyright flydubai.*?Page\.\s*\d+\s*$", re.I | re.M)
 
 
+class ExtractionError(Exception):
+    """Carries a stable machine-readable code alongside the message."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
 def fail(code: str, message: str) -> None:
     """Emit a machine-readable error and exit non-zero."""
     print(json.dumps({"error": code, "message": message}), file=sys.stderr)
@@ -44,15 +61,35 @@ def fail(code: str, message: str) -> None:
 
 
 def run(cmd: list[str]) -> str:
-    """Run a binary with an ARGUMENT ARRAY. Never shell=True."""
+    """Run a binary with an ARGUMENT ARRAY. Never shell=True.
+
+    The output is ALWAYS decoded as UTF-8 with errors="replace". Without the
+    explicit encoding, Python falls back to locale.getpreferredencoding(),
+    which is cp1252 on Windows and raises UnicodeDecodeError on bytes such as
+    0x9d that legitimately occur in the manual's text layer.
+    """
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=600,
+            check=False,
+        )
     except FileNotFoundError:
-        fail("MISSING_DEPENDENCY", f"{cmd[0]} is not installed")
+        raise ExtractionError("MISSING_DEPENDENCY", f"{cmd[0]} is not installed")
     except subprocess.TimeoutExpired:
-        fail("EXTRACTION_TIMEOUT", f"{cmd[0]} timed out")
+        raise ExtractionError("EXTRACTION_TIMEOUT", f"{cmd[0]} timed out")
+
     if result.returncode != 0:
-        fail("EXTRACTION_FAILED", f"{cmd[0]} exited {result.returncode}")
+        raise ExtractionError("EXTRACTION_FAILED", f"{cmd[0]} exited {result.returncode}")
+
+    # Never return None: downstream callers immediately .split() the result.
+    if result.stdout is None:
+        raise ExtractionError("EMPTY_OUTPUT", f"{cmd[0]} returned no text")
+
     return result.stdout
 
 
@@ -66,9 +103,11 @@ def sha256_of(path: str) -> str:
 
 def page_count(pdf_path: str) -> int:
     info = run(["pdfinfo", pdf_path])
+    if info is None:
+        raise ExtractionError("EMPTY_OUTPUT", "pdfinfo returned no text")
     match = re.search(r"^Pages:\s+(\d+)", info, re.M)
     if not match:
-        fail("INVALID_PDF", "Could not read the page count")
+        raise ExtractionError("INVALID_PDF", "Could not read the page count")
     return int(match.group(1))
 
 
@@ -81,9 +120,18 @@ def pdf_pages_text(pdf_path: str) -> list[str]:
     extraction contract (correctly) rejects the output.
     """
     text = run(["pdftotext", "-layout", pdf_path, "-"])
+    # Guard before split(): a missing text layer must surface as a proper
+    # extraction error, never as AttributeError on None.
+    if text is None:
+        raise ExtractionError("EMPTY_OUTPUT", "pdftotext returned no text")
+    if not text.strip():
+        raise ExtractionError("NO_TEXT_LAYER", "pdftotext returned an empty text layer")
+
     pages = text.split("\f")
     while pages and not pages[-1].strip():
         pages.pop()
+    if not pages:
+        raise ExtractionError("NO_TEXT_LAYER", "pdftotext returned no readable pages")
     return pages
 
 
@@ -217,4 +265,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # Any ExtractionError becomes the same machine-readable {"error": CODE}
+    # contract the worker already parses — never a raw Python traceback.
+    try:
+        main()
+    except ExtractionError as error:
+        fail(error.code, error.message)

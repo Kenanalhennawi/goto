@@ -153,6 +153,46 @@ assert.ok(
 );
 
 // ===========================================================================
+// 9b. UPD-2.3: Windows-safe Unicode handling in the extraction tools
+// ===========================================================================
+const attachPy = read("tools/extraction/attach_pdf_links.py");
+for (const [name, src] of [["extract.py", extractPy], ["attach_pdf_links.py", attachPy]]) {
+  // Every subprocess call must decode UTF-8 explicitly; text=True alone falls
+  // back to locale.getpreferredencoding() (cp1252 on Windows) and crashes.
+  const calls = [...src.matchAll(/subprocess\.run\(([\s\S]{0,400}?)\)/g)].map((m) => m[1]);
+  assert.ok(calls.length > 0, `${name} must invoke subprocess`);
+  for (const call of calls) {
+    assert.ok(/encoding="utf-8"/.test(call), `${name}: subprocess must set encoding="utf-8"`);
+    assert.ok(/errors="replace"/.test(call), `${name}: subprocess must set errors="replace"`);
+  }
+  // No reliance on the platform locale anywhere in CODE. Docstrings and
+  // comments may legitimately explain the cp1252 problem, so strip them first.
+  const code = src
+    .replace(/"""[\s\S]*?"""/g, "")
+    .split("\n")
+    .filter((l) => {
+      const t = l.trim();
+      return t && !t.startsWith("#");
+    })
+    .join("\n");
+  assert.ok(!/getpreferredencoding/.test(code), `${name} must not use locale.getpreferredencoding`);
+  assert.ok(!/cp1252/.test(code), `${name} must not reference cp1252 in code`);
+  // A proper error type instead of AttributeError on None.
+  assert.ok(/class ExtractionError\(Exception\)/.test(src), `${name} must define ExtractionError`);
+  assert.ok(/if result\.stdout is None:/.test(src), `${name} must guard a None stdout`);
+  assert.ok(/except ExtractionError as error:/.test(src), `${name} must exit via the error contract`);
+  // Windows console safety.
+  assert.ok(/reconfigure\(encoding="utf-8"/.test(src), `${name} must force UTF-8 on its own streams`);
+}
+// Guards must precede the split() that previously raised AttributeError.
+assert.ok(
+  extractPy.indexOf('if text is None:') < extractPy.indexOf('pages = text.split("\\f")'),
+  "extract.py must check for None before splitting"
+);
+assert.ok(/raise ExtractionError\("EMPTY_OUTPUT", "pdftotext returned no text"\)/.test(extractPy), "explicit empty-output error required");
+assert.ok(/NO_TEXT_LAYER/.test(extractPy), "empty text layer must raise a proper error");
+
+// ===========================================================================
 // 10. Verification harness
 // ===========================================================================
 assert.ok(existsSync(new URL("../scripts/verify-extraction-pipeline.mjs", import.meta.url)), "verifier must exist");

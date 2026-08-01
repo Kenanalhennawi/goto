@@ -20,8 +20,24 @@ import re
 import subprocess
 import sys
 
+# Windows consoles default to cp1252; force UTF-8 on our own streams.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):  # pragma: no cover - older interpreters
+        pass
+
 # "26.3 TV Carriage Limitations.xls" / "(click me to view file)" style callouts.
 ATTACHMENT_RE = re.compile(r"([A-Za-z0-9_\-. ]+\.(?:pdf|xls|xlsx|docx?|pptx?))", re.I)
+
+
+class ExtractionError(Exception):
+    """Carries a stable machine-readable code alongside the message."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
 
 
 def fail(code: str, message: str) -> None:
@@ -30,15 +46,33 @@ def fail(code: str, message: str) -> None:
 
 
 def run(cmd: list[str]) -> str:
-    """Run a binary with an ARGUMENT ARRAY. Never shell=True."""
+    """Run a binary with an ARGUMENT ARRAY. Never shell=True.
+
+    Output is ALWAYS decoded as UTF-8 with errors="replace"; relying on the
+    Windows default (cp1252) raises UnicodeDecodeError on the manual's text.
+    """
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=600,
+            check=False,
+        )
     except FileNotFoundError:
-        fail("MISSING_DEPENDENCY", f"{cmd[0]} is not installed")
+        raise ExtractionError("MISSING_DEPENDENCY", f"{cmd[0]} is not installed")
     except subprocess.TimeoutExpired:
-        fail("EXTRACTION_TIMEOUT", f"{cmd[0]} timed out")
+        raise ExtractionError("EXTRACTION_TIMEOUT", f"{cmd[0]} timed out")
+
     if result.returncode != 0:
-        fail("EXTRACTION_FAILED", f"{cmd[0]} exited {result.returncode}")
+        raise ExtractionError("EXTRACTION_FAILED", f"{cmd[0]} exited {result.returncode}")
+
+    # Never return None: the caller immediately .split()s the result.
+    if result.stdout is None:
+        raise ExtractionError("EMPTY_OUTPUT", f"{cmd[0]} returned no text")
+
     return result.stdout
 
 
@@ -58,7 +92,10 @@ def main() -> None:
     with open(chapters_path, "r", encoding="utf-8") as handle:
         payload = json.load(handle)
 
-    pages = run(["pdftotext", "-layout", pdf_path, "-"]).split("\f")
+    text = run(["pdftotext", "-layout", pdf_path, "-"])
+    if text is None:
+        raise ExtractionError("EMPTY_OUTPUT", "pdftotext returned no text")
+    pages = text.split("\f")
     total_pages = len(pages)
 
     for chapter in payload.get("chapters", []):
@@ -91,4 +128,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ExtractionError as error:
+        fail(error.code, error.message)
