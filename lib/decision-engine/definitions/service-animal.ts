@@ -14,9 +14,9 @@ export const SERVICE_ANIMAL_DEFINITION: DecisionDefinition = {
   procedureSlug: "service-animal",
   procedureTitle: "Service Animal",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "36. Service animal",
-  sourcePages: [173],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "37. Service animal",
+  sourcePages: [171],
   questions: QUESTION_SETS["service-animal"],
   rules: [
     {
@@ -25,7 +25,7 @@ export const SERVICE_ANIMAL_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "flydubai does not accept Emotional Support Animals for carriage.",
       nextAction: "Confirm to the customer that Emotional Support Animals are not accepted for carriage.",
-      sourcePages: [173],
+      sourcePages: [171],
       sourceField: "Emotional Support Animal exclusion",
     },
     {
@@ -39,7 +39,7 @@ export const SERVICE_ANIMAL_DEFINITION: DecisionDefinition = {
         "Carriage of a service dog requires pre-approval from flydubai via Let's Talk at least 72 hours before departure, with the documented records.",
       nextAction:
         "Refer the passenger to letstalk@flydubai.com with the passenger's medical condition, the animal's training certificate, and the vaccination record. Customer Service will advise any further documents.",
-      sourcePages: [173],
+      sourcePages: [171],
       sourceField: "Service dog pre-approval and document requirement",
     },
     {
@@ -53,7 +53,7 @@ export const SERVICE_ANIMAL_DEFINITION: DecisionDefinition = {
         "Final acceptance of a service dog is completed through the Let's Talk / Customer Service approval; the agent should not self-authorise carriage.",
       nextAction:
         "Coordinate with the Let's Talk / Customer Service case to confirm the approval and add SSR SVAN (free of charge). Follow any further instructions from Customer Service.",
-      sourcePages: [173],
+      sourcePages: [171],
       sourceField: "Service dog approval completion (SSR SVAN)",
     },
   ],

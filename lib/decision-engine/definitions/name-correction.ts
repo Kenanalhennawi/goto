@@ -21,9 +21,9 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
   procedureSlug: "name-correction",
   procedureTitle: "Name Change / Correction",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "52. Name Change / Correction",
-  sourcePages: [276, 277, 278, 279],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "53. Name Change / Correction",
+  sourcePages: [274, 275, 276, 277],
   questions: QUESTION_SETS["name-correction"],
   rules: [
     {
@@ -31,7 +31,7 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
       conditions: [{ questionId: "hours_before_departure", max: 5 }],
       outcome: "Not permitted",
       explanation: "Name correction is not permitted within 6 hours of flight departure.",
-      sourcePages: [276],
+      sourcePages: [274],
       sourceField: "cut_off_time",
     },
     {
@@ -42,7 +42,7 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
         "Name correction is only done on a fully active PNR; it cannot be done after a no-show or a utilized sector.",
       nextAction:
         "The passenger may cancel under standard fare rules and follow voucher name-change policy instead.",
-      sourcePages: [276, 277],
+      sourcePages: [274, 275],
       sourceField: "not_allowed",
     },
     {
@@ -52,7 +52,7 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
       explanation:
         "For a passenger already checked in at the airport, the check-in desk handles the correction via RES Support, applying USD 100 even for a single character, title or space (name as per passport).",
       nextAction: "Direct the airport check-in desk to RES Support; USD 100 applies.",
-      sourcePages: [276],
+      sourcePages: [274],
       sourceField: "escalation_points",
     },
     {
@@ -62,7 +62,7 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
       explanation:
         "An online checked-in passenger must not be offloaded for a name or title correction; it is handled at the airport with applicable charges.",
       nextAction: "Advise the passenger to have the correction done at the airport.",
-      sourcePages: [276],
+      sourcePages: [274],
       sourceField: "not_allowed",
     },
     {
@@ -71,7 +71,7 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Name corrections are not done for GDS bookings.",
       nextAction: "Refer the passenger to their booking agent.",
-      sourcePages: [276],
+      sourcePages: [274],
       sourceField: "not_allowed",
     },
     {
@@ -80,7 +80,7 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Name corrections are not done for codeshare bookings.",
       nextAction: "Refer the passenger to their booking agent.",
-      sourcePages: [276],
+      sourcePages: [274],
       sourceField: "not_allowed",
     },
     {
@@ -89,7 +89,7 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Name change is not permitted on TA block-fare bookings.",
       nextAction: "Refer the passenger to their travel agent.",
-      sourcePages: [276],
+      sourcePages: [274],
       sourceField: "not_allowed",
     },
     {
@@ -99,7 +99,7 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
       explanation:
         "Interline name correction is only handled on a booking created through the FZ direct channel that is fully active; system-issue cases are escalated to a supervisor.",
       nextAction: "Escalate to a supervisor to verify FZ-direct-channel and fully-active status before any change.",
-      sourcePages: [276, 278],
+      sourcePages: [274, 276],
       sourceField: "escalation_points",
     },
     {
@@ -110,7 +110,7 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
         "Title correction, space correction, and up to 3-character (or gender) corrections are free of charge. Title/space requests can be taken over the phone without document validation.",
       nextAction:
         "Refer to Floor Support / Supervisor to confirm; validate the passenger is not no-show; add any SSR on the outbound sector only.",
-      sourcePages: [276, 277],
+      sourcePages: [274, 275],
       sourceField: "fees_charges",
     },
     {
@@ -121,7 +121,7 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
         "A name swap that only changes name position without altering spelling is USD 30 / AED 110.",
       nextAction:
         "Refer to Floor Support / Supervisor to confirm the charge; collect the SSR on the outbound sector. If the swap also involves more than 3-character corrections, USD 100 applies.",
-      sourcePages: [276, 277],
+      sourcePages: [274, 275],
       sourceField: "fees_charges",
     },
     {
@@ -137,7 +137,7 @@ export const NAME_CORRECTION_DEFINITION: DecisionDefinition = {
         "More than 3-character corrections, complete first/middle/last name corrections, addition/deletion of names, and maiden-to-married changes are USD 100 / AED 367 and require documents.",
       nextAction:
         "Advise the passenger to write to letstalk@flydubai.com with the passport copy (and marriage/birth certificate if applicable). The request is subject to Supervisor/Floor Support approval; the fee is USD 100 / AED 367.",
-      sourcePages: [276, 277],
+      sourcePages: [274, 275],
       sourceField: "required_information",
     },
   ],

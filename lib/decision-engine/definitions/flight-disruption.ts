@@ -30,9 +30,9 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
   procedureSlug: "flight-disruption",
   procedureTitle: "Flight Disruption",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "71. Flight Disruption",
-  sourcePages: [329, 330, 331, 333, 334, 335, 338, 339, 340],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "72. Flight Disruption",
+  sourcePages: [327, 328, 329, 331, 332, 333, 336, 337, 338],
   questions: QUESTION_SETS["flight-disruption"],
   rules: [
     {
@@ -43,7 +43,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
         "Follow the FDIS pop-up: modify or cancel the booking using the options available in the pop-up, based on the email received from SUP/FS/Outbound.",
       nextAction:
         "Before using the pop-up, check services in the booking: if non-refundable SSRs such as name-change SSRs (NCFE/NCFA/NCFB) are present, seek Sup/FS assistance first.",
-      sourcePages: [331, 335],
+      sourcePages: [329, 333],
       sourceField: "system_steps",
     },
     {
@@ -52,7 +52,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
       outcome: "Requires supervisor",
       explanation:
         "A 'Flight not cancelled Changes' pop-up requires strict referral to FS/SUP in charge for clear instructions before any action.",
-      sourcePages: [331],
+      sourcePages: [329],
       sourceField: "escalation_points",
     },
     {
@@ -68,7 +68,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
         "FZ leg disrupted on an interline/codeshare TA/OAL-system booking within 72 hours of departure: Contact Centre honors rebooking requests regardless of booking channel. Rebooking is complimentary one-time only.",
       nextAction:
         "Capture the request, escalate the Salesforce case to Supervisor, and always refer to Sup/FS in charge to check availability on the OAL leg before committing anything to the caller.",
-      sourcePages: [338, 339, 340],
+      sourcePages: [336, 337, 338],
       sourceField: "system_steps / escalation_points",
     },
     {
@@ -84,7 +84,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
         "Outside 72 hours of departure the ticket issuer must handle rebooking for interline/codeshare TA/OAL-system bookings.",
       nextAction:
         "Refer the passenger to the ticket issuer. If the passenger cannot reach the issuer, escalate to Supervisor to check options with Reservations Support.",
-      sourcePages: [339, 340],
+      sourcePages: [337, 338],
       sourceField: "not_allowed / escalation_points",
     },
     {
@@ -98,7 +98,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
       explanation:
         "For interline/codeshare TA/OAL-system bookings, refund requests are handled by the ticket issuer — inside or outside the 72-hour window.",
       nextAction: "Refer the caller to the ticket issuer for the refund.",
-      sourcePages: [338, 339, 340],
+      sourcePages: [336, 337, 338],
       sourceField: "not_allowed",
     },
     {
@@ -114,7 +114,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
         "Self-service re-accommodation is available: while the flight status is active and not online checked-in, the passenger can re-accommodate free of charge according to policy (default +/- 10 days from the affected flight), accept the re-accommodated flight, choose new flights, or request a refund per policy through manage booking.",
       nextAction:
         "Do not offer anything free of charge beyond the validated options; refer to the SUP/FS/Outbound email for the available options.",
-      sourcePages: [331, 333],
+      sourcePages: [329, 331],
       sourceField: "allowed / system_steps",
     },
     {
@@ -130,7 +130,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
         "TA bookings (not GDS/G fares) can re-accommodate via the flydubai website, contact centre, or travel shops during disruption, while the flight status is active and not online checked-in.",
       nextAction:
         "Do not offer anything free of charge beyond the validated options; refer to the SUP/FS/Outbound email for the available options.",
-      sourcePages: [331, 333],
+      sourcePages: [329, 331],
       sourceField: "allowed",
     },
     {
@@ -146,7 +146,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
         "Self-service is not available once online check-in is completed. With no pop-up, refer to the email received from SUP/FS/Outbound for the available options; a free-of-charge action is not validated without it.",
       nextAction:
         "If free-of-cost modification/cancellation is an available option in the validated guidance, escalate the case to SUP/FS for action.",
-      sourcePages: [331, 333],
+      sourcePages: [329, 331],
       sourceField: "system_steps / escalation_points",
     },
     {
@@ -159,7 +159,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
       outcome: "Requires supervisor",
       explanation:
         "Travel shop bookings do not have the online manage-booking option. With no pop-up, follow the options in the SUP/FS/Outbound email; do not offer anything free of charge without validated guidance.",
-      sourcePages: [331, 333],
+      sourcePages: [329, 331],
       sourceField: "not_allowed / system_steps",
     },
     {
@@ -172,7 +172,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
       outcome: "Can proceed with conditions",
       explanation:
         "TA booking (not GDS/G fare) refund: for a refund to the original form of payment (payment is invoice), refer the customer to the ticket issuer regardless of origin. For a voucher refund, change the 'system default' option to 'voucher flyer'.",
-      sourcePages: [335],
+      sourcePages: [333],
       sourceField: "system_steps",
     },
     {
@@ -187,7 +187,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
       explanation:
         "Green zone: refund to the original form of payment or voucher. Use the IRROPS flow with the system default option; INVC/Miles/TKNE/WBSP go back to FOP.",
       nextAction: "Double-check the payment details tab before saving changes.",
-      sourcePages: [334, 335],
+      sourcePages: [332, 333],
       sourceField: "fees_charges / system_steps",
     },
     {
@@ -203,7 +203,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
         "Red/Amber zone: regardless of the method of payment, the customer receives a voucher refund through the Contact Centre (except INVC/Miles/TKNE/WBSP, which go back to FOP). No refund to the original FOP is guaranteed.",
       nextAction:
         "If the passenger insists on a refund to the original form of payment, consult the on-floor supervisor; subject to approval, inform the passenger accordingly.",
-      sourcePages: [334, 335],
+      sourcePages: [332, 333],
       sourceField: "not_allowed / escalation_points",
     },
     {
@@ -217,7 +217,7 @@ export const FLIGHT_DISRUPTION_DEFINITION: DecisionDefinition = {
       explanation:
         "The refund zone is not confirmed in SPRINT, so the verified zonal refund logic cannot be applied.",
       nextAction: "Verify the zone message on the booking in SPRINT before actioning any refund.",
-      sourcePages: [334, 335],
+      sourcePages: [332, 333],
       sourceField: "system_steps",
     },
   ],

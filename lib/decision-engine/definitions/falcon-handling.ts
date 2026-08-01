@@ -24,7 +24,7 @@ export const FALCON_HANDLING_DEFINITION: DecisionDefinition = {
   procedureSlug: "falcon-handling",
   procedureTitle: "Falcon Handling",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
+  sourceVersion: "81.7 (30-Jul-2026)",
   sourceChapter: "27. Falcon Handling",
   sourcePages: [119, 120, 121, 122, 123, 124],
   questions: QUESTION_SETS["falcon-handling"],

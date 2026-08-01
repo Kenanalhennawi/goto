@@ -16,9 +16,9 @@ export const MEET_ASSIST_DEFINITION: DecisionDefinition = {
   procedureSlug: "meet-assist",
   procedureTitle: "Meet & Assist",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
+  sourceVersion: "81.7 (30-Jul-2026)",
   sourceChapter: "Meet and Assist Service (MASD) – DXB T2 Departures",
-  sourcePages: [304],
+  sourcePages: [302],
   questions: QUESTION_SETS["meet-assist"],
   rules: [
     {
@@ -27,7 +27,7 @@ export const MEET_ASSIST_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Meet & Assist under this procedure is not available for Economy Class passengers.",
       nextAction: "Do not offer MASD under this workflow.",
-      sourcePages: [304],
+      sourcePages: [302],
       sourceField: "MASD eligibility exclusions",
     },
     {
@@ -36,7 +36,7 @@ export const MEET_ASSIST_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Staff, discounted, or rebate bookings are not eligible under this MASD procedure.",
       nextAction: "Do not offer MASD.",
-      sourcePages: [304],
+      sourcePages: [302],
       sourceField: "MASD fare/booking exclusions",
     },
     {
@@ -46,7 +46,7 @@ export const MEET_ASSIST_DEFINITION: DecisionDefinition = {
       explanation:
         "Passengers upgraded through bid, online check-in, or airport UPGJ are not eligible under this MASD procedure.",
       nextAction: "Do not offer MASD.",
-      sourcePages: [304],
+      sourcePages: [302],
       sourceField: "MASD upgrade exclusions",
     },
     {
@@ -55,7 +55,7 @@ export const MEET_ASSIST_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "This MASD service applies only to DXB Terminal 2 departures.",
       nextAction: "Do not apply this workflow to Terminal 3.",
-      sourcePages: [304],
+      sourcePages: [302],
       sourceField: "MASD station/terminal eligibility",
     },
     {
@@ -64,7 +64,7 @@ export const MEET_ASSIST_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "This MASD workflow applies only to DXB Terminal 2 departures.",
       nextAction: "Do not apply this workflow to an outstation departure.",
-      sourcePages: [304],
+      sourcePages: [302],
       sourceField: "MASD station eligibility",
     },
     {
@@ -73,7 +73,7 @@ export const MEET_ASSIST_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Transit passengers through DXB T2 are not eligible under this departure MASD procedure.",
       nextAction: "Do not offer the departure MASD service.",
-      sourcePages: [304],
+      sourcePages: [302],
       sourceField: "MASD transit exclusion",
     },
     {
@@ -82,7 +82,7 @@ export const MEET_ASSIST_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "A booking carrying SSR LNGN – No Lounge Access is not eligible under this MASD procedure.",
       nextAction: "Do not offer MASD.",
-      sourcePages: [304],
+      sourcePages: [302],
       sourceField: "MASD SSR exclusion",
     },
     {
@@ -98,7 +98,7 @@ export const MEET_ASSIST_DEFINITION: DecisionDefinition = {
         "An eligible commercial Business Class passenger departing DXB Terminal 2 may use the MASD process.",
       nextAction:
         "Confirm the MASD SSR is present/auto-added. The passenger may opt in during OLCI and select an arrival time, with the default at D-3 hours, or use the Business Class check-in area at T2 Entrance 3.",
-      sourcePages: [304],
+      sourcePages: [302],
       sourceField: "MASD eligible process",
     },
   ],

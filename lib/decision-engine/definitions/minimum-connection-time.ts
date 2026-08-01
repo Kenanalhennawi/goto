@@ -105,7 +105,7 @@ export const MINIMUM_CONNECTION_TIME_DEFINITION: DecisionDefinition = {
   procedureSlug: "minimum-connection-time",
   procedureTitle: "Minimum Connection Time",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
+  sourceVersion: "81.7 (30-Jul-2026)",
   sourceChapter: "25. Connection and Transfers — Minimum connection time (MCT)",
   sourcePages: [100, 101, 102],
   questions: QUESTION_SETS["minimum-connection-time"],

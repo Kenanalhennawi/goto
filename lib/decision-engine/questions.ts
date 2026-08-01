@@ -31,29 +31,33 @@ export const QUESTION_SETS: Record<string, DecisionQuestion[]> = {
   // Wheelchair and name-correction question sets are defined in the Phase H
   // section below (real deterministic trees replaced the Phase B placeholders).
 
-  // ---------- Phase D: Sporting Equipment (GO TO v81.2 ch.28 pp.126-131) ----------
+  // ---------- Sporting Equipment (GO TO v81.7 ch.28 pp.126-129, effective 01-Aug-2026) ----------
+  // New process: no separate handling fee — equipment travels within the checked
+  // baggage allowance (excess baggage policy applies beyond it). SSR SPEQ (max 10)
+  // and SSR BIKE (max 10) per flight; SPEX is retired effective 01-Aug-2026.
   "sporting-equipment": [
-    {
-      id: "speq_request",
-      label: "Is this a new equipment booking or a cancellation/refund of an existing equipment fee?",
-      answerType: "single_choice",
-      options: ["New equipment booking", "Cancel or refund an existing equipment fee"],
-      required: true,
-      reason: "Refund eligibility follows a different verified rule than new bookings.",
-      ruleAffected: "24-hour refundability rule (p.126 §12; p.129 notes 1-2)",
-    },
     {
       id: "equipment_kind",
       label: "What type of equipment is being carried?",
       answerType: "single_choice",
       options: [
         "Standard sporting equipment",
-        "Pole vault, javelin or hang glider",
+        "Bicycle",
         "Sporting weapon, firearm or ammunition",
       ],
       required: true,
-      reason: "Weapons and restricted items have longer pre-booking and approval requirements.",
-      ruleAffected: "24h standard / 48h restricted / 96h weapon pre-booking (pp.126-127)",
+      reason: "Bicycles use SSR BIKE, other equipment SSR SPEQ; weapons need 96-hour pre-booking and approval.",
+      ruleAffected: "SPEQ/BIKE SSRs and 96h weapon pre-booking (v81.7 pp.126-127)",
+    },
+    {
+      id: "item_weight_kg",
+      label: "Weight in kg of the heaviest single item?",
+      answerType: "number",
+      min: 1,
+      max: 500,
+      required: true,
+      reason: "No item over 32 kg is accepted, for health and safety reasons.",
+      ruleAffected: "32 kg per-item maximum (v81.7 p.126 §11-13)",
     },
     {
       id: "total_dimension_cm",
@@ -62,8 +66,8 @@ export const QUESTION_SETS: Record<string, DecisionQuestion[]> = {
       min: 1,
       max: 1000,
       required: true,
-      reason: "SPEQ, SPEX, free carriage and pre-authorization bands are defined by total dimension.",
-      ruleAffected: "Dimension bands: ≤159 free / 160-189 SPEQ / 190-350 SPEX / >350 pre-authorization (pp.126-127)",
+      reason: "Maximum 300 cm total (width ≤115 cm, height ≤80 cm); oversized items go as cargo.",
+      ruleAffected: "300 cm maximum dimension; oversized to cargo (v81.7 p.126 §9-10)",
     },
     {
       id: "equipment_count",
@@ -72,8 +76,8 @@ export const QUESTION_SETS: Record<string, DecisionQuestion[]> = {
       min: 1,
       max: 50,
       required: true,
-      reason: "SUP/FS may add up to 10 equipment per flight; beyond 10 needs Special Handling approval.",
-      ruleAffected: "Maximum 10 equipment per flight (p.126 §2-3)",
+      reason: "Flight inventory is 20 pieces: max 10 SPEQ and max 10 BIKE; beyond 10 bikes needs prior confirmation.",
+      ruleAffected: "Per-flight SSR inventory limits (v81.7 p.126 §7)",
     },
     {
       id: "hours_before_departure",
@@ -82,8 +86,8 @@ export const QUESTION_SETS: Record<string, DecisionQuestion[]> = {
       min: 0,
       max: 1000,
       required: true,
-      reason: "Booking, pre-authorization and refund windows are all defined in hours before departure.",
-      ruleAffected: "24h booking / 12h SUP-FS window / 48h pre-authorization / 96h weapons / 24h refund (pp.126-127)",
+      reason: "Pre-book at least 24h; inside 24h SUP decides; SUP/FS may add the SSR up to 12h; weapons need 96h.",
+      ruleAffected: "24h pre-booking / 12h SUP-FS window / 96h weapons (v81.7 pp.126-127)",
     },
     {
       id: "journey_type",
@@ -91,8 +95,8 @@ export const QUESTION_SETS: Record<string, DecisionQuestion[]> = {
       answerType: "single_choice",
       options: ["Point-to-point", "FZ connecting", "Interline or codeshare"],
       required: true,
-      reason: "Connecting and interline/codeshare requests are escalated to a Supervisor to add the SSR.",
-      ruleAffected: "Connecting/interline/codeshare Supervisor handling (pp.128-130)",
+      reason: "On FZ connections a Supervisor adds the SSR per sector; on interline the onward carrier must confirm acceptance.",
+      ruleAffected: "Connection/interline handling (v81.7 pp.126 §21, 128)",
     },
   ],
 

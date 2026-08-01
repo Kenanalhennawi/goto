@@ -515,7 +515,8 @@ function workAreaFor(card: Pick<ProcedureListRow, "service_code" | "service_type
   if (matches(text, ["visa", "oktb", "ok to board"])) return "Visa / OKTB";
   if (matches(text, ["wheelchair", "wchr", "wchs", "wchc", "meda", "dpna", "pregnancy"])) return "Special Assistance";
   if (matches(text, ["check in", "check-in", "olci", "lounge", "boarding", "airport"])) return "Airport / Check-in";
-  if (matches(text, ["baggage", "speq", "spex", "falcon", "petc"])) return "Baggage";
+  // SPEX retired effective 01-Aug-2026 (GO TO v81.7 ch.28); BIKE replaces it for bicycles.
+  if (matches(text, ["baggage", "speq", "bike", "falcon", "petc"])) return "Baggage";
   if (matches(text, ["booking", "name", "seat", "cbbg", "exst", "stopover", "government", "fare"])) return "Booking Changes";
   return "Other References";
 }

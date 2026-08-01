@@ -19,7 +19,7 @@ export const AUTO_SPLIT_OD_DEFINITION: DecisionDefinition = {
   procedureSlug: "auto-split-od",
   procedureTitle: "Auto Split OD",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
+  sourceVersion: "81.7 (30-Jul-2026)",
   sourceChapter: "11. Fare Types — Auto Split OD (FZ-FZ)",
   sourcePages: [49, 50],
   questions: QUESTION_SETS["auto-split-od"],

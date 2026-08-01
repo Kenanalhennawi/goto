@@ -30,9 +30,9 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
   procedureSlug: "extra-seat-cbbg",
   procedureTitle: "Extra Seat EXST / CBBG",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
+  sourceVersion: "81.7 (30-Jul-2026)",
   sourceChapter: "33. Seat — Extra Seat EXST / CBBG",
-  sourcePages: [160, 161, 162, 163],
+  sourcePages: [158, 159, 160, 161],
   questions: QUESTION_SETS["extra-seat-cbbg"],
   rules: [
     {
@@ -41,7 +41,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation:
         "EXST/CBBG cannot be purchased as an interline/codeshare document; the service is only available on FZ prime booked flights.",
-      sourcePages: [160],
+      sourcePages: [158],
       sourceField: "not_allowed",
     },
     {
@@ -50,7 +50,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       outcome: "Can proceed with conditions",
       explanation:
         "The pre-booking deadline is missed: requests must be made at least 2 hours before departure. Additional seats may still be booked at the airport at go-show fares — DXB T2 departures only, handled in the airport only, subject to capacity restrictions and approval.",
-      sourcePages: [161],
+      sourcePages: [159],
       sourceField: "cut_off_time / escalation_points",
     },
     {
@@ -60,7 +60,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       explanation:
         "An extra seat cannot be added after check-in through the Contact Centre: extra-seat requests are excluded from online check-in eligibility and offload requests to add SSRs are not honored (Ways to Check-in, ch.55).",
       nextAction: "Refer the passenger to the airport team for any airport-handled options.",
-      sourcePages: [283, 285],
+      sourcePages: [281, 283],
       sourceField: "not_allowed (ch.55)",
     },
     {
@@ -71,7 +71,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       ],
       outcome: "Not permitted",
       explanation: "Booking an extra seat for cabin baggage (CBBG) is not available for Business Class passengers.",
-      sourcePages: [160],
+      sourcePages: [158],
       sourceField: "not_allowed",
     },
     {
@@ -82,7 +82,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       ],
       outcome: "Not permitted",
       explanation: "Passengers are permitted to purchase a maximum of two extra seats (EXST) per passenger.",
-      sourcePages: [161],
+      sourcePages: [159],
       sourceField: "allowed",
     },
     {
@@ -93,7 +93,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       ],
       outcome: "Not permitted",
       explanation: "Only one CBBG seat is allowed for each passenger.",
-      sourcePages: [161],
+      sourcePages: [159],
       sourceField: "allowed",
     },
     {
@@ -104,7 +104,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       ],
       outcome: "Not permitted",
       explanation: "The maximum weight of the baggage on the blocked seat must not exceed 75 kg.",
-      sourcePages: [161],
+      sourcePages: [159],
       sourceField: "not_allowed",
     },
     {
@@ -116,7 +116,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation:
         "Baggage on the seat must be of a size and shape that can be secured with the seat belt or extension belt and within the headrest height (max 55×45×40 cm; musical instruments up to 140 cm). An article too large to be properly secured may not be accepted.",
-      sourcePages: [161],
+      sourcePages: [159],
       sourceField: "not_allowed",
     },
     {
@@ -128,7 +128,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "EXST must not be allocated in emergency exit rows 15 or 16.",
       nextAction: "Assign standard adjoining rows instead (window and middle).",
-      sourcePages: [160],
+      sourcePages: [158],
       sourceField: "not_allowed",
     },
     {
@@ -140,7 +140,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "CBBG must not be allocated in rows 14, 15, 16 or 17.",
       nextAction: "Assign standard adjoining rows instead (window and middle).",
-      sourcePages: [160],
+      sourcePages: [158],
       sourceField: "not_allowed",
     },
     {
@@ -148,7 +148,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       conditions: [{ questionId: "meda_case", equals: true }],
       outcome: "Requires document",
       explanation: "Medical approval will be required for MEDA (medical) cases before the extra seat can be confirmed.",
-      sourcePages: [161],
+      sourcePages: [159],
       sourceField: "required_information",
     },
     {
@@ -158,7 +158,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
       explanation:
         "GDS handling required: the extra seat cannot be added directly to a GDS booking. Create a separate PNR for the extra seat on an available fare, add the zero-value EXST/CBBG SSR to the passenger requesting the seat (in the GDS booking), keep seat assignments together, and update remarks in both bookings.",
       nextAction: "FS/SUP may contact the GDS support team for assistance, if required.",
-      sourcePages: [160, 162, 163],
+      sourcePages: [158, 160, 161],
       sourceField: "system_steps",
     },
     {
@@ -169,7 +169,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
         "EXST can proceed: add an adult passenger named 'EXST <passenger last name>', add the zero-value SSR EXST to the requesting passenger, and manually pre-assign adjoining seats (window and middle) for both — both seats chargeable as per standard rates and booked in the same fare option/brand.",
       nextAction:
         "If window seats are not available, refer to the supervisor in charge. Seats must be manually assigned to any modified segment. Standard penalty charges on modification apply to both seats.",
-      sourcePages: [160, 161, 162],
+      sourcePages: [158, 159, 160],
       sourceField: "system_steps",
     },
     {
@@ -180,7 +180,7 @@ export const EXTRA_SEAT_CBBG_DEFINITION: DecisionDefinition = {
         "CBBG can proceed: add an adult passenger named 'CBBG <passenger last name>', add the zero-value SSR CBBG to the requesting passenger, and manually pre-assign adjoining seats (window and middle) for both — both seats chargeable as per standard rates.",
       nextAction:
         "Comment the booking with the type of cabin baggage. Passengers with CBBG are not eligible for extra checked-in baggage allowance; hand luggage entitlement is per passenger, not per seat.",
-      sourcePages: [160, 161, 162],
+      sourcePages: [158, 159, 160],
       sourceField: "system_steps",
     },
   ],

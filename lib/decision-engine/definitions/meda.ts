@@ -16,9 +16,9 @@ export const MEDA_DEFINITION: DecisionDefinition = {
   procedureSlug: "meda",
   procedureTitle: "MEDA / Medical Travel Exception",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "43. Medical & Death cases",
-  sourcePages: [260, 261, 262, 263],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "44. Medical & Death cases",
+  sourcePages: [258, 259, 260, 261],
   questions: QUESTION_SETS["meda"],
   rules: [
     {
@@ -28,7 +28,7 @@ export const MEDA_DEFINITION: DecisionDefinition = {
       explanation:
         "TA block-fare bookings are not eligible for a medical exception (only death cases are, subject to approval).",
       nextAction: "Refer the passenger to the issuing travel agent; a TA should contact the Agency Support Team.",
-      sourcePages: [260, 261],
+      sourcePages: [258, 259],
       sourceField: "TA block-fare medical-exception exclusion",
     },
     {
@@ -39,7 +39,7 @@ export const MEDA_DEFINITION: DecisionDefinition = {
         "A medical exception needs a medical certificate stating the passenger was unfit to travel by air on the scheduled flight date.",
       nextAction:
         "Advise the passenger to email Let's Talk with the medical certificate (and proof of relationship if an immediate family member). The request is subject to validation and approval.",
-      sourcePages: [260, 262],
+      sourcePages: [258, 260],
       sourceField: "Medical certificate requirement",
     },
     {
@@ -53,7 +53,7 @@ export const MEDA_DEFINITION: DecisionDefinition = {
         "Documents are not yet validated and options have not been provided by Customer Service.",
       nextAction:
         "Escalate the Let's Talk case to a Supervisor for Customer Service follow-up and update SPRINT. Do not confirm any outcome.",
-      sourcePages: [262],
+      sourcePages: [260],
       sourceField: "Unvalidated-document escalation",
     },
     {
@@ -67,7 +67,7 @@ export const MEDA_DEFINITION: DecisionDefinition = {
         "Once Customer Service has validated the documents and shared options, only Floor Support / a Supervisor may action the change.",
       nextAction:
         "Confirm the customer's preferred option (within 4 days; approvals valid 30 days) and coordinate with Floor Support / a Supervisor to proceed. Update SPRINT.",
-      sourcePages: [260, 262],
+      sourcePages: [258, 260],
       sourceField: "Validated-case action via SUP/FS",
     },
   ],

@@ -20,9 +20,9 @@ export const GOVERNMENT_DEALS_DEFINITION: DecisionDefinition = {
   procedureSlug: "government-deals",
   procedureTitle: "Government Deals",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "69. Government Deals",
-  sourcePages: [322, 323, 324],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "70. Government Deals",
+  sourcePages: [320, 321, 322],
   questions: QUESTION_SETS["government-deals"],
   rules: [
     {
@@ -31,7 +31,7 @@ export const GOVERNMENT_DEALS_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Government Deals are not applicable to interline or codeshare bookings.",
       nextAction: "Do not process the request under the Government Deals procedure.",
-      sourcePages: [322],
+      sourcePages: [320],
       sourceField: "Government Deals exclusions",
     },
     {
@@ -45,7 +45,7 @@ export const GOVERNMENT_DEALS_DEFINITION: DecisionDefinition = {
         "New Government Deal bookings and ticket issuance are handled only through eligible flydubai retail offices in the UAE.",
       nextAction:
         "Refer the passenger to an eligible flydubai Travel Shop. Do not issue the deal through Contact Centre or the DXB Airport office.",
-      sourcePages: [322, 323, 324],
+      sourcePages: [320, 321, 322],
       sourceField: "Government Deal creation and issuing channels",
     },
     {
@@ -59,7 +59,7 @@ export const GOVERNMENT_DEALS_DEFINITION: DecisionDefinition = {
         "Adding an adult or child to an existing Government Deal requires Travel Shop handling or a separately priced booking after Floor Support/Supervisor consultation.",
       nextAction:
         "Refer to the Travel Shop for the discounted option, or consult FS/SUP before creating a separate non-discounted booking. A standalone child booking may not support OLCI or online modification.",
-      sourcePages: [322],
+      sourcePages: [320],
       sourceField: "Adding adult/child to Government Deal",
     },
     {
@@ -72,7 +72,7 @@ export const GOVERNMENT_DEALS_DEFINITION: DecisionDefinition = {
       explanation:
         "Contact Centre may assist with adding an infant to an existing Government Deal booking under the documented process.",
       nextAction: "Follow the existing infant-addition process and verify the booking remains eligible.",
-      sourcePages: [322],
+      sourcePages: [320],
       sourceField: "Infant addition",
     },
     {
@@ -86,7 +86,7 @@ export const GOVERNMENT_DEALS_DEFINITION: DecisionDefinition = {
         "Government Deal bookings may be modified or cancelled through Contact Centre or eligible retail shops, subject to the deal fare rules.",
       nextAction:
         "Apply the documented fare rules. Multi-city modifications must be handled by the ticket issuer. Refunds may be voucher-only where specified.",
-      sourcePages: [322, 323],
+      sourcePages: [320, 321],
       sourceField: "Modification, cancellation and refund handling",
     },
   ],

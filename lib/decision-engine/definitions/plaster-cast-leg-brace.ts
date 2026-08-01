@@ -14,9 +14,9 @@ export const PLASTER_CAST_LEG_BRACE_DEFINITION: DecisionDefinition = {
   procedureSlug: "plaster-cast-leg-brace",
   procedureTitle: "Plaster Cast / Leg Brace",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "44. Passengers with Medical Conditions Onboard – Plaster Casts / Leg Braces",
-  sourcePages: [264, 265, 266],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "45. Passengers with Medical Conditions Onboard – Plaster Casts / Leg Braces",
+  sourcePages: [262, 263, 264],
   questions: QUESTION_SETS["plaster-cast-leg-brace"],
   rules: [
     {
@@ -25,7 +25,7 @@ export const PLASTER_CAST_LEG_BRACE_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "flydubai will not accept a passenger travelling with both legs in cast.",
       nextAction: "Do not accept the passenger under this workflow.",
-      sourcePages: [264],
+      sourcePages: [262],
       sourceField: "Both-legs-in-cast exclusion",
     },
     {
@@ -36,7 +36,7 @@ export const PLASTER_CAST_LEG_BRACE_DEFINITION: DecisionDefinition = {
         "A cast applied within 48 hours must be split to accommodate swelling and requires a medical certificate, especially on flights over two hours.",
       nextAction:
         "Advise the passenger that a fresh cast must be split (a longitudinal cut along the full length) and that a medical certificate is required.",
-      sourcePages: [265],
+      sourcePages: [263],
       sourceField: "Fresh-cast split and medical-certificate requirement",
     },
     {
@@ -47,7 +47,7 @@ export const PLASTER_CAST_LEG_BRACE_DEFINITION: DecisionDefinition = {
         "A passenger who cannot sit upright for take-off/landing or move unaided in an emergency must be accompanied by an able-bodied person.",
       nextAction:
         "Arrange for an able-bodied companion in the same cabin and verify the seating with Floor Support / a Supervisor.",
-      sourcePages: [264],
+      sourcePages: [262],
       sourceField: "Upright/mobility condition and companion requirement",
     },
     {
@@ -58,7 +58,7 @@ export const PLASTER_CAST_LEG_BRACE_DEFINITION: DecisionDefinition = {
         "Leg elevation is restricted; an extra seat or XLGR in Economy may not be used to elevate a leg — only Business class.",
       nextAction:
         "Escalate to Floor Support / a Supervisor; leg elevation is only considered in Business class and must be verified.",
-      sourcePages: [264, 265],
+      sourcePages: [262, 263],
       sourceField: "Leg-elevation restriction",
     },
     {
@@ -72,7 +72,7 @@ export const PLASTER_CAST_LEG_BRACE_DEFINITION: DecisionDefinition = {
         "A full leg cast including the knee is accepted only on a Business class window seat; it cannot be accommodated in Economy as booked.",
       nextAction:
         "A Business class window seat is required; arrange a Business upgrade with Floor Support / a Supervisor. The companion, if any, must travel in the same cabin.",
-      sourcePages: [265],
+      sourcePages: [263],
       sourceField: "Full leg cast Business-only seating",
     },
     {
@@ -88,7 +88,7 @@ export const PLASTER_CAST_LEG_BRACE_DEFINITION: DecisionDefinition = {
         "A full leg cast (over 48 hours) in Business class may be accepted when the passenger can sit upright and move unaided.",
       nextAction:
         "Assign a Business class window seat (not an emergency-exit row); the leg must not extend into the aisle. Record the cast details in the PNR.",
-      sourcePages: [265, 266],
+      sourcePages: [263, 264],
       sourceField: "Full leg cast Business window-seat acceptance",
     },
     {
@@ -103,7 +103,7 @@ export const PLASTER_CAST_LEG_BRACE_DEFINITION: DecisionDefinition = {
         "A half cast below the knee (over 48 hours) may be accepted when the passenger can sit upright and move unaided.",
       nextAction:
         "Assign an Economy window XLGR seat in the first row (standard seat charges) or a Business window seat; never an emergency-exit row, and not the aisle unless it is the only option with the leg kept out of the aisle. Record the cast details in the PNR.",
-      sourcePages: [265, 266],
+      sourcePages: [263, 264],
       sourceField: "Half cast (below knee) seating acceptance",
     },
   ],

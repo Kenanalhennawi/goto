@@ -20,7 +20,7 @@ export const BLUE_RIBBON_BAGS_DEFINITION: DecisionDefinition = {
   procedureSlug: "blue-ribbon-bags",
   procedureTitle: "Blue Ribbon Bags",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
+  sourceVersion: "81.7 (30-Jul-2026)",
   sourceChapter: "26. Baggage — Blue Ribbon Bags",
   sourcePages: [119],
   questions: QUESTION_SETS["blue-ribbon-bags"],

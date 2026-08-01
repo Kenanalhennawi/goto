@@ -17,9 +17,9 @@ export const OK_TO_BOARD_DEFINITION: DecisionDefinition = {
   procedureSlug: "ok-to-board",
   procedureTitle: "OK to Board (OKTB)",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "50. Ok to Board (OKTB)",
-  sourcePages: [272, 273, 274],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "51. Ok to Board (OKTB)",
+  sourcePages: [270, 271, 272],
   questions: QUESTION_SETS["ok-to-board"],
   rules: [
     {
@@ -30,7 +30,7 @@ export const OK_TO_BOARD_DEFINITION: DecisionDefinition = {
         "The source does not state OKTB eligibility rules; it directs users to the official flydubai OKTB website for the current policy.",
       nextAction:
         "Refer to the official flydubai OKTB website for the current policy. Do not decide passenger OKTB eligibility.",
-      sourcePages: [272],
+      sourcePages: [270],
       sourceField: "OKTB official website reference",
     },
     {
@@ -43,7 +43,7 @@ export const OK_TO_BOARD_DEFINITION: DecisionDefinition = {
       explanation:
         "The EK* manual OKTB-add process is documented for Floor Support and Supervisors only.",
       nextAction: "Escalate to Floor Support or a Supervisor to perform the EK* manual OKTB-add.",
-      sourcePages: [272],
+      sourcePages: [270],
       sourceField: "EK* manual-add restricted to Floor Support/Supervisor",
     },
     {
@@ -57,7 +57,7 @@ export const OK_TO_BOARD_DEFINITION: DecisionDefinition = {
         "Floor Support and Supervisors may add OKTB on EK* flights using the documented steps.",
       nextAction:
         "Take control of the booking, open Add services, select carrier EK*, category UAE Visit Visa, then OKTB and add. Update the PNR comments with the action taken and release control.",
-      sourcePages: [272, 273, 274],
+      sourcePages: [270, 271, 272],
       sourceField: "EK* manual OKTB-add steps",
     },
   ],

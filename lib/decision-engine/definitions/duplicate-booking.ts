@@ -19,9 +19,9 @@ export const DUPLICATE_BOOKING_DEFINITION: DecisionDefinition = {
   procedureSlug: "duplicate-booking",
   procedureTitle: "Duplicate Booking",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "47. Duplicate booking",
-  sourcePages: [268, 269, 270],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "48. Duplicate booking",
+  sourcePages: [266, 267, 268],
   questions: QUESTION_SETS["duplicate-booking"],
   rules: [
     {
@@ -32,7 +32,7 @@ export const DUPLICATE_BOOKING_DEFINITION: DecisionDefinition = {
         "The bookings must match the documented duplicate-booking criteria before the case can be handled as a duplicate.",
       nextAction:
         "Verify passenger/journey details, sector, cabin, issue date, booking channel, travel date, flight, fare and booking status.",
-      sourcePages: [268],
+      sourcePages: [266],
       sourceField: "Duplicate-booking definition and exclusions",
     },
     {
@@ -42,7 +42,7 @@ export const DUPLICATE_BOOKING_DEFINITION: DecisionDefinition = {
       explanation:
         "A booking containing a no-show, used, or inactive segment requires exception review.",
       nextAction: "Refer the case to the Customer Service / Supervisor process, subject to approval.",
-      sourcePages: [269],
+      sourcePages: [267],
       sourceField: "Escalation and inactive-booking handling",
     },
     {
@@ -53,7 +53,7 @@ export const DUPLICATE_BOOKING_DEFINITION: DecisionDefinition = {
         "Partial duplicate itineraries require approval and customer confirmation of which booking should be cancelled.",
       nextAction:
         "Advise the customer to use Let's Talk and identify which booking they want cancelled, subject to approval.",
-      sourcePages: [269],
+      sourcePages: [267],
       sourceField: "Partial duplicate handling",
     },
     {
@@ -63,7 +63,7 @@ export const DUPLICATE_BOOKING_DEFINITION: DecisionDefinition = {
       explanation:
         "Duplicate bookings involving a travel agent or GDS require cross-channel handling and approval.",
       nextAction: "Escalate; the original issuing/booking agent may need to handle the affected booking.",
-      sourcePages: [269],
+      sourcePages: [267],
       sourceField: "Travel agency / GDS duplicate handling",
     },
     {
@@ -78,7 +78,7 @@ export const DUPLICATE_BOOKING_DEFINITION: DecisionDefinition = {
       explanation:
         "For an exact duplicate with the same fare, the first booking is cancelled and the latest booking is retained, subject to approval.",
       nextAction: "Escalate to Team Leader / Supervisor for approval and cancellation handling.",
-      sourcePages: [269, 270],
+      sourcePages: [267, 268],
       sourceField: "Exact duplicate — same fare handling",
     },
     {
@@ -93,7 +93,7 @@ export const DUPLICATE_BOOKING_DEFINITION: DecisionDefinition = {
       explanation:
         "For an exact duplicate with different fares, the lower-fare booking is cancelled and the higher-fare booking is retained, subject to approval.",
       nextAction: "Escalate to Team Leader / Supervisor and advise the customer before cancellation.",
-      sourcePages: [269, 270],
+      sourcePages: [267, 268],
       sourceField: "Exact duplicate — different fare handling",
     },
   ],

@@ -21,9 +21,9 @@ export const VISA_CHANGE_DEFINITION: DecisionDefinition = {
   procedureSlug: "visa-change",
   procedureTitle: "Visa Change",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "48.1 Visa Change",
-  sourcePages: [271],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "49.1 Visa Change",
+  sourcePages: [269],
   questions: QUESTION_SETS["visa-change"],
   rules: [
     {
@@ -34,7 +34,7 @@ export const VISA_CHANGE_DEFINITION: DecisionDefinition = {
         "Agents must not provide visa-related details over the call.",
       nextAction:
         "Direct the passenger to visa.dxb@flydubai.com or a flydubai Travel Shop (transit visa: Deira only). Do not advise on visa details or admissibility.",
-      sourcePages: [271],
+      sourcePages: [269],
       sourceField: "Visa enquiry handling restriction",
     },
     {
@@ -47,7 +47,7 @@ export const VISA_CHANGE_DEFINITION: DecisionDefinition = {
       explanation:
         "If the passenger is a NOSHOW on the outbound flight, the case must be referred to the supervisor in charge.",
       nextAction: "Refer to the supervisor in charge for advice and assistance.",
-      sourcePages: [271],
+      sourcePages: [269],
       sourceField: "Visa-change outbound NOSHOW handling",
     },
     {
@@ -59,7 +59,7 @@ export const VISA_CHANGE_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Visa-change flights are applicable only to MCT, KWI and BAH.",
       nextAction: "Advise the passenger that visa-change travel is not offered on this route.",
-      sourcePages: [271],
+      sourcePages: [269],
       sourceField: "Visa-change eligible routes (MCT, KWI, BAH)",
     },
     {
@@ -73,7 +73,7 @@ export const VISA_CHANGE_DEFINITION: DecisionDefinition = {
         "The passenger must hold a valid UAE visa in hand before departure to be able to re-enter the UAE.",
       nextAction:
         "Advise the passenger that a valid UAE visa must be in hand before departure. Do not confirm visa validity; the passenger must arrange this with the relevant authority.",
-      sourcePages: [271],
+      sourcePages: [269],
       sourceField: "Valid UAE visa required before departure",
     },
     {
@@ -87,7 +87,7 @@ export const VISA_CHANGE_DEFINITION: DecisionDefinition = {
         "Both the outbound and inbound flights must be under the same PNR for visa-change handling.",
       nextAction:
         "Escalate to arrange both flights under a single PNR through an authorized travel agent before travel.",
-      sourcePages: [271],
+      sourcePages: [269],
       sourceField: "Both flights under the same PNR",
     },
     // Eligible cases are enumerated per route so an unanswered or ineligible
@@ -106,7 +106,7 @@ export const VISA_CHANGE_DEFINITION: DecisionDefinition = {
         "Visa-change travel to MCT is supported when a valid UAE visa is held, both flights are on the same PNR and the outbound is not a NOSHOW.",
       nextAction:
         "The booking must be created through one of the authorized travel agents on the approved list (only those bookings are accepted at the airport). The passenger is through-checked from DXB with a printed boarding pass for API clearance.",
-      sourcePages: [271],
+      sourcePages: [269],
       sourceField: "Visa-change authorized-agent booking and API clearance",
     },
     {
@@ -123,7 +123,7 @@ export const VISA_CHANGE_DEFINITION: DecisionDefinition = {
         "Visa-change travel to KWI is supported when a valid UAE visa is held, both flights are on the same PNR and the outbound is not a NOSHOW.",
       nextAction:
         "The booking must be created through one of the authorized travel agents on the approved list (only those bookings are accepted at the airport). The passenger is through-checked from DXB with a printed boarding pass for API clearance.",
-      sourcePages: [271],
+      sourcePages: [269],
       sourceField: "Visa-change authorized-agent booking and API clearance",
     },
     {
@@ -140,7 +140,7 @@ export const VISA_CHANGE_DEFINITION: DecisionDefinition = {
         "Visa-change travel to BAH is supported when a valid UAE visa is held, both flights are on the same PNR and the outbound is not a NOSHOW.",
       nextAction:
         "The booking must be created through one of the authorized travel agents on the approved list (only those bookings are accepted at the airport). The passenger is through-checked from DXB with a printed boarding pass for API clearance.",
-      sourcePages: [271],
+      sourcePages: [269],
       sourceField: "Visa-change authorized-agent booking and API clearance",
     },
   ],

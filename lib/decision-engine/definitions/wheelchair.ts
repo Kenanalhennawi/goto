@@ -17,9 +17,9 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
   procedureSlug: "wheelchair",
   procedureTitle: "Wheelchair",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "34. Wheelchair",
-  sourcePages: [165, 166, 167, 168, 169, 170],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "35. Wheelchair",
+  sourcePages: [164, 165, 166, 167, 168, 169],
   questions: QUESTION_SETS["wheelchair"],
   rules: [
     {
@@ -31,7 +31,7 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation:
         "No battery can be accepted when there are any signs of damage or leaking. The battery-powered wheelchair cannot be carried as presented.",
-      sourcePages: [167, 168],
+      sourcePages: [166, 167],
       sourceField: "not_allowed",
     },
     {
@@ -44,7 +44,7 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
       explanation:
         "Battery-powered wheelchairs must be notified at least 48 hours before departure; there is insufficient notice for this flight.",
       nextAction: "Advise the passenger to request assistance at the airport; the mobility aid may not be accepted without the 48-hour notification.",
-      sourcePages: [167],
+      sourcePages: [166],
       sourceField: "cut_off_time",
     },
     {
@@ -56,7 +56,7 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation:
         "A WCHC passenger must travel with a companion/helper in the same cabin on an adjoining seat; without one the request cannot proceed.",
-      sourcePages: [165, 166],
+      sourcePages: [164, 165],
       sourceField: "not_allowed",
     },
     {
@@ -70,7 +70,7 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
       explanation:
         "A WCHC passenger must carry a fit-to-fly medical certificate in English (or a language the ground staff/crew can read) signed by a licensed medical practitioner.",
       nextAction: "Advise the passenger to obtain the fit-to-fly certificate before travel.",
-      sourcePages: [165, 166],
+      sourcePages: [164, 165],
       sourceField: "required_information",
     },
     {
@@ -85,7 +85,7 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
         "Battery-powered wheelchair accepted with conditions: notify 48h ahead and submit the Wheelchair and Mobility Aid form.",
       nextAction:
         "Collect the mobility-aid form and battery details (type WCBD/WCLB/WCBW, watt-hours, count). Lithium (WCLB) travels in the cabin, max 300 Wh or 2x160 Wh; wet/dry cells go in the hold. Dimensions must not exceed 89x122 cm and weight 100 kg. For an interline/OAL onward leg, obtain proof the other carrier accepts the battery wheelchair. Passenger reports 3 hours before departure.",
-      sourcePages: [167, 168, 170],
+      sourcePages: [166, 167, 169],
       sourceField: "required_information",
     },
     {
@@ -98,7 +98,7 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
       explanation:
         "WCHR can be added through the system up to 12 hours before departure; inside that window the SSR cannot be added normally.",
       nextAction: "Refer to SUP/FS in charge and advise the passenger that airport staff can arrange assistance.",
-      sourcePages: [165],
+      sourcePages: [164],
       sourceField: "escalation_points",
     },
     {
@@ -111,7 +111,7 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
       explanation:
         "WCHS requires 24 hours' notice to add the SSR; inside that window the SSR cannot be added normally.",
       nextAction: "Refer to SUP/FS in charge and advise the passenger that airport staff can arrange assistance.",
-      sourcePages: [165],
+      sourcePages: [164],
       sourceField: "escalation_points",
     },
     {
@@ -124,7 +124,7 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
       explanation:
         "WCHC requires 24 hours' notice to add the SSR; inside that window the SSR cannot be added normally.",
       nextAction: "Refer to SUP/FS in charge and advise the passenger that airport staff can arrange assistance.",
-      sourcePages: [165],
+      sourcePages: [164],
       sourceField: "escalation_points",
     },
     {
@@ -138,8 +138,8 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
       explanation:
         "WCHR (ramp assistance): passenger walks the stairs and moves around the cabin unassisted. Add the SSR and assign a seat.",
       nextAction:
-        "Offer a complimentary seat in rows 29-31 (one companion only), avoiding emergency-exit rows; advise the passenger to arrive 3 hours before departure. Escalate seat assignment to SUP/FS.",
-      sourcePages: [165, 166],
+        "Follow the Guidelines on seat allocation for passengers requiring additional assistance (v81.7 ch.34): FOC adjacent seats, preferably rows 18-31, XLGR/FRST excluded, no emergency-exit rows. On a seat-inclusive fare assign adjoining seats directly; on a non-inclusive seat fare escalate seat assignment to SUP/FS. Advise the passenger to arrive 3 hours before departure.",
+      sourcePages: [164, 165],
       sourceField: "system_steps",
     },
     {
@@ -153,8 +153,8 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
       explanation:
         "WCHS (steps assistance): passenger cannot manage stairs but moves around the cabin and self-cares unassisted. Add the SSR and assign a seat.",
       nextAction:
-        "Offer a complimentary seat in rows 29-31 (one companion only), avoiding emergency-exit rows; advise the passenger to arrive 3 hours before departure. Escalate seat assignment to SUP/FS.",
-      sourcePages: [165, 166],
+        "Follow the Guidelines on seat allocation for passengers requiring additional assistance (v81.7 ch.34): FOC adjacent seats, preferably rows 18-31, XLGR/FRST excluded, no emergency-exit rows. On a seat-inclusive fare assign adjoining seats directly; on a non-inclusive seat fare escalate seat assignment to SUP/FS. Advise the passenger to arrive 3 hours before departure.",
+      sourcePages: [164, 165],
       sourceField: "system_steps",
     },
     {
@@ -170,8 +170,8 @@ export const WHEELCHAIR_DEFINITION: DecisionDefinition = {
       explanation:
         "WCHC (cabin-seat assistance) accepted: companion in the same cabin on an adjoining seat and a fit-to-fly medical certificate are present.",
       nextAction:
-        "Assign adjoining seats for the passenger and companion in rows 29-31 (aisle for the WCHC passenger), avoiding emergency-exit rows; advise arrival 3 hours before departure. Escalate seat assignment to SUP/FS.",
-      sourcePages: [165, 166],
+        "Follow the Guidelines on seat allocation for passengers requiring additional assistance (v81.7 ch.34): FOC adjacent seats in the same row (aisle preferred for the WCHC passenger), preferably rows 18-31, XLGR/FRST excluded, no emergency-exit rows. On a seat-inclusive fare assign adjoining seats directly; on a non-inclusive seat fare escalate to SUP/FS. Advise arrival 3 hours before departure.",
+      sourcePages: [164, 165],
       sourceField: "system_steps",
     },
   ],

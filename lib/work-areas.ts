@@ -33,7 +33,8 @@ export function groupForCard(card: GroupableCard): WorkArea {
   if (matchesArea(text, ["visa", "oktb", "ok to board"])) return "Visa / OKTB";
   if (matchesArea(text, ["wheelchair", "wchr", "wchs", "wchc", "meda", "dpna", "pregnancy"])) return "Special Assistance";
   if (matchesArea(text, ["check in", "check-in", "olci", "lounge", "boarding", "airport"])) return "Airport / Check-in";
-  if (matchesArea(text, ["baggage", "speq", "spex", "falcon", "petc"])) return "Baggage";
+  // SPEX retired effective 01-Aug-2026 (GO TO v81.7 ch.28); BIKE replaces it for bicycles.
+  if (matchesArea(text, ["baggage", "speq", "bike", "falcon", "petc"])) return "Baggage";
   if (matchesArea(text, ["booking", "name", "seat", "cbbg", "exst", "stopover", "government"])) return "Booking Changes";
   return "Other References";
 }

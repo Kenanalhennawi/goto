@@ -220,7 +220,9 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
       "sporting equipment", "sports equipment", "sporting weapon", "weapon", "firearm",
       "ammunition", "sports bag", "bicycle", "bike", "golf bag", "surfboard", "ski equipment",
     ],
-    abbreviations: ["speq", "spex"],
+    // SPEX retired effective 01-Aug-2026 (v81.7 ch.28 §22) — never route it as
+    // live. "bike"/"bicycle" are already phrases of this concept (SSR BIKE).
+    abbreviations: ["speq"],
   },
 
   // ---------------- Travel documents ----------------
@@ -335,8 +337,29 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
 
   // ---------------- Broad categories (search only; never auto-route) ----------------
   { id: "broad-medical", targetSlugs: [], category: "Medical & assistance", safety: "broad", phrases: ["medical assistance", "medical"] },
-  { id: "broad-baggage", targetSlugs: [], category: "Baggage", safety: "broad", phrases: ["baggage", "bag", "bags", "extra baggage", "add bag", "luggage"] },
+  {
+    id: "broad-baggage",
+    targetSlugs: [],
+    category: "Baggage",
+    safety: "broad",
+    phrases: [
+      "baggage", "bag", "bags", "extra baggage", "add bag", "luggage",
+      // v81.7: checked-baggage out-of-gauge + TV carriage vocabulary (reference/search only).
+      "out of gauge", "oversized baggage", "oversize bag", "television", "tv charge",
+    ],
+  },
   { id: "broad-airport", targetSlugs: [], category: "Check-in & airport", safety: "broad", phrases: ["airport", "lounge", "airport lounge", "lounge access"] },
+  // v81.7 new reference topics (chapter/manual guidance only — no workflow).
+  { id: "al-majlis", targetSlugs: [], category: "Check-in & airport", safety: "broad", phrases: ["al majlis", "al majlis vip", "majlis vip service", "lmaj"] },
+  { id: "champagne", targetSlugs: [], category: "Special services", safety: "broad", phrases: ["champagne", "champagne on board"] },
+  // v81.4 Accessibility seating guidelines: relevant to both wheelchair and DPNA.
+  {
+    id: "accessibility-seating",
+    targetSlugs: ["wheelchair", "dpna"],
+    category: "Medical & assistance",
+    safety: "ambiguous",
+    phrases: ["accessibility", "accessibility seating", "seat allocation assistance", "seat allocation for additional assistance"],
+  },
   { id: "broad-refund", targetSlugs: [], category: "Payment & refunds", safety: "broad", phrases: ["refund", "refund ticket", "money back", "voucher", "credit voucher", "cash refund"] },
   { id: "broad-flight-change", targetSlugs: [], category: "Booking changes", safety: "broad", phrases: ["cancel flight", "cancel ticket", "change flight", "change booking"] },
 

@@ -140,33 +140,35 @@ function expectRule(definition, answers, ruleId, outcome, confidence) {
   return result;
 }
 
-// ---- Sporting Equipment (v81.2 ch.28 pp.126-131) ----
+// ---- Sporting Equipment (v81.7 ch.28 pp.126-129 — new process effective 01-Aug-2026) ----
 const SPEQ = DECISION_DEFINITIONS["sporting-equipment"];
+assert.equal(SPEQ.sourceVersion, "81.7 (30-Jul-2026)", "SPEQ tree must be on v81.7");
 const speqBase = {
-  speq_request: "New equipment booking",
   equipment_kind: "Standard sporting equipment",
+  item_weight_kg: 20,
   total_dimension_cm: 170,
   equipment_count: 1,
   hours_before_departure: 48,
   journey_type: "Point-to-point",
 };
-// standard equipment with sufficient notice
-expectRule(SPEQ, speqBase, "standard-24h-plus-speq", "Can proceed", "High confidence");
-expectRule(
+// standard equipment: within allowance, no fee, any size up to 300 cm
+expectRule(SPEQ, speqBase, "standard-24h-plus", "Can proceed", "High confidence");
+expectRule(SPEQ, { ...speqBase, total_dimension_cm: 300 }, "standard-24h-plus", "Can proceed", "High confidence");
+// no handling fee remains anywhere in the tree (fee model abolished in v81.7)
+for (const rule of SPEQ.rules) {
+  assert.ok(!/AED\s?150|AED\s?270|SPEX/.test(`${rule.explanation} ${rule.nextAction ?? ""}`),
+    `sporting-equipment/${rule.id}: must not reference retired fees or SPEX`);
+}
+// bicycles use SSR BIKE
+const bikeResult = expectRule(
   SPEQ,
-  { ...speqBase, total_dimension_cm: 120 },
-  "standard-24h-plus-free-size",
+  { ...speqBase, equipment_kind: "Bicycle" },
+  "bike-24h-plus",
   "Can proceed",
   "High confidence"
 );
-expectRule(
-  SPEQ,
-  { ...speqBase, total_dimension_cm: 300 },
-  "standard-24h-plus-spex",
-  "Can proceed",
-  "High confidence"
-);
-// sporting weapon below 96 hours
+assert.ok(bikeResult.explanation.includes("BIKE"), "bicycle rule must use SSR BIKE");
+// sporting weapon below/above 96 hours
 expectRule(
   SPEQ,
   { ...speqBase, equipment_kind: "Sporting weapon, firearm or ammunition", hours_before_departure: 95 },
@@ -174,51 +176,31 @@ expectRule(
   "Not permitted",
   "High confidence"
 );
-// item longer than 350 cm below 48 hours
 expectRule(
   SPEQ,
-  { ...speqBase, total_dimension_cm: 400, hours_before_departure: 40 },
-  "over-350cm-under-48h",
-  "Not permitted",
-  "High confidence"
-);
-// more than 10 pieces
-expectRule(
-  SPEQ,
-  { ...speqBase, equipment_count: 11 },
-  "over-10-pieces",
+  { ...speqBase, equipment_kind: "Sporting weapon, firearm or ammunition", hours_before_departure: 100 },
+  "weapon-96h-plus",
   "Requires supervisor",
   "Conditional"
 );
-// refund request inside restricted window
-expectRule(
-  SPEQ,
-  { ...speqBase, speq_request: "Cancel or refund an existing equipment fee", hours_before_departure: 10 },
-  "refund-inside-24h",
-  "Not permitted",
-  "High confidence"
-);
+// over 32 kg per item is never accepted
+expectRule(SPEQ, { ...speqBase, item_weight_kg: 33 }, "over-32kg", "Not permitted", "High confidence");
+// over 300 cm is never accepted (cargo only) — 301 is the boundary
+expectRule(SPEQ, { ...speqBase, total_dimension_cm: 301 }, "over-300cm", "Not permitted", "High confidence");
+expectRule(SPEQ, { ...speqBase, total_dimension_cm: 400 }, "over-300cm", "Not permitted", "High confidence");
+// more than 10 pieces needs prior confirmation
+expectRule(SPEQ, { ...speqBase, equipment_count: 11 }, "over-10-pieces", "Requires supervisor", "Conditional");
 // supervisor late-add window and go-show
-expectRule(
-  SPEQ,
-  { ...speqBase, hours_before_departure: 15 },
-  "standard-12-to-24h",
-  "Requires supervisor",
-  "Conditional"
-);
-expectRule(
-  SPEQ,
-  { ...speqBase, hours_before_departure: 5 },
-  "standard-under-12h-goshow",
-  "Can proceed with conditions",
-  "Conditional"
-);
-// interline escalation
+expectRule(SPEQ, { ...speqBase, hours_before_departure: 15 }, "within-24h-supervisor", "Requires supervisor", "Conditional");
+expectRule(SPEQ, { ...speqBase, hours_before_departure: 5 }, "under-12h-goshow", "Can proceed with conditions", "Conditional");
+// FZ connection: supervisor adds the SSR per sector
+expectRule(SPEQ, { ...speqBase, journey_type: "FZ connecting" }, "fz-connection", "Requires supervisor", "Conditional");
+// interline: onward-carrier confirmation
 expectRule(
   SPEQ,
   { ...speqBase, journey_type: "Interline or codeshare" },
-  "interline-codeshare",
-  "Requires supervisor",
+  "interline-confirm",
+  "Can proceed with conditions",
   "Conditional"
 );
 
@@ -537,7 +519,7 @@ assert.equal(mctUnknown.outcome, "Insufficient information");
 assert.equal(mctUnknown.matchedRuleId, null);
 
 // No unsupported outcome: unanswered combinations never produce a decision.
-const speqUnanswered = evaluate(SPEQ, { speq_request: "New equipment booking" });
+const speqUnanswered = evaluate(SPEQ, { equipment_kind: "Standard sporting equipment" });
 assert.equal(speqUnanswered.outcome, "Insufficient information");
 assert.equal(speqUnanswered.matchedRuleId, null);
 
@@ -551,7 +533,7 @@ const availSpeq = getWorkflowAvailability({
   slug: "sporting-equipment",
   is_published: true,
   review_status: "approved",
-  source_version: "81.2 (10-Jul-2026)",
+  source_version: "81.7 (30-Jul-2026)",
 });
 assert.equal(availSpeq.status, "available");
 assert.equal(availSpeq.available, true);
@@ -564,7 +546,7 @@ const availUnpub = getWorkflowAvailability({
   slug: "sporting-equipment",
   is_published: false,
   review_status: "needs_review",
-  source_version: "81.2",
+  source_version: "81.7",
 });
 assert.equal(availUnpub.status, "unavailable_unpublished");
 assert.equal(availUnpub.available, false);
@@ -587,9 +569,9 @@ const availStale = getWorkflowAvailability({
   slug: "sporting-equipment",
   is_published: true,
   review_status: "approved",
-  source_version: "81.2",
-  last_reviewed_at: "2026-07-10T00:00:00.000Z",
-  chapters: { source_version: "81.2", updated_at: "2026-07-15T00:00:00.000Z" },
+  source_version: "81.7",
+  last_reviewed_at: "2026-07-30T00:00:00.000Z",
+  chapters: { source_version: "81.7", updated_at: "2026-08-01T00:00:00.000Z" },
 });
 assert.equal(availStale.status, "unavailable_source_stale");
 assert.equal(availStale.adminReason, "Source updated after review");
@@ -794,7 +776,7 @@ expectRule(
 // Every Phase H tree is registered, versioned and has source-cited rules.
 for (const slug of ["wheelchair", "name-correction", "falcon-handling"]) {
   assert.ok(DECISION_DEFINITIONS[slug], `definition registered for ${slug}`);
-  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.2 (10-Jul-2026)");
+  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.7 (30-Jul-2026)");
   assert.ok(DECISION_DEFINITIONS[slug].sourcePages.length > 0, `source pages for ${slug}`);
 }
 
@@ -808,7 +790,7 @@ assert.ok(wchairIncomplete.missing.length > 0);
 // Every Batch 1 tree is registered, versioned to 81.2 and source-cited.
 for (const slug of ["duplicate-booking", "government-deals", "auto-split-od"]) {
   assert.ok(DECISION_DEFINITIONS[slug], `definition registered for ${slug}`);
-  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.2 (10-Jul-2026)");
+  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.7 (30-Jul-2026)");
   assert.ok(DECISION_DEFINITIONS[slug].sourcePages.length > 0, `source pages for ${slug}`);
   for (const rule of DECISION_DEFINITIONS[slug].rules) {
     assert.ok((rule.sourceField ?? "").length > 0, `${slug}/${rule.id}: non-empty sourceField`);
@@ -858,7 +840,7 @@ const dupSameFare = evaluate(DUP, {
   fare_same: true,
   other_channel: false,
 });
-assert.deepEqual(dupSameFare.rulePages, [269, 270], "dup-exact-same-fare source pages");
+assert.deepEqual(dupSameFare.rulePages, [267, 268], "dup-exact-same-fare source pages (v81.7 -2 shift)");
 expectRule(
   DUP,
   { match_level: "Identical in every detail", both_active: true, fare_same: false, other_channel: false },
@@ -983,7 +965,7 @@ for (const slug of ["government-deals", "auto-split-od"]) {
     slug,
     is_published: true,
     review_status: "approved",
-    source_version: "81.2 (10-Jul-2026)",
+    source_version: "81.7 (30-Jul-2026)",
   });
   assert.equal(live.status, "available");
   assert.equal(live.available, true);
@@ -1002,7 +984,7 @@ assert.equal(govMismatch.status, "unavailable_source_mismatch");
 // Every Batch 2 tree is registered, versioned to 81.2 and source-cited.
 for (const slug of ["travel-requirements", "ok-to-board", "visa-change"]) {
   assert.ok(DECISION_DEFINITIONS[slug], `definition registered for ${slug}`);
-  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.2 (10-Jul-2026)");
+  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.7 (30-Jul-2026)");
   assert.ok(DECISION_DEFINITIONS[slug].sourcePages.length > 0, `source pages for ${slug}`);
   for (const rule of DECISION_DEFINITIONS[slug].rules) {
     assert.ok((rule.sourceField ?? "").length > 0, `${slug}/${rule.id}: non-empty sourceField`);
@@ -1182,7 +1164,7 @@ for (const slug of ["travel-requirements", "ok-to-board", "visa-change"]) {
     slug,
     is_published: true,
     review_status: "approved",
-    source_version: "81.2 (10-Jul-2026)",
+    source_version: "81.7 (30-Jul-2026)",
   });
   assert.equal(live.status, "available");
   assert.equal(live.available, true);
@@ -1193,7 +1175,7 @@ for (const slug of ["travel-requirements", "ok-to-board", "visa-change"]) {
 // Every Batch 3 tree is registered, versioned to 81.2 and source-cited.
 for (const slug of ["meet-assist", "business-lounge", "blue-ribbon-bags", "worldtracer"]) {
   assert.ok(DECISION_DEFINITIONS[slug], `definition registered for ${slug}`);
-  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.2 (10-Jul-2026)");
+  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.7 (30-Jul-2026)");
   assert.ok(DECISION_DEFINITIONS[slug].sourcePages.length > 0, `source pages for ${slug}`);
   for (const rule of DECISION_DEFINITIONS[slug].rules) {
     assert.ok((rule.sourceField ?? "").length > 0, `${slug}/${rule.id}: non-empty sourceField`);
@@ -1372,7 +1354,7 @@ for (const slug of ["meet-assist", "business-lounge", "blue-ribbon-bags", "world
     slug,
     is_published: true,
     review_status: "approved",
-    source_version: "81.2 (10-Jul-2026)",
+    source_version: "81.7 (30-Jul-2026)",
   });
   assert.equal(live.status, "available");
   assert.equal(live.available, true);
@@ -1391,7 +1373,7 @@ for (const slug of [
   "human-remains",
 ]) {
   assert.ok(DECISION_DEFINITIONS[slug], `definition registered for ${slug}`);
-  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.2 (10-Jul-2026)");
+  assert.equal(DECISION_DEFINITIONS[slug].sourceVersion, "81.7 (30-Jul-2026)");
   assert.ok(DECISION_DEFINITIONS[slug].sourcePages.length > 0, `source pages for ${slug}`);
   for (const rule of DECISION_DEFINITIONS[slug].rules) {
     assert.ok((rule.sourceField ?? "").length > 0, `${slug}/${rule.id}: non-empty sourceField`);
@@ -1739,7 +1721,7 @@ for (const slug of [
     slug,
     is_published: true,
     review_status: "approved",
-    source_version: "81.2 (10-Jul-2026)",
+    source_version: "81.7 (30-Jul-2026)",
   });
   assert.equal(live.status, "available");
   assert.equal(live.available, true);

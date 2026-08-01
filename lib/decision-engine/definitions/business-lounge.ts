@@ -17,9 +17,9 @@ export const BUSINESS_LOUNGE_DEFINITION: DecisionDefinition = {
   procedureSlug: "business-lounge",
   procedureTitle: "Business Lounge – DXB T2",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "64. Business Lounge – DXB T2",
-  sourcePages: [314],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "65. Business Lounge – DXB T2",
+  sourcePages: [312],
   questions: QUESTION_SETS["business-lounge"],
   rules: [
     {
@@ -29,7 +29,7 @@ export const BUSINESS_LOUNGE_DEFINITION: DecisionDefinition = {
       explanation:
         "Business Lounge access under this procedure is limited to eligible FZ-operated flights.",
       nextAction: "Do not sell access under this workflow.",
-      sourcePages: [314],
+      sourcePages: [312],
       sourceField: "Business Lounge flight eligibility",
     },
     {
@@ -41,7 +41,7 @@ export const BUSINESS_LOUNGE_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Cash is not accepted for this airport lounge purchase.",
       nextAction: "Use an accepted card payment method only.",
-      sourcePages: [314],
+      sourcePages: [312],
       sourceField: "Business Lounge payment restrictions",
     },
     {
@@ -53,7 +53,7 @@ export const BUSINESS_LOUNGE_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Miles are not accepted for this airport lounge purchase.",
       nextAction: "Use an accepted card payment method only.",
-      sourcePages: [314],
+      sourcePages: [312],
       sourceField: "Business Lounge payment restrictions",
     },
     {
@@ -65,7 +65,7 @@ export const BUSINESS_LOUNGE_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Only the documented card payment method is accepted.",
       nextAction: "Use an accepted credit or debit card.",
-      sourcePages: [314],
+      sourcePages: [312],
       sourceField: "Business Lounge payment restrictions",
     },
     {
@@ -79,7 +79,7 @@ export const BUSINESS_LOUNGE_DEFINITION: DecisionDefinition = {
         "Eligible passengers may purchase DXB T2 Business Lounge access at the airport using card payment.",
       nextAction:
         "Use EZEtap card payment at the airport. Apply the documented LNGS 4-hour or LNGL 8-hour option. Adult and child passengers are charged; an infant is free with a paying adult. Access is one-time and subject to capacity. Lounge purchasers do not board through the Business Class gate.",
-      sourcePages: [314],
+      sourcePages: [312],
       sourceField: "Business Lounge purchase and use conditions",
     },
   ],

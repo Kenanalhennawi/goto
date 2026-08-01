@@ -17,9 +17,9 @@ export const TRAVEL_REQUIREMENTS_DEFINITION: DecisionDefinition = {
   procedureSlug: "travel-requirements",
   procedureTitle: "Travel Requirements (UAE Residency)",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "49. Travel Requirements to travel from UAE",
-  sourcePages: [272],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "50. Travel Requirements to travel from UAE",
+  sourcePages: [270],
   questions: QUESTION_SETS["travel-requirements"],
   rules: [
     {
@@ -30,7 +30,7 @@ export const TRAVEL_REQUIREMENTS_DEFINITION: DecisionDefinition = {
         "Entry and exit requirements depend on nationality, destination and current authority rules that are not modeled here and can change without notice.",
       nextAction:
         "Advise the passenger to check with the relevant authorities for the latest entry and exit requirements before travel. Do not confirm admissibility.",
-      sourcePages: [272],
+      sourcePages: [270],
       sourceField: "Travel requirements disclaimer",
     },
     {
@@ -44,7 +44,7 @@ export const TRAVEL_REQUIREMENTS_DEFINITION: DecisionDefinition = {
         "The original Emirates ID is the accepted proof of UAE residency for the return journey; a resident-visa sticker is no longer issued.",
       nextAction:
         "Advise the passenger to carry the original Emirates ID when departing Dubai. Without it they may be unable to prove UAE residency on return.",
-      sourcePages: [272],
+      sourcePages: [270],
       sourceField: "Emirates ID as proof of UAE residency",
     },
     {
@@ -58,7 +58,7 @@ export const TRAVEL_REQUIREMENTS_DEFINITION: DecisionDefinition = {
         "The original Emirates ID is accepted as proof of UAE residency for this return-travel scenario.",
       nextAction:
         "Confirm the passenger carries the original Emirates ID, and advise them to verify the latest entry and exit requirements with the relevant authorities before travel.",
-      sourcePages: [272],
+      sourcePages: [270],
       sourceField: "Emirates ID as proof of UAE residency",
     },
   ],

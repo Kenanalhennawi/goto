@@ -23,7 +23,7 @@ export const WORLDTRACER_DEFINITION: DecisionDefinition = {
   procedureSlug: "worldtracer",
   procedureTitle: "WorldTracer Baggage Handling",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
+  sourceVersion: "81.7 (30-Jul-2026)",
   sourceChapter: "26.6–26.9 WorldTracer",
   sourcePages: [115, 116, 117, 118],
   questions: QUESTION_SETS["worldtracer"],

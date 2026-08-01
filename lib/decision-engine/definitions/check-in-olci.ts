@@ -21,9 +21,9 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
   procedureSlug: "check-in-olci",
   procedureTitle: "Check-in / OLCI",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "55. Ways to Check-in",
-  sourcePages: [282, 283, 284, 285],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "56. Ways to Check-in",
+  sourcePages: [280, 281, 282, 283],
   questions: QUESTION_SETS["check-in-olci"],
   rules: [
     {
@@ -37,7 +37,7 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
         "Not eligible for online check-in: the booking requires debit/credit card verification at the airport check-in desk. Airport check-in only.",
       nextAction:
         "Advise airport check-in; passenger must be at the airport at least 60 minutes prior to departure and gates close 25 minutes before departure.",
-      sourcePages: [282, 283],
+      sourcePages: [280, 281],
       sourceField: "not_allowed",
     },
     {
@@ -51,7 +51,7 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
         "Not eligible for online check-in: bookings with a special request for cabin baggage or an extra seat are excluded from OLCI. Airport check-in only.",
       nextAction:
         "Advise airport check-in; passenger must be at the airport at least 60 minutes prior to departure and gates close 25 minutes before departure.",
-      sourcePages: [282, 283],
+      sourcePages: [280, 281],
       sourceField: "not_allowed",
     },
     {
@@ -64,7 +64,7 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
       explanation:
         "Online check-in is not open yet: it opens 48 hours (2880 minutes) before departure.",
       nextAction: "Advise the passenger to check in online once the 48-hour window opens.",
-      sourcePages: [283],
+      sourcePages: [281],
       sourceField: "cut_off_time",
     },
     {
@@ -76,7 +76,7 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
       outcome: "Can proceed",
       explanation:
         "Eligible for online check-in: OLCI is open from 48 hours up to 75 minutes prior to departure, using the booking reference and departure airport or the primary passenger's last name.",
-      sourcePages: [283],
+      sourcePages: [281],
       sourceField: "cut_off_time / system_steps",
     },
     {
@@ -90,7 +90,7 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
         "Online check-in is closed (it closes 75 minutes before departure). Airport check-in only.",
       nextAction:
         "Advise the passenger to go directly to the airport check-in counter: reporting is at least 60 minutes prior to departure and boarding gates close 25 minutes before departure.",
-      sourcePages: [282, 283],
+      sourcePages: [280, 281],
       sourceField: "cut_off_time / passenger_advice",
     },
     {
@@ -103,7 +103,7 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
       explanation:
         "Contact Centre must reject offload requests for passengers who performed check-in at the airport.",
       nextAction: "Refer the passenger to the airport team.",
-      sourcePages: [285],
+      sourcePages: [283],
       sourceField: "not_allowed",
     },
     {
@@ -118,7 +118,7 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
         "Honor the modify/cancel request and escalate the case to a Supervisor to offload the passenger. Offload requests are applicable up to 60 minutes before departure and apply to all booking types (including GDS, interline and codeshare).",
       nextAction:
         "Escalate to Supervisor for offload and inform the caller to perform online check-in again for the modified flight.",
-      sourcePages: [285],
+      sourcePages: [283],
       sourceField: "system_steps / escalation_points",
     },
     {
@@ -131,7 +131,7 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation:
         "Too late for offload: post-OLCI offload requests are applicable only up to 60 minutes before departure.",
-      sourcePages: [285],
+      sourcePages: [283],
       sourceField: "cut_off_time",
     },
     {
@@ -143,7 +143,7 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
       outcome: "Can proceed",
       explanation:
         "The booking status is Active (no check-in completed), so modify or cancel as per fare rules — no offload is needed.",
-      sourcePages: [285],
+      sourcePages: [283],
       sourceField: "system_steps",
     },
     {
@@ -152,7 +152,7 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
       outcome: "Not permitted",
       explanation: "Offload requests to add SSRs will not be honored.",
       nextAction: "Advise that the SSR cannot be added through offload after check-in.",
-      sourcePages: [285],
+      sourcePages: [283],
       sourceField: "not_allowed",
     },
     {
@@ -161,7 +161,7 @@ export const CHECK_IN_OLCI_DEFINITION: DecisionDefinition = {
       outcome: "Can proceed with conditions",
       explanation:
         "In the event of issues completing online check-in, refer the customer to the check-in counter at least 3 hours prior to departure for normal airport check-in.",
-      sourcePages: [285],
+      sourcePages: [283],
       sourceField: "passenger_advice",
     },
   ],

@@ -16,9 +16,9 @@ export const HUMAN_REMAINS_DEFINITION: DecisionDefinition = {
   procedureSlug: "human-remains",
   procedureTitle: "Human Remains",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
+  sourceVersion: "81.7 (30-Jul-2026)",
   sourceChapter: "32. Cargo – Deceased Persons and Human Remains",
-  sourcePages: [140, 141, 142, 143],
+  sourcePages: [140, 141, 140, 141],
   questions: QUESTION_SETS["human-remains"],
   rules: [
     {
@@ -32,7 +32,7 @@ export const HUMAN_REMAINS_DEFINITION: DecisionDefinition = {
         "Human remains transport is handled by Cargo/dnata and is subject to destination approval; when no passenger accompanies, destination clearance confirmation is also required.",
       nextAction:
         "Advise the documents (cancelled passport copy, death certificate, police clearance, embassy/consulate certificate, embalming certificate — 7 copies in English, and Arabic for Islamic countries), plus destination clearance confirmation. Refer the customer to the flydubai Cargo office / dnata Cargo Export; do not confirm acceptance or cost.",
-      sourcePages: [142, 143],
+      sourcePages: [140, 141],
       sourceField: "Human remains documents – not accompanying",
     },
     {
@@ -46,7 +46,7 @@ export const HUMAN_REMAINS_DEFINITION: DecisionDefinition = {
         "Human remains transport is handled by Cargo/dnata and is subject to destination approval; the documented certificates and ticket copies are required.",
       nextAction:
         "Advise the documents (cancelled passport copy, death certificate, police clearance, embassy/consulate certificate, embalming certificate, and two ticket copies — 7 copies in English, and Arabic for Islamic countries) and to reach the airport 6 hours prior. Refer the customer to the flydubai Cargo office / dnata Cargo Export; do not confirm acceptance or cost.",
-      sourcePages: [142, 143],
+      sourcePages: [140, 141],
       sourceField: "Human remains documents – accompanying",
     },
     {
@@ -57,7 +57,7 @@ export const HUMAN_REMAINS_DEFINITION: DecisionDefinition = {
         "Ashes of a deceased person may be carried in the cabin under the documented conditions.",
       nextAction:
         "The ashes must be in a sealed urn that fits under the seat or in the overhead bin (not on a seat or in direct view). A copy of the death certificate or a crematorium letter must be available for security.",
-      sourcePages: [142],
+      sourcePages: [140],
       sourceField: "Ashes in cabin conditions",
     },
   ],

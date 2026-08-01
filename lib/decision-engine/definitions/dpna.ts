@@ -14,9 +14,9 @@ export const DPNA_DEFINITION: DecisionDefinition = {
   procedureSlug: "dpna",
   procedureTitle: "DPNA Assistance",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
-  sourceChapter: "35. DPNA",
-  sourcePages: [172, 173],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "36. DPNA",
+  sourcePages: [170, 171],
   questions: QUESTION_SETS["dpna"],
   rules: [
     {
@@ -27,7 +27,7 @@ export const DPNA_DEFINITION: DecisionDefinition = {
         "A DPNA passenger must travel with a companion in the same cabin for constant supervision and support; without one the booking cannot be accepted as DPNA.",
       nextAction:
         "Advise that a travel companion in the same cabin is mandatory before DPNA assistance can be arranged.",
-      sourcePages: [172],
+      sourcePages: [170],
       sourceField: "Mandatory same-cabin companion",
     },
     {
@@ -38,10 +38,10 @@ export const DPNA_DEFINITION: DecisionDefinition = {
       ],
       outcome: "Requires supervisor",
       explanation:
-        "On a non-inclusive seat fare, waiving the seat charge (rows 29-31) and assigning the seats requires SUP/FS approval.",
+        "On a non-inclusive seat fare, assigning the complimentary seats requires SUP/FS approval.",
       nextAction:
-        "Add SSR DPNA (up to D-12) and escalate the seat assignment/waiver to Floor Support / a Supervisor. Assign only window or middle seats for the DPNA passenger, excluding emergency-exit rows.",
-      sourcePages: [172, 173],
+        "Add SSR DPNA (up to D-12) and escalate the seat assignment to Floor Support / a Supervisor. Follow the Guidelines on seat allocation for passengers requiring additional assistance (v81.7 ch.34): FOC adjacent seats in the same row, preferably rows 18-31, XLGR/FRST excluded, never emergency-exit rows.",
+      sourcePages: [170, 171],
       sourceField: "Non-inclusive fare seat-waiver escalation",
     },
     {
@@ -54,14 +54,14 @@ export const DPNA_DEFINITION: DecisionDefinition = {
       explanation:
         "On a seat-inclusive fare, adjoining seats can be assigned for the DPNA passenger and companion under the documented conditions.",
       nextAction:
-        "Add SSR DPNA up to 12 hours before departure and assign adjoining window/middle seats for the DPNA passenger (excluding emergency-exit rows). Priority check-in, boarding and wheelchair are provided at DXB; additional airport assistance is subject to approval at check-in (do not commit).",
-      sourcePages: [172, 173],
+        "Add SSR DPNA up to 12 hours before departure and assign adjoining seats per the Guidelines on seat allocation for passengers requiring additional assistance (v81.7 ch.34) — never emergency-exit rows. Priority check-in, boarding and wheelchair are provided at DXB; additional airport assistance is subject to approval at check-in (do not commit).",
+      sourcePages: [170, 171],
       sourceField: "Seat-inclusive fare adjoining-seat assignment",
     },
   ],
   notes: [
     "A travel companion in the same cabin is mandatory for a DPNA passenger.",
-    "SSR DPNA is added up to 12 hours before departure; only window or middle seats for the DPNA passenger, never emergency-exit rows.",
+    "SSR DPNA is added up to 12 hours before departure; seat assignment follows the Guidelines on seat allocation for passengers requiring additional assistance (v81.7 ch.34), never emergency-exit rows.",
     "Rows 29-31 may be free on a non-inclusive fare after SUP/FS approval; additional airport assistance is decided at check-in.",
   ],
 };

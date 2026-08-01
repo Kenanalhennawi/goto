@@ -14,9 +14,9 @@ export const OXYGEN_DEFINITION: DecisionDefinition = {
   procedureSlug: "oxygen",
   procedureTitle: "Oxygen Carry",
   version: 1,
-  sourceVersion: "81.2 (10-Jul-2026)",
+  sourceVersion: "81.7 (30-Jul-2026)",
   sourceChapter: "30. Oxygen Carry",
-  sourcePages: [135, 136, 137, 138],
+  sourcePages: [134, 135, 136, 137],
   questions: QUESTION_SETS["oxygen"],
   rules: [
     {
@@ -26,7 +26,7 @@ export const OXYGEN_DEFINITION: DecisionDefinition = {
       explanation:
         "Only portable, battery-powered oxygen devices are accepted on flydubai; additional oxygen is not provided on board.",
       nextAction: "Do not add the oxygen SSR. A non-portable or non-battery cylinder cannot be carried for onboard use.",
-      sourcePages: [135],
+      sourcePages: [134],
       sourceField: "Portable battery-powered device requirement",
     },
     {
@@ -37,7 +37,7 @@ export const OXYGEN_DEFINITION: DecisionDefinition = {
         "A device not on the flydubai approved list but newly FAA-approved needs approval via Let's Talk at least 72 hours before departure.",
       nextAction:
         "Refer the passenger to letstalk@flydubai.com with model specifications and pictures for approval. Do not confirm or promise acceptance.",
-      sourcePages: [135, 137],
+      sourcePages: [134, 136],
       sourceField: "FAA-newly-approved device approval route",
     },
     {
@@ -51,7 +51,7 @@ export const OXYGEN_DEFINITION: DecisionDefinition = {
         "An original medical (fit-to-fly) certificate with the documented statements must be presented at check-in for a passenger travelling with their own oxygen concentrator.",
       nextAction:
         "Advise the passenger to carry the original medical certificate stating the required oxygen-flow and self-management conditions, to be presented at check-in.",
-      sourcePages: [135],
+      sourcePages: [134],
       sourceField: "Medical (fit-to-fly) certificate requirement",
     },
     {
@@ -66,7 +66,7 @@ export const OXYGEN_DEFINITION: DecisionDefinition = {
         "When the first operating carrier is another airline, written approval from that carrier is required before the SSR can be added.",
       nextAction:
         "Advise the passenger to obtain written approval from the operating carrier and forward it to letstalk@flydubai.com; escalate the case to a Supervisor for follow-up.",
-      sourcePages: [138],
+      sourcePages: [137],
       sourceField: "OAL first-carrier written-approval requirement",
     },
     {
@@ -81,7 +81,7 @@ export const OXYGEN_DEFINITION: DecisionDefinition = {
         "An approved battery-powered concentrator on a flydubai-first journey with the required medical certificate may be handled under the documented process.",
       nextAction:
         "Add SSR PPOC (free of cost), assign a window seat (seat charge per fare type), and comment the PNR with the device type. The device must be battery-powered with sufficient/ spare batteries.",
-      sourcePages: [135, 137],
+      sourcePages: [134, 136],
       sourceField: "Approved-device handling (SSR PPOC, window seat)",
     },
   ],
