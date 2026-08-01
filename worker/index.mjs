@@ -1,11 +1,13 @@
-// PDF Update Studio — background extraction worker (UPD-2.1, complete pipeline).
+// PDF Update Studio — background extraction worker (UPD-2.2, self-healing).
 //
 // Provider-neutral: runs unchanged on Cloud Run (reference), Fly.io, Render or
 // Railway. Uses the service role key, which MUST exist only in the worker
 // environment — never in Vercel, NEXT_PUBLIC_*, the client bundle or the
 // browser.
 //
-// Flow: claim -> validate -> extract -> classify -> stage -> impact -> staged.
+// Flow: claim -> Downloading -> Validating -> Extracting -> Parsing ->
+//       Comparing -> Building impact report -> Ready for review.
+// Crashed runs are reclaimed via heartbeat; transient failures auto-retry.
 // It NEVER publishes chapters, never approves or publishes procedure cards,
 // never edits decision trees, and never deletes a removed chapter.
 
@@ -36,6 +38,31 @@ const BUCKET = "manual-sources";
 const MAX_BYTES = 40 * 1024 * 1024;
 const EXTRACT_TIMEOUT_MS = Number(process.env.EXTRACT_TIMEOUT_MS ?? 15 * 60 * 1000);
 const MAX_OUTPUT_BYTES = 1024 * 1024; // bounded stdout/stderr
+const STALE_AFTER_SECONDS = Number(process.env.STALE_AFTER_SECONDS ?? 900);
+const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS ?? 30000);
+
+// UPD-2.2 progress contract. Stage -> [run state, progress %, label].
+const STAGE = {
+  QUEUED: ["validating", 5, "Queued"],
+  DOWNLOADING: ["validating", 15, "Downloading"],
+  VALIDATING: ["validating", 25, "Validating"],
+  EXTRACTING: ["extracting", 40, "Extracting"],
+  PARSING: ["extracting", 60, "Parsing"],
+  COMPARING: ["extracting", 75, "Comparing"],
+  IMPACT: ["extracting", 90, "Building impact report"],
+  READY: ["staged", 100, "Ready for review"],
+};
+
+// Only these failures are worth retrying automatically; everything else would
+// fail identically on a second attempt (bad PDF, duplicate, older version...).
+const TRANSIENT_ERROR_CODES = new Set([
+  "DOWNLOAD_FAILED",
+  "SNAPSHOT_FAILED",
+  "STAGING_FAILED",
+  "IMPACT_FAILED",
+  "REKEY_FAILED",
+  "EXTRACTION_TIMEOUT",
+]);
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   console.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
@@ -60,12 +87,46 @@ async function setState(runId, state, pct, message, extra = {}) {
   if (error) console.error(`[${runId}] state update failed:`, error.message);
 }
 
+/** Advance to a named pipeline stage (state + bounded progress + label). */
+async function setStage(runId, stage, extra = {}) {
+  const [state, pct, label] = stage;
+  await setState(runId, state, pct, label, { heartbeat_at: new Date().toISOString(), ...extra });
+}
+
+/** Periodic liveness signal so a crashed worker's run can be reclaimed. */
+function startHeartbeat(runId) {
+  const timer = setInterval(() => {
+    supabase
+      .from("sync_runs")
+      .update({ heartbeat_at: new Date().toISOString() })
+      .eq("id", runId)
+      .then(() => {}, () => {});
+  }, HEARTBEAT_MS);
+  if (typeof timer.unref === "function") timer.unref();
+  return () => clearInterval(timer);
+}
+
 /** Safe failure: a stable code plus a short message. Never a stack trace. */
 async function fail(runId, code, detail) {
   console.error(`[${runId}] ${code}`);
+
+  // Transient problems get a bounded automatic retry; requeue_sync_run()
+  // returns false once attempt_count has reached max_attempts.
+  if (TRANSIENT_ERROR_CODES.has(code)) {
+    const { data: requeued } = await supabase.rpc("requeue_sync_run", {
+      p_run_id: runId,
+      p_reason: `${code}: retrying automatically`,
+    });
+    if (requeued === true) {
+      console.log(`[${runId}] requeued after transient ${code}`);
+      return;
+    }
+  }
+
   await setState(runId, "failed", 100, "Extraction failed", {
     error_code: code,
     error_detail: String(detail ?? "").slice(0, 300),
+    heartbeat_at: new Date().toISOString(),
     completed_at: new Date().toISOString(),
   });
 }
@@ -153,12 +214,13 @@ async function rekeyPdf(runId, pendingPath, version, sha256) {
 async function processRun(run) {
   const runId = run.id;
   let workDir = null;
+  const stopHeartbeat = startHeartbeat(runId);
 
   try {
     workDir = await mkdtemp(join(tmpdir(), "goto-sync-"));
 
     // ---- 1. Download (10%) ----
-    await setState(runId, "validating", 10, "Downloading uploaded PDF");
+    await setStage(runId, STAGE.DOWNLOADING);
     const { data: blob, error: dlError } = await supabase.storage.from(BUCKET).download(run.pdf_path);
     if (dlError || !blob) throw new WorkerError("DOWNLOAD_FAILED", "Could not download the uploaded PDF.");
     const buffer = Buffer.from(await blob.arrayBuffer());
@@ -173,10 +235,10 @@ async function processRun(run) {
     const sha256 = createHash("sha256").update(buffer).digest("hex");
     const pdfPath = join(workDir, "manual.pdf");
     await writeFile(pdfPath, buffer);
-    await setState(runId, "validating", 15, "Validating manual", { pdf_sha256: sha256 });
+    await setStage(runId, STAGE.VALIDATING, { pdf_sha256: sha256 });
 
     // ---- 3. Extract (25-70%) ----
-    await setState(runId, "extracting", 25, "Extracting chapters", {
+    await setStage(runId, STAGE.EXTRACTING, {
       started_at: run.started_at ?? new Date().toISOString(),
       extractor_version: EXTRACTOR_VERSION,
     });
@@ -186,7 +248,8 @@ async function processRun(run) {
     if (contract.source.sha256 !== sha256) {
       throw new WorkerError("HASH_MISMATCH", "Extracted file hash does not match the stored PDF.");
     }
-    await setState(runId, "extracting", 70, `Extracted ${contract.chapters.length} chapters`, {
+    // Parsing: the extractor output has been validated against the contract.
+    await setStage(runId, STAGE.PARSING, {
       pdf_page_count: contract.source.pageCount,
       pdf_version: contract.source.version,
       pdf_version_date: contract.source.versionDate,
@@ -212,7 +275,7 @@ async function processRun(run) {
     if (!gate.allowed) throw new WorkerError(gate.errorCode, gate.error);
 
     // ---- 5. Snapshot live chapters + classify (75%) ----
-    await setState(runId, "extracting", 75, "Comparing against live chapters");
+    await setStage(runId, STAGE.COMPARING);
     const { data: liveChapters, error: liveError } = await supabase
       .from("chapters")
       .select("id, slug, title, chapter_number, body_text, search_keywords, page_start, page_end, source_version");
@@ -245,7 +308,7 @@ async function processRun(run) {
     const bySlug = new Map(contract.chapters.map((c) => [c.slug, c]));
 
     // ---- 6. Stage rows (80-90%) — replace any prior incomplete attempt ----
-    await setState(runId, "extracting", 80, "Writing staged changes");
+    await setStage(runId, STAGE.COMPARING, { progress_message: "Comparing" });
     await supabase.from("sync_staged_changes").delete().eq("sync_run_id", runId);
 
     const stagedRows = diffs.map((d) => {
@@ -284,7 +347,7 @@ async function processRun(run) {
     }
 
     // ---- 7. Impact report (90-98%) ----
-    await setState(runId, "extracting", 90, "Building impact report");
+    await setStage(runId, STAGE.IMPACT);
     const { data: cardRows } = await supabase
       .from("procedure_cards")
       .select("slug, title, chapter_id, source_version, review_status, is_published");
@@ -310,16 +373,17 @@ async function processRun(run) {
       requires_manual_review: i.requiresManualReview,
     }));
     for (let i = 0; i < impactRows.length; i += 100) {
-      await supabase.from("sync_impact_report").insert(impactRows.slice(i, i + 100));
+      const { error } = await supabase.from("sync_impact_report").insert(impactRows.slice(i, i + 100));
+      if (error) throw new WorkerError("IMPACT_FAILED", "Could not write the impact report.");
     }
 
     // ---- 8. Archive the PDF and finish (100%) ----
-    await setState(runId, "extracting", 98, "Archiving source PDF");
     await rekeyPdf(runId, run.pdf_path, contract.source.version, sha256);
 
     const changed = diffs.filter((d) => d.changeClass !== "unchanged").length;
     const added = diffs.filter((d) => d.changeClass === "new").length;
-    await setState(runId, "staged", 100, `Ready for review — ${changed} chapter(s) changed`, {
+    await setStage(runId, STAGE.READY, {
+      progress_message: `Ready for review — ${changed} chapter(s) changed`,
       status: "review",
       chapters_changed: changed,
       chapters_added: added,
@@ -334,6 +398,7 @@ async function processRun(run) {
     const detail = error instanceof WorkerError ? error.message : "Unexpected worker error.";
     await fail(runId, code, detail);
   } finally {
+    stopHeartbeat();
     if (workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
 }
@@ -357,7 +422,10 @@ async function loadWorkflows() {
 // Poll loop — concurrency-safe claim
 // ---------------------------------------------------------------------------
 async function tick() {
-  const { data, error } = await supabase.rpc("claim_sync_run", { p_worker_id: WORKER_ID });
+  const { data, error } = await supabase.rpc("claim_sync_run", {
+    p_worker_id: WORKER_ID,
+    p_stale_after_seconds: STALE_AFTER_SECONDS,
+  });
   if (error) {
     console.error("claim_sync_run failed:", error.message);
     return;

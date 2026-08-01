@@ -73,9 +73,18 @@ def page_count(pdf_path: str) -> int:
 
 
 def pdf_pages_text(pdf_path: str) -> list[str]:
-    """Layout-preserved text, one entry per page."""
+    """Layout-preserved text, one entry per page.
+
+    pdftotext terminates the final page with a form feed, so a naive split
+    yields a trailing empty element. Dropping it keeps len(pages) equal to the
+    real page count — otherwise the last chapter's pageEnd overshoots and the
+    extraction contract (correctly) rejects the output.
+    """
     text = run(["pdftotext", "-layout", pdf_path, "-"])
-    return text.split("\f")
+    pages = text.split("\f")
+    while pages and not pages[-1].strip():
+        pages.pop()
+    return pages
 
 
 def parse_version(first_pages: list[str]) -> tuple[str | None, str | None, str | None]:
