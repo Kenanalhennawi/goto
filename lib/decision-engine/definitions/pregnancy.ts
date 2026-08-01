@@ -1,9 +1,15 @@
 // Pregnancy decision tree.
-// Source of truth: The GO TO document v80.8 (23-Jun-2026),
-// chapter 42 "Pregnancy", page 259. Rules transcribed verbatim:
+// Source of truth: The GO TO document v81.7 (30-Jul-2026),
+// chapter 43 "Pregnancy", page 257. Rules transcribed verbatim:
 //   Single uncomplicated:  0-28 no certificate | 29-36 certificate | 37+ not allowed
 //   Multiple uncomplicated: 0-28 no certificate | 29-32 certificate | 33+ not allowed
 // Medical and airport authority decisions always stand.
+//
+// UPD-1 metadata-only alignment: the v81.7 chapter body is byte-identical to
+// the previously verified text — the only differences are the chapter number
+// (42 -> 43, from the ch.34 Accessibility insertion) and the page (259 -> 257,
+// the -2 shift). No question, rule, outcome, explanation or next action was
+// changed.
 
 import { QUESTION_SETS } from "../questions.ts";
 import type { DecisionDefinition } from "../evaluator.ts";
@@ -12,9 +18,9 @@ export const PREGNANCY_DEFINITION: DecisionDefinition = {
   procedureSlug: "pregnancy",
   procedureTitle: "Pregnancy",
   version: 1,
-  sourceVersion: "80.8 (23-Jun-2026)",
-  sourceChapter: "42. Pregnancy",
-  sourcePages: [259],
+  sourceVersion: "81.7 (30-Jul-2026)",
+  sourceChapter: "43. Pregnancy",
+  sourcePages: [257],
   questions: QUESTION_SETS["pregnancy"],
   rules: [
     {

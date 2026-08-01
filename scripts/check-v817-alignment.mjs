@@ -13,10 +13,13 @@ const { OPERATIONAL_CONCEPTS } = await import("../lib/operational-intelligence/c
 const { resolveOperationalIntelligence } = await import("../lib/operational-intelligence/resolve.ts");
 const { evaluate } = await import("../lib/decision-engine/evaluator.ts");
 
-// ---- 1. Every workflow is version-aligned to v81.7 (pregnancy stays 80.8) ----
+// ---- 1. EVERY workflow is version-aligned to v81.7 (no exemptions) ----
 for (const [slug, def] of Object.entries(DECISION_DEFINITIONS)) {
-  const expected = slug === "pregnancy" ? "80.8 (23-Jun-2026)" : "81.7 (30-Jul-2026)";
-  assert.equal(def.sourceVersion, expected, `${slug} sourceVersion must be ${expected}`);
+  assert.equal(
+    def.sourceVersion,
+    "81.7 (30-Jul-2026)",
+    `${slug} sourceVersion must be 81.7 (30-Jul-2026)`
+  );
 }
 assert.equal(Object.keys(DECISION_DEFINITIONS).length, 26, "still exactly 26 workflows");
 
@@ -30,6 +33,9 @@ assert.ok(DECISION_DEFINITIONS["extra-seat-cbbg"].sourceChapter.startsWith("33."
 assert.deepEqual(DECISION_DEFINITIONS["sporting-equipment"].sourcePages, [126, 127, 128, 129]);
 assert.equal(DECISION_DEFINITIONS["wheelchair"].sourcePages[0], 164, "wheelchair starts p.164 in v81.7");
 assert.equal(DECISION_DEFINITIONS["dpna"].sourcePages[0], 170, "dpna starts p.170 in v81.7");
+// Pregnancy: ch.42 -> 43 (Accessibility insertion) and p.259 -> 257 (-2 shift).
+assert.ok(DECISION_DEFINITIONS["pregnancy"].sourceChapter.startsWith("43."), "pregnancy must cite ch.43");
+assert.deepEqual(DECISION_DEFINITIONS["pregnancy"].sourcePages, [257], "pregnancy cites p.257 in v81.7");
 
 // ---- 3. No SPEX anywhere in live decision/search/OI code ----
 const liveFiles = [];
@@ -98,6 +104,43 @@ assert.equal(
   "Not permitted"
 );
 
+// ---- 5b. Pregnancy: metadata-only alignment, rules untouched, workflow available ----
+const { getWorkflowAvailability } = await import("../lib/decision-engine/availability.ts");
+const PREG = DECISION_DEFINITIONS["pregnancy"];
+// Card 81.7 + tree 81.7 + linked chapter 81.7 => workflow available.
+const pregAvailable = getWorkflowAvailability({
+  slug: "pregnancy",
+  is_published: true,
+  review_status: "approved",
+  source_version: "81.7 (30-Jul-2026)",
+  last_reviewed_at: "2026-08-01T00:00:00.000Z",
+  chapters: { source_version: "81.7 (30-Jul-2026)", updated_at: "2026-07-30T00:00:00.000Z" },
+});
+assert.equal(pregAvailable.status, "available", "pregnancy must be available once card+tree+chapter are 81.7");
+assert.equal(pregAvailable.available, true);
+assert.equal(pregAvailable.hasTree, true);
+// A card still on the old version stays gated (guard still works).
+assert.equal(
+  getWorkflowAvailability({
+    slug: "pregnancy",
+    is_published: true,
+    review_status: "approved",
+    source_version: "80.8 (23-Jun-2026)",
+  }).status,
+  "unavailable_source_mismatch"
+);
+// Operational rules are byte-for-byte unchanged by the metadata alignment.
+assert.equal(PREG.rules.length, 6, "pregnancy still has exactly 6 rules");
+const pregOutcome = (type, week) =>
+  evaluate(PREG, { pregnancy_type: type, pregnancy_week: week }).outcome;
+assert.equal(pregOutcome("Single", 28), "Can proceed");
+assert.equal(pregOutcome("Single", 29), "Requires document");
+assert.equal(pregOutcome("Single", 36), "Requires document");
+assert.equal(pregOutcome("Single", 37), "Not permitted");
+assert.equal(pregOutcome("Multiple", 28), "Can proceed");
+assert.equal(pregOutcome("Multiple", 32), "Requires document");
+assert.equal(pregOutcome("Multiple", 33), "Not permitted");
+
 // ---- 6. OI/search vocabulary ----
 const sporting = OPERATIONAL_CONCEPTS.find((c) => c.id === "sporting-equipment");
 assert.ok(!JSON.stringify(sporting).match(/"spex"/), "OI must not route spex");
@@ -128,7 +171,17 @@ for (const line of searchSrc.split("\n").filter((l) => /spex/i.test(l))) {
 const sql = read("supabase/seed_upd1_v817_alignment.sql");
 assert.ok(sql.includes("needs_review"), "content-changed cards must be gated for review");
 assert.ok(!sql.includes("is_published = true,") && !/set\s+is_published\s*=\s*true/i.test(sql), "SQL must not auto-publish");
-assert.ok(!sql.match(/'pregnancy'/), "pregnancy card must not be bumped");
 assert.ok(sql.includes("81.7 (30-Jul-2026)"), "SQL must align to 81.7");
+// Pregnancy is included as METADATA-ONLY: version/pages/chapter link only, and
+// its review_status / is_published are never written (existing state preserved).
+const pregBlock = sql.slice(sql.indexOf("4b. Pregnancy"), sql.indexOf("5. Post-run"));
+assert.ok(pregBlock.includes("where slug = 'pregnancy'"), "pregnancy metadata alignment missing");
+assert.ok(pregBlock.includes("source_version = '81.7 (30-Jul-2026)'"), "pregnancy must be aligned to 81.7");
+assert.ok(pregBlock.includes("array[257]"), "pregnancy pages must be 257");
+assert.ok(!/review_status\s*=/.test(pregBlock), "pregnancy state must not be re-approved or reset");
+assert.ok(!/is_published\s*=/.test(pregBlock), "pregnancy publish state must be preserved");
+for (const field of ["summary", "allowed", "not_allowed", "system_steps", "fees_charges", "passenger_advice", "cut_off_time"]) {
+  assert.ok(!new RegExp(`${field}\\s*=`).test(pregBlock), `pregnancy operational field '${field}' must not be modified`);
+}
 
 console.log("v81.7 alignment checks passed.");

@@ -78,7 +78,8 @@ const typeQ = pregnancyQs.find((q) => q.id === "pregnancy_type");
 assert.equal(validateAnswer(typeQ, "Single"), null);
 assert.ok(validateAnswer(typeQ, "Quadruple"));
 
-// ---- Phase C: pregnancy tree fixtures (verified: GO TO v80.8 ch.42 p.259) ----
+// ---- Phase C: pregnancy tree fixtures (verified: GO TO v81.7 ch.43 p.257;
+//      body byte-identical to the earlier v80.8/v81.2 text) ----
 const { evaluate } = await import("../lib/decision-engine/evaluator.ts");
 const { PREGNANCY_DEFINITION } = await import("../lib/decision-engine/definitions/pregnancy.ts");
 
@@ -588,14 +589,26 @@ assert.equal(availNoTree.status, "unavailable_no_tree");
 assert.equal(availNoTree.hasTree, false);
 assert.equal(availNoTree.safeMessage, ""); // nothing to show
 
-// Pregnancy tree is verified against 80.8, so an 80.8 approved card is available.
+// Pregnancy tree is aligned to v81.7 (UPD-1 metadata-only), so an 81.7
+// approved+published card makes the workflow available.
 const availPreg = getWorkflowAvailability({
   slug: "pregnancy",
   is_published: true,
   review_status: "approved",
-  source_version: "80.8 (23-Jun-2026)",
+  source_version: "81.7 (30-Jul-2026)",
 });
 assert.equal(availPreg.status, "available");
+assert.equal(availPreg.available, true);
+// A card left behind at 80.8 must now be gated (version mismatch vs the tree).
+assert.equal(
+  getWorkflowAvailability({
+    slug: "pregnancy",
+    is_published: true,
+    review_status: "approved",
+    source_version: "80.8 (23-Jun-2026)",
+  }).status,
+  "unavailable_source_mismatch"
+);
 
 // Direct-link preselect fallback (Phase G): /decision?procedure=<slug> can be
 // opened with no card info (e.g. before cards are published). The preselect

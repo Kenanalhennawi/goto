@@ -74,7 +74,6 @@ where slug = 'dpna';
 
 -- ---------- 4. Metadata-only alignment for the remaining workflow cards ------
 -- Content verified source-identical in the UPD-1 audit (pages shift only).
--- Pregnancy is intentionally excluded (tree remains verified against v80.8).
 update procedure_cards set
   source_version = '81.7 (30-Jul-2026)',
   updated_at = now()
@@ -87,9 +86,38 @@ where slug in (
 )
 and review_status = 'approved';
 
+-- ---------- 4b. Pregnancy — metadata-only alignment (v81.7 ch.43 p.257) ------
+-- The v81.7 chapter body is byte-identical to the previously verified text; the
+-- only changes are the chapter number (42 -> 43) and page (259 -> 257). No
+-- operational card content is touched here, and review_status / is_published
+-- are deliberately NOT written, so whatever state the card is in is preserved
+-- (an already approved+published card stays approved+published and simply
+-- becomes version-matched to the tree again).
+update procedure_cards set
+  source_version = '81.7 (30-Jul-2026)',
+  source_pages = array[257],
+  updated_at = now()
+where slug = 'pregnancy';
+
+-- Re-link the pregnancy card to the v81.7 chapter row if the chapter slug is
+-- known (no-op when the link is already correct). Content is untouched.
+update procedure_cards pc set
+  chapter_id = c.id,
+  updated_at = now()
+from chapters c
+where pc.slug = 'pregnancy'
+  and c.chapter_number = 43
+  and c.source_version like '81.7%'
+  and (pc.chapter_id is distinct from c.id);
+
 -- ---------- 5. Post-run verification ----------
 -- select slug, source_version, review_status from procedure_cards
---   where slug in ('sporting-equipment','wheelchair','dpna') order by slug;
--- select count(*) from procedure_cards where source_version like '81.2%';
+--   where slug in ('sporting-equipment','wheelchair','dpna','pregnancy') order by slug;
+-- select count(*) from procedure_cards where source_version like '81.2%' or source_version like '80.%';
+-- Pregnancy must be version-matched to its chapter and keep its prior state:
+-- select pc.slug, pc.source_version, pc.review_status, pc.is_published,
+--        c.chapter_number, c.source_version as chapter_version
+--   from procedure_cards pc left join chapters c on c.id = pc.chapter_id
+--   where pc.slug = 'pregnancy';
 -- After manual review, approve the three needs_review cards in Admin so their
 -- guided workflows become available again (tree versions are already 81.7).
