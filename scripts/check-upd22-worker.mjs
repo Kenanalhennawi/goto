@@ -193,6 +193,81 @@ assert.ok(/raise ExtractionError\("EMPTY_OUTPUT", "pdftotext returned no text"\)
 assert.ok(/NO_TEXT_LAYER/.test(extractPy), "empty text layer must raise a proper error");
 
 // ===========================================================================
+// 9c. UPD-2.4: cross-platform extractor script paths
+// ===========================================================================
+{
+  const { fileURLToPath } = await import("node:url");
+  const { resolve, isAbsolute } = await import("node:path");
+
+  // (a) fileURLToPath is imported and used for the default tools directory.
+  assert.ok(/import \{ fileURLToPath \} from "node:url"/.test(worker), "worker must import fileURLToPath");
+  assert.ok(/import \{[^}]*\bresolve\b[^}]*\} from "node:path"/.test(worker), "worker must import resolve from node:path");
+  assert.ok(
+    /const DEFAULT_TOOLS_DIR = fileURLToPath\(new URL\("\.\.\/tools\/extraction\/", import\.meta\.url\)\)/.test(worker),
+    "default tools dir must use fileURLToPath"
+  );
+  assert.ok(
+    /const TOOLS_DIR = process\.env\.TOOLS_DIR \? resolve\(process\.env\.TOOLS_DIR\) : DEFAULT_TOOLS_DIR/.test(worker),
+    "TOOLS_DIR override must be resolved to an absolute native path"
+  );
+
+  // (b) No raw URL.pathname is used for ANY filesystem path.
+  const workerCode = worker
+    .split("\n")
+    .filter((l) => !l.trim().startsWith("//"))
+    .join("\n");
+  assert.ok(!/new URL\([^)]*\)\.pathname/.test(workerCode), "URL.pathname must never be used as a filesystem path");
+  assert.ok(!/\.pathname/.test(workerCode), "worker must not read .pathname at all");
+
+  // (c) The Windows conversion produces a native drive-letter path, NOT "/C:/...".
+  const winUrl = new URL("../tools/extraction/", "file:///C:/Users/domin/goto/worker/index.mjs");
+  const winPathname = winUrl.pathname; // the old, broken behaviour
+  const winNative = fileURLToPath(winUrl, { windows: true }); // the fix
+  assert.equal(winPathname, "/C:/Users/domin/goto/tools/extraction/", "sanity: pathname is the broken form");
+  assert.ok(/^[A-Za-z]:\\/.test(winNative), `Windows path must start with a drive letter (got ${winNative})`);
+  assert.ok(!winNative.startsWith("/"), "Windows path must not keep the leading slash");
+  assert.ok(winNative.includes("\\tools\\extraction"), "Windows path must use native separators");
+
+  // (d) Linux behaviour is unchanged.
+  const posixUrl = new URL("../tools/extraction/", "file:///srv/app/worker/index.mjs");
+  const posixNative = fileURLToPath(posixUrl, { windows: false });
+  assert.equal(posixNative, "/srv/app/tools/extraction/", "POSIX path must be unchanged");
+  assert.equal(posixNative, posixUrl.pathname, "on POSIX, fileURLToPath matches the old behaviour");
+
+  // (e) TOOLS_DIR override still works and stays absolute.
+  const overridden = resolve("./tools/extraction");
+  assert.ok(isAbsolute(overridden), "an overridden TOOLS_DIR must resolve to an absolute path");
+
+  // (f) Missing scripts raise the dedicated code, never generic EXTRACTION_FAILED.
+  assert.ok(/import \{[^}]*\baccess\b[^}]*\} from "node:fs\/promises"/.test(worker), "worker must import fs access");
+  assert.ok(/await access\(script\)/.test(worker), "worker must verify each script exists");
+  assert.ok(/"EXTRACTOR_SCRIPT_MISSING"/.test(worker), "missing scripts need a dedicated error code");
+  const preflight = worker.slice(worker.indexOf("for (const script of scripts)"), worker.indexOf("await execFileAsync"));
+  assert.ok(preflight.includes("EXTRACTOR_SCRIPT_MISSING"), "existence check must run BEFORE execFile");
+  assert.ok(!preflight.includes("EXTRACTION_FAILED"), "the preflight must not use the generic code");
+
+  // (g) execFile safety options are retained.
+  assert.ok(/shell: false/.test(worker) && /windowsHide: true/.test(worker), "execFile safety flags must remain");
+  assert.ok(/timeout: EXTRACT_TIMEOUT_MS/.test(worker) && /maxBuffer: MAX_OUTPUT_BYTES/.test(worker), "limits must remain");
+
+  // (h) Diagnostics log the code and basename only — never paths or secrets.
+  assert.ok(/basename\(script\)/.test(worker), "diagnostics must log the script basename");
+  assert.ok(!/console\.(error|log)\([^)]*TOOLS_DIR/.test(worker), "must not log the tools directory");
+  assert.ok(!/console\.(error|log)\([^)]*stderr/.test(worker), "must never log raw stderr");
+  // No console call may interpolate a secret VALUE or a filesystem path.
+  // (Naming the required env var in the startup message is fine.)
+  for (const leak of [
+    /console\.(error|log)\([^)]*\$\{SERVICE_ROLE_KEY/,
+    /console\.(error|log)\([^)]*\$\{SUPABASE_URL/,
+    /console\.(error|log)\([^)]*\$\{pdfPath/,
+    /console\.(error|log)\([^)]*\$\{workDir/,
+    /console\.(error|log)\([^)]*\$\{script\}/,
+  ]) {
+    assert.ok(!leak.test(worker), `diagnostics must not interpolate ${leak}`);
+  }
+}
+
+// ===========================================================================
 // 10. Verification harness
 // ===========================================================================
 assert.ok(existsSync(new URL("../scripts/verify-extraction-pipeline.mjs", import.meta.url)), "verifier must exist");

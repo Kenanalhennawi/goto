@@ -13,9 +13,10 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 
@@ -32,7 +33,13 @@ const WORKER_ID = process.env.WORKER_ID ?? `worker-${process.pid}`;
 const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS ?? 15000);
 const EXTRACTOR_VERSION = process.env.EXTRACTOR_VERSION ?? "upd2-1";
 const PYTHON_BIN = process.env.PYTHON_BIN ?? "python3";
-const TOOLS_DIR = process.env.TOOLS_DIR ?? new URL("../tools/extraction/", import.meta.url).pathname;
+// UPD-2.4: derive a NATIVE filesystem path. URL.pathname yields "/C:/..." on
+// Windows, which is a valid URL path but an invalid file path, so Python was
+// handed a script argument it could not open. fileURLToPath() converts the
+// file: URL correctly on every platform; an explicit TOOLS_DIR override is
+// resolved to an absolute native path.
+const DEFAULT_TOOLS_DIR = fileURLToPath(new URL("../tools/extraction/", import.meta.url));
+const TOOLS_DIR = process.env.TOOLS_DIR ? resolve(process.env.TOOLS_DIR) : DEFAULT_TOOLS_DIR;
 
 const BUCKET = "manual-sources";
 const MAX_BYTES = 40 * 1024 * 1024;
@@ -147,6 +154,23 @@ async function runExtractor(pdfPath, outDir) {
     join(TOOLS_DIR, "attach_pdf_links.py"),
   ];
 
+  // UPD-2.4: fail fast and distinctly when the tools are not where we think
+  // they are (bad TOOLS_DIR, incomplete image, path-portability bug). Without
+  // this, a missing script surfaced as the generic EXTRACTION_FAILED, which is
+  // indistinguishable from a genuinely unreadable PDF.
+  for (const script of scripts) {
+    try {
+      await access(script);
+    } catch {
+      // Log the basename only — never the absolute path or any secret.
+      console.error(`extractor script missing: ${basename(script)}`);
+      throw new WorkerError(
+        "EXTRACTOR_SCRIPT_MISSING",
+        `Extractor script ${basename(script)} was not found. Check TOOLS_DIR.`
+      );
+    }
+  }
+
   for (const script of scripts) {
     try {
       // execFile (not exec): arguments are passed as an array, so a hostile
@@ -170,6 +194,9 @@ async function runExtractor(pdfPath, outDir) {
       } catch {
         /* keep the generic code */
       }
+      // Safe diagnostics: stable code + script basename only. Never the full
+      // stderr, the PDF content, absolute paths, secrets or a stack trace.
+      console.error(`extractor ${basename(script)} failed: ${code}`);
       throw new WorkerError(code, "The extractor could not process this PDF.");
     }
   }
