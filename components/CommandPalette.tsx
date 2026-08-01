@@ -46,6 +46,9 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<UnifiedSearchResult[]>([]);
+  // AUTH-UX-1 defense-in-depth: distinguish "signed out" from "no matches".
+  // Unreachable once the layout only mounts this for an authenticated session.
+  const [authRequired, setAuthRequired] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [recent, setRecent] = useState<string[]>([]);
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
@@ -144,7 +147,15 @@ export function CommandPalette() {
         const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
           signal: controller.signal,
         });
+        // An unauthenticated/forbidden response is NOT an empty result set.
+        if (res.status === 401 || res.status === 403) {
+          setAuthRequired(true);
+          setResults([]);
+          setActiveIndex(0);
+          return;
+        }
         const json = (await res.json()) as { results?: UnifiedSearchResult[] };
+        setAuthRequired(false);
         setResults(json.results ?? []);
         setActiveIndex(0);
       } catch {
@@ -391,6 +402,10 @@ export function CommandPalette() {
               <div className="skeleton h-12" />
               <div className="skeleton h-12" />
             </div>
+          ) : authRequired ? (
+            <p className="px-3 py-6 text-center text-sm text-ink-muted">
+              Sign in required. This is an internal operational tool.
+            </p>
           ) : items.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-ink-muted">
               No matches. Try an SSR code, service name, or passenger issue.

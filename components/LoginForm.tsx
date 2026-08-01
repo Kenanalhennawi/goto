@@ -38,10 +38,10 @@ export function LoginForm() {
   return (
     <div className="w-full max-w-sm">
       <h1 className="mb-1 font-display text-2xl font-semibold text-ink">
-        Quality team sign in
+        Sign in to GO TO
       </h1>
       <p className="mb-8 text-sm text-ink-muted">
-        For editing chapters and reviewing PDF syncs. Agents do not need an account to browse.
+        This is an internal operational tool. Sign in with your authorised account to continue.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -93,11 +93,10 @@ export function LoginForm() {
           {loading ? "Signing in..." : "Sign in"}
         </button>
       </form>
+      {/* AUTH-UX-1: public signup is intentionally unavailable — accounts are
+          provisioned by an administrator. No signup link is shown. */}
       <p className="mt-5 text-center text-sm text-ink-muted">
-        Need access?{" "}
-        <Link href="/signup" className="font-semibold text-accent">
-          Create an account
-        </Link>
+        Accounts are provided by your administrator.
       </p>
     </div>
   );

@@ -3,6 +3,7 @@ import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { CommandPalette } from "@/components/CommandPalette";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 const display = Space_Grotesk({
   variable: "--font-display",
@@ -27,11 +28,20 @@ export const metadata: Metadata = {
   description: "Searchable product & process guide for flydubai Contact Centre agents",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // AUTH-UX-1: operational search surfaces are mounted only for an
+  // authenticated session, so signed-out public auth pages never load the
+  // command palette, never bind operational keyboard shortcuts and never
+  // issue a /api/search request. Route protection stays in proxy.ts.
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <html
       lang="en"
@@ -42,8 +52,12 @@ export default function RootLayout({
           Skip to content
         </a>
         {children}
-        <CommandPalette />
-        <KeyboardShortcuts />
+        {user ? (
+          <>
+            <CommandPalette />
+            <KeyboardShortcuts />
+          </>
+        ) : null}
       </body>
     </html>
   );

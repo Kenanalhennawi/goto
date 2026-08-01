@@ -25,6 +25,35 @@ export async function SiteHeader() {
   const displayName = role?.full_name ?? user?.email ?? null;
   const showAdmin = canAccessAdmin(roleName);
 
+  // AUTH-UX-1: signed out, GO TO is an internal tool with nothing to browse.
+  // Render identity only — no operational navigation, no search trigger, no
+  // admin entry. The authenticated branch below is unchanged.
+  if (!user) {
+    return (
+      <header className="glass-dark sticky top-0 z-40 border-b border-white/10">
+        <div className="flex h-13 items-center justify-between gap-3 px-4">
+          <span className="flex shrink-0 items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-accent font-display text-[10px] font-bold text-white">
+              FZ
+            </span>
+            <span className="flex flex-col leading-tight">
+              <span className="font-display text-sm font-semibold text-white">GO TO</span>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-white/45">
+                Contact Centre Guide
+              </span>
+            </span>
+          </span>
+          <Link
+            href="/login"
+            className="press rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent-dim"
+          >
+            Sign in
+          </Link>
+        </div>
+      </header>
+    );
+  }
+
   // Agent Mode navigation: plain-language, task-first labels only. No admin
   // terminology, chapter/source metadata, or internal statuses.
   const navItems: SidebarNavItem[] = [
