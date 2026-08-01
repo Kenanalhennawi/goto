@@ -36,8 +36,24 @@ for (const header of [
 ]) {
   assert.ok(proxy.includes(header), `security header ${header} missing`);
 }
-// Protected pages must not be browser-cacheable (Back button after logout).
-assert.ok(proxy.includes('"Cache-Control", "no-store, max-age=0"'), "protected pages must send no-store");
+// ---- Cache posture (SEC-1.1) ----
+// Protected pages (and login redirects) must not be cacheable anywhere.
+assert.ok(proxy.includes('"Cache-Control", "private, no-store, max-age=0"'), "protected pages must send private, no-store, max-age=0");
+// Every protected API response — including the middleware 401 — is private.
+// The middleware sets this because edge headers override route-handler headers,
+// which is how the platform default (public, max-age=0, must-revalidate) was
+// previously leaking onto the 401.
+assert.ok(proxy.includes('"Cache-Control", "private, no-store"'), "protected API responses must send private, no-store");
+assert.ok(proxy.includes('"protected-api"') && proxy.includes('"protected-page"') && proxy.includes('"public-page"'), "response classes missing");
+// The 401 branch and the redirect branch must both be classified as protected.
+assert.ok(/status: 401[\s\S]{0,40}\),\s*"protected-api"/.test(proxy), "middleware 401 must be protected-api classified");
+assert.ok(/NextResponse\.redirect\(loginUrl\), "protected-page"/.test(proxy), "login redirect must be protected-page classified");
+// No protected response may ever be marked public.
+assert.ok(!proxy.includes('"Cache-Control", "public'), "no protected response may set a public cache header");
+// Route-level defense-in-depth stays: authenticated /api/search payloads are
+// also private, no-store at the handler level.
+const searchRoute = read("app/api/search/route.ts");
+assert.ok(searchRoute.includes('"Cache-Control": "private, no-store"'), "search route must keep private, no-store on authenticated responses");
 
 // ---- Safe redirect helper behavior (runtime) ----
 const { safeRelativePath } = await import("../lib/auth/safe-redirect.ts");

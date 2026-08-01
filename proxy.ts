@@ -25,7 +25,18 @@ function isPublicPath(pathname: string) {
   );
 }
 
-function applySecurityHeaders(response: NextResponse, isProtectedPage: boolean) {
+// Response class drives the cache posture:
+//  "public-page"    — auth pages; framework caching left untouched.
+//  "protected-page" — internal pages + login redirects: private, no-store, max-age=0.
+//  "protected-api"  — every protected API response (401/403/success/error):
+//                     private, no-store. Set here because edge/middleware headers
+//                     take precedence over route-handler headers on Vercel, which
+//                     is exactly how the platform default (public, max-age=0,
+//                     must-revalidate) was previously overwriting the route's own
+//                     private/no-store on the 401 path.
+type ResponseClass = "public-page" | "protected-page" | "protected-api";
+
+function applySecurityHeaders(response: NextResponse, kind: ResponseClass) {
   const headers = response.headers;
   headers.set("X-Frame-Options", "DENY");
   headers.set("X-Content-Type-Options", "nosniff");
@@ -48,10 +59,13 @@ function applySecurityHeaders(response: NextResponse, isProtectedPage: boolean) 
       "object-src 'none'",
     ].join("; ")
   );
-  if (isProtectedPage) {
-    // Internal pages must never be recoverable from the browser cache (e.g.
-    // via the Back button after logout). Server-side caching is unaffected.
-    headers.set("Cache-Control", "no-store, max-age=0");
+  if (kind === "protected-page") {
+    // Internal pages (and redirects to /login) must never be cacheable by the
+    // browser or any shared cache. Server-side ISR caching is unaffected.
+    headers.set("Cache-Control", "private, no-store, max-age=0");
+  } else if (kind === "protected-api") {
+    // Protected API responses — including the middleware 401 — are private.
+    headers.set("Cache-Control", "private, no-store");
   }
   return response;
 }
@@ -93,7 +107,7 @@ export async function proxy(request: NextRequest) {
           { error: "Authentication required", errorCode: "AUTH_REQUIRED" },
           { status: 401 }
         ),
-        false
+        "protected-api"
       );
     }
     const loginUrl = request.nextUrl.clone();
@@ -101,10 +115,16 @@ export async function proxy(request: NextRequest) {
     loginUrl.search = "";
     const next = safeRelativePath(`${pathname}${search}`);
     if (next !== "/") loginUrl.searchParams.set("next", next);
-    return applySecurityHeaders(NextResponse.redirect(loginUrl), false);
+    // The redirect itself must not be publicly cacheable.
+    return applySecurityHeaders(NextResponse.redirect(loginUrl), "protected-page");
   }
 
-  return applySecurityHeaders(response, !publicRoute && !isApi);
+  const kind: ResponseClass = publicRoute
+    ? "public-page"
+    : isApi
+      ? "protected-api"
+      : "protected-page";
+  return applySecurityHeaders(response, kind);
 }
 
 export const config = {
