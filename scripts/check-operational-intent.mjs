@@ -231,7 +231,58 @@ const firearmsSql = read("supabase/seed_ops21_firearms_reference_card.sql");
 for (const token of ["'firearms-ammunition'", "AED 300", "WEAP", "4 working days", "5kg", "81.7 (30-Jul-2026)", "array[130, 131, 132]"]) {
   assert.ok(firearmsSql.includes(token), `Firearms card seed missing ${token}`);
 }
-assert.ok(!/questions|outcome|decision tree|evaluator/i.test(firearmsSql.replace(/--.*$/gm, "")), "seed must not add workflow logic");
+const firearmsSqlCode = firearmsSql.replace(/--.*$/gm, "");
+assert.ok(!/questions|outcome|decision tree|evaluator/i.test(firearmsSqlCode), "seed must not add workflow logic");
+
+// ---- OPS-2.1 card lifecycle: review required, never auto-published --------
+assert.ok(firearmsSqlCode.includes("'needs_review'"), "card must be seeded as needs_review");
+assert.ok(firearmsSqlCode.includes("'source_backed'"), "card must be marked source_backed");
+assert.ok(!/'approved'/.test(firearmsSqlCode), "seed must not auto-approve the card");
+assert.ok(!/\btrue\b/.test(firearmsSqlCode), "seed must not auto-publish the card (no is_published = true)");
+// The inserted values tuple ends with the lifecycle pair: needs_review, false.
+assert.ok(/'needs_review',\s*false/.test(firearmsSqlCode), "is_published must be seeded false");
+assert.ok(/is_published/.test(firearmsSqlCode), "is_published column must be set explicitly");
+// Idempotent re-runs refresh content only — lifecycle columns are never rewritten.
+const conflictClause = firearmsSqlCode.slice(firearmsSqlCode.indexOf("on conflict"));
+assert.ok(conflictClause.length > 0, "seed must be idempotent (on conflict ... do update)");
+assert.ok(!/review_status\s*=/.test(conflictClause), "re-running must not rewrite review_status");
+assert.ok(!/is_published\s*=/.test(conflictClause), "re-running must not rewrite is_published");
+
+// ---- Visibility before vs after review (mirrors the real query filter) ----
+// Agent-facing reads filter is_published = true AND review_status = 'approved'.
+const visibleToAgents = (card) => card.is_published === true && card.review_status === "approved";
+const seededCard = { slug: "firearms-ammunition", is_published: false, review_status: "needs_review" };
+assert.equal(visibleToAgents(seededCard), false, "seeded card must NOT be searchable before review");
+const approvedCard = { slug: "firearms-ammunition", is_published: true, review_status: "approved" };
+assert.equal(visibleToAgents(approvedCard), true, "after approval + publish the card becomes searchable");
+// The real search paths enforce exactly that filter.
+for (const f of ["app/api/search/route.ts", "app/search/page.tsx"]) {
+  const src = read(f);
+  assert.ok(
+    src.includes('.eq("is_published", true)') && src.includes('.eq("review_status", "approved")'),
+    `${f} must keep published+approved gating`
+  );
+}
+// Routing is unaffected by publication state: OI always resolves to the slug.
+assert.deepEqual(r("firearm").candidateSlugs, ["firearms-ammunition"], "routing unchanged by lifecycle");
+
+// ---- Guided workflow stays unavailable for a reference card ---------------
+const { getWorkflowAvailability } = await import("../lib/decision-engine/availability.ts");
+const refUnpublished = getWorkflowAvailability({ slug: "firearms-ammunition" });
+assert.equal(refUnpublished.status, "unavailable_no_tree", "reference card has no decision tree");
+assert.equal(refUnpublished.hasTree, false);
+assert.equal(refUnpublished.available, false);
+assert.equal(refUnpublished.safeMessage, "", "no guided entry point is advertised");
+// Even fully approved + published, a reference card never gains guided questions.
+const refPublished = getWorkflowAvailability({
+  slug: "firearms-ammunition",
+  is_published: true,
+  review_status: "approved",
+  source_version: "81.7 (30-Jul-2026)",
+});
+assert.equal(refPublished.status, "unavailable_no_tree");
+assert.equal(refPublished.hasTree, false);
+assert.equal(refPublished.available, false);
 for (const t of ["firearm", "firearms", "ammunition"]) {
   assert.ok(!sporting.phrases.includes(t), `sporting-equipment must no longer own '${t}'`);
   assert.ok(firearms.phrases.includes(t), `firearms must own '${t}'`);

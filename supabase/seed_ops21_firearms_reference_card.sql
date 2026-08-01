@@ -10,7 +10,19 @@
 -- entry point is never offered for it.
 --
 -- Every field below is transcribed from the chapter body. Nothing is inferred.
--- Idempotent: safe to re-run (insert ... on conflict (slug) do update).
+--
+-- LIFECYCLE: the card is created for REVIEW only —
+--   review_status     = 'needs_review'
+--   is_published      = false
+--   source_confidence = 'source_backed'   (content transcribed from the guide)
+-- Nothing is auto-approved or auto-published. A quality/admin reviewer approves
+-- and publishes it through the Admin UI. Until then it is invisible to ordinary
+-- agent search, which filters on is_published = true AND review_status =
+-- 'approved'.
+--
+-- Idempotent: safe to re-run (insert ... on conflict (slug) do update). The
+-- re-run refreshes CONTENT only and never writes review_status / is_published,
+-- so a card already approved and published by a reviewer is never demoted.
 -- ============================================================
 
 insert into procedure_cards (
@@ -20,7 +32,7 @@ insert into procedure_cards (
   passenger_advice, allowed, not_allowed, escalation_points,
   fees_charges, required_approval,
   keywords, aliases,
-  source_pages, source_version, priority,
+  source_pages, source_version, source_confidence, priority,
   review_status, is_published
 ) values (
   'Firearms and Carry of Ammunition',
@@ -92,9 +104,10 @@ insert into procedure_cards (
   array['WEAP', 'firearms and ammunition', 'carry of ammunition', 'weapon carriage', 'firearm declaration'],
   array[130, 131, 132],
   '81.7 (30-Jul-2026)',
+  'source_backed',
   0,
-  'approved',
-  true
+  'needs_review',
+  false
 )
 on conflict (slug) do update set
   title = excluded.title,
@@ -118,6 +131,10 @@ on conflict (slug) do update set
   aliases = excluded.aliases,
   source_pages = excluded.source_pages,
   source_version = excluded.source_version,
+  source_confidence = excluded.source_confidence,
+  -- NOTE: review_status and is_published are deliberately NOT updated here.
+  -- Re-running the seed refreshes content only and never approves, publishes,
+  -- or demotes the card.
   updated_at = now();
 
 -- Link the card to the v81.7 Firearms chapter when that chapter row exists.
@@ -131,7 +148,14 @@ where pc.slug = 'firearms-ammunition'
   and (pc.chapter_id is distinct from c.id);
 
 -- ---------- Verification ----------
--- select slug, title, service_code, source_version, review_status, is_published
+-- Expected immediately after running this seed: needs_review / false / source_backed.
+-- select slug, title, service_code, source_version, source_confidence,
+--        review_status, is_published
 --   from procedure_cards where slug = 'firearms-ammunition';
+--
+-- The card is intentionally INVISIBLE to agent search until a reviewer approves
+-- and publishes it in the Admin UI (agent queries filter is_published = true and
+-- review_status = 'approved').
+--
 -- The slug must NOT appear in any decision-tree registry: guided questions are
--- never offered for a reference card.
+-- never offered for a reference card (availability = unavailable_no_tree).
