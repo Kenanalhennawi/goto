@@ -112,8 +112,9 @@ for (const [q, slugs] of AMBIG) {
 const sportingWeapon = r("sporting weapon");
 assert.equal(sportingWeapon.safety, "ambiguous", "'sporting weapon' spans ch.28 and ch.29");
 assert.deepEqual(sportingWeapon.candidateSlugs, ["sporting-equipment"]);
-assert.ok(onlySlug("firearm", "sporting-equipment"), "'firearm' resolves to the reviewed weapon guidance");
-assert.ok(onlySlug("ammunition", "sporting-equipment"), "'ammunition' resolves to the reviewed weapon guidance");
+// OPS-2.1: firearms/ammunition now open their own reviewed reference card.
+assert.ok(onlySlug("firearm", "firearms-ammunition"), "'firearm' opens the Firearms reference card");
+assert.ok(onlySlug("ammunition", "firearms-ammunition"), "'ammunition' opens the Firearms reference card");
 
 // ---------------------------------------------------------------------------
 // 4. Unsafe — never route, carries a safe message

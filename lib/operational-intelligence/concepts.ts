@@ -238,14 +238,12 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
     abbreviations: ["speq"],
   },
   {
-    // OPS-2 firearms / ammunition (GO TO v81.7 ch.29 "Firearms and Carry of
-    // Ammunition", pp.130-132). No dedicated procedure card exists, so this
-    // concept targets the reviewed sporting-equipment card, whose guided
-    // workflow carries the source-backed weapon rules (96h pre-booking, SSR
-    // WEAP AED 300 per passenger per sector, documents to Security@flydubai.com
-    // 4 working days ahead — v81.7 pp.127, 129). No new workflow is created.
+    // Firearms / ammunition (GO TO v81.7 ch.29 "Firearms and Carry of
+    // Ammunition", pp.130-132). OPS-2.1 gave this its own reviewed REFERENCE
+    // card (slug firearms-ammunition, seeded from the chapter body). The card
+    // has no decision tree, so guided questions are never offered for it.
     id: "firearms-ammunition",
-    targetSlugs: ["sporting-equipment"],
+    targetSlugs: ["firearms-ammunition"],
     category: "Special services",
     chapterHint: "29. Firearms and Carry of Ammunition",
     safety: "safe",

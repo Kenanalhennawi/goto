@@ -59,8 +59,8 @@ assert.deepEqual(topicIds("visa change"), ["visa-change"], "'visa change' must n
 // ---------------------------------------------------------------------------
 const SINGLE = [
   ["passenger has a bicycle", "sporting-equipment", "sporting-equipment"],
-  ["passenger has a firearm", "firearms-ammunition", "sporting-equipment"],
-  ["passenger carrying ammunition", "firearms-ammunition", "sporting-equipment"],
+  ["passenger has a firearm", "firearms-ammunition", "firearms-ammunition"],
+  ["passenger carrying ammunition", "firearms-ammunition", "firearms-ammunition"],
   ["customer is expecting", "pregnancy", "pregnancy"],
   ["passenger has a plaster cast", "plaster-cast-leg-brace", "plaster-cast-leg-brace"],
   ["unable to check in online", "check-in-olci", "check-in-olci"],
@@ -165,7 +165,7 @@ const ABBREV = [
   ["wchr", "wheelchair"], ["wchs", "wheelchair"], ["wchc", "wheelchair"],
   ["dpna", "dpna"], ["meda", "meda"], ["olci", "check-in-olci"],
   ["mct", "minimum-connection-time"], ["bike", "sporting-equipment"],
-  ["weap", "sporting-equipment"], ["brb", "blue-ribbon-bags"], ["maas", "meet-assist"],
+  ["weap", "firearms-ammunition"], ["brb", "blue-ribbon-bags"], ["maas", "meet-assist"],
 ];
 for (const [abbr, slug] of ABBREV) {
   assert.deepEqual(r(abbr).candidateSlugs, [slug], `abbreviation ${abbr} → ${slug}`);
@@ -199,8 +199,39 @@ for (const [q, concept] of [
 const sporting = OPERATIONAL_CONCEPTS.find((c) => c.id === "sporting-equipment");
 const firearms = OPERATIONAL_CONCEPTS.find((c) => c.id === "firearms-ammunition");
 assert.ok(firearms, "firearms-ammunition concept must exist");
-assert.deepEqual(firearms.targetSlugs, ["sporting-equipment"], "firearms targets the reviewed card");
+// OPS-2.1: firearms open their own reviewed reference card (ch.29).
+assert.deepEqual(firearms.targetSlugs, ["firearms-ammunition"], "firearms target their own reference card");
 assert.ok(firearms.chapterHint.includes("29."), "firearms cites ch.29");
+
+// ---- OPS-2.1 required routing fixtures ----
+for (const q of ["firearm", "firearms", "ammunition", "ammo", "rifle", "pistol", "weap"]) {
+  const res = r(q);
+  assert.deepEqual(res.candidateSlugs, ["firearms-ammunition"], `"${q}" must open the Firearms card`);
+  assert.deepEqual(topicIds(q), ["firearms-ammunition"], `"${q}" single firearms topic`);
+  assert.equal(res.safety, "safe", `"${q}" safety`);
+  assert.equal(res.ambiguity, false, `"${q}" must not be ambiguous`);
+}
+// "sporting weapon" behaviour is unchanged from OPS-2 (deliberately ambiguous).
+const spWeapon = r("sporting weapon");
+assert.equal(spWeapon.safety, "ambiguous", "'sporting weapon' stays ambiguous");
+assert.deepEqual(spWeapon.candidateSlugs, ["sporting-equipment"], "'sporting weapon' target unchanged");
+assert.deepEqual(topicIds("sporting weapon"), ["sporting-weapon"]);
+// Sporting equipment routing is unchanged.
+assert.deepEqual(r("sporting equipment").candidateSlugs, ["sporting-equipment"]);
+assert.deepEqual(r("bicycle").candidateSlugs, ["sporting-equipment"]);
+// The Firearms reference card carries no decision tree (content card only).
+const { DECISION_DEFINITIONS } = await import("../lib/decision-engine/definitions/index.ts");
+assert.ok(
+  !DECISION_DEFINITIONS["firearms-ammunition"],
+  "the Firearms reference card must not gain a decision tree"
+);
+assert.equal(Object.keys(DECISION_DEFINITIONS).length, 26, "still exactly 26 workflows");
+// The seeded card is source-backed and reference-only.
+const firearmsSql = read("supabase/seed_ops21_firearms_reference_card.sql");
+for (const token of ["'firearms-ammunition'", "AED 300", "WEAP", "4 working days", "5kg", "81.7 (30-Jul-2026)", "array[130, 131, 132]"]) {
+  assert.ok(firearmsSql.includes(token), `Firearms card seed missing ${token}`);
+}
+assert.ok(!/questions|outcome|decision tree|evaluator/i.test(firearmsSql.replace(/--.*$/gm, "")), "seed must not add workflow logic");
 for (const t of ["firearm", "firearms", "ammunition"]) {
   assert.ok(!sporting.phrases.includes(t), `sporting-equipment must no longer own '${t}'`);
   assert.ok(firearms.phrases.includes(t), `firearms must own '${t}'`);
