@@ -20,7 +20,24 @@ type ProcedureSearchRow = Parameters<typeof scoreOperationalCard>[0] & {
   source_pages: number[] | null;
   source_version: string | null;
   summary: string | null;
+  // OPS-1 answer fields (typed like the existing JSON array columns).
+  when_to_use: string | null;
+  who_can_action: OperationalCardSearchResult["channels"] | null;
+  required_information: OperationalCardSearchResult["channels"] | null;
+  allowed: OperationalCardSearchResult["channels"] | null;
+  not_allowed: OperationalCardSearchResult["channels"] | null;
+  escalation_points: OperationalCardSearchResult["channels"] | null;
+  fees_charges: string | null;
+  // Linked source chapter (to-one embed; Supabase may widen to an array).
+  chapters: { slug: string } | { slug: string }[] | null;
 };
+
+// Normalize the embedded chapter relation to a plain slug (object or array).
+function chapterSlugOf(rel: ProcedureSearchRow["chapters"]): string | null {
+  if (!rel) return null;
+  const first = Array.isArray(rel) ? rel[0] : rel;
+  return first?.slug ?? null;
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -114,6 +131,7 @@ async function searchOperationalCards(
         "source_pages",
         "source_version",
         "priority",
+        "chapters(slug)",
       ].join(", ")
     )
     .eq("is_published", true)
@@ -145,5 +163,15 @@ async function searchOperationalCards(
       source_version: card.source_version ?? null,
       summary: card.summary ?? null,
       snippet: operationalCardPreview(card),
+      // OPS-1 additive fields (already selected for scoring; now exposed so the
+      // Cockpit can derive the operational answer without a second request).
+      when_to_use: card.when_to_use ?? null,
+      who_can_action: card.who_can_action ?? [],
+      required_information: card.required_information ?? [],
+      allowed: card.allowed ?? [],
+      not_allowed: card.not_allowed ?? [],
+      escalation_points: card.escalation_points ?? [],
+      fees_charges: card.fees_charges ?? null,
+      chapter_slug: chapterSlugOf(card.chapters),
     }));
 }

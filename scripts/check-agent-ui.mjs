@@ -9,7 +9,9 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const header = read("components/SiteHeader.tsx");
 const page = read("app/page.tsx");
 const css = read("app/globals.css");
-const primarySearch = read("components/agent/PrimarySearch.tsx");
+// OPS-1: the homepage scenario input is the Cockpit search (same proven
+// behaviour as PrimarySearch, resolving in place instead of navigating).
+const primarySearch = read("components/agent/CockpitSearch.tsx");
 
 // ---- Navigation: plain-language agent labels ----
 for (const label of ['label: "Home"', 'label: "Search"', 'label: "Guided decision"', 'label: "Browse services"']) {
@@ -31,7 +33,7 @@ assert.ok(!header.includes('label: "Quality"'), "Quality should not be in agent 
 
 // ---- Homepage: search-first, no internal metadata ----
 assert.ok(page.includes("What is the customer asking about?"), "primary search heading missing");
-assert.ok(page.includes("PrimarySearch"), "PrimarySearch not rendered on homepage");
+assert.ok(page.includes("AgentCockpit"), "AgentCockpit not rendered on homepage");
 for (const banned of [
   "MetaStrip",
   "ChapterDirectory",
@@ -70,11 +72,11 @@ assert.ok(
   "homepage must gate procedure deep-links on published+approved"
 );
 
-// ---- Primary search reuses the existing search route via a real GET form ----
-assert.ok(primarySearch.includes('action="/search"') && primarySearch.includes('method="get"'), "PrimarySearch must GET /search");
-assert.ok(primarySearch.includes('name="q"'), "PrimarySearch input must be named q");
+// ---- Cockpit search keeps the /search GET form as the no-JS fallback ----
+assert.ok(primarySearch.includes('action="/search"') && primarySearch.includes('method="get"'), "CockpitSearch must keep the GET /search fallback form");
+assert.ok(primarySearch.includes('name="q"'), "CockpitSearch input must be named q");
 assert.ok(primarySearch.includes('href="/decision"') || primarySearch.includes('href={"/decision"}') || primarySearch.includes("/decision"), "guided decision secondary action missing");
-assert.ok(primarySearch.includes("prefers-reduced-motion"), "PrimarySearch must respect reduced motion");
+assert.ok(primarySearch.includes("prefers-reduced-motion"), "CockpitSearch must respect reduced motion");
 
 // ---- Design-system foundations ----
 assert.ok(css.includes("@media (prefers-reduced-motion: reduce)"), "reduced-motion CSS missing");

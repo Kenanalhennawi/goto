@@ -72,6 +72,15 @@ export interface OperationalCardSearchResult {
   source_version: string | null;
   summary: string | null;
   snippet: string;
+  // OPS-1 additive answer fields (optional so older consumers stay valid).
+  when_to_use?: string | null;
+  who_can_action?: JsonValue[];
+  required_information?: JsonValue[];
+  allowed?: JsonValue[];
+  not_allowed?: JsonValue[];
+  escalation_points?: JsonValue[];
+  fees_charges?: string | null;
+  chapter_slug?: string | null;
 }
 
 export type UserRole = "editor" | "admin" | "owner" | "quality" | "supervisor" | "agent";

@@ -6,7 +6,9 @@ import { readFileSync } from "node:fs";
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 const page = read("app/page.tsx");
-const primary = read("components/agent/PrimarySearch.tsx");
+// OPS-1: the homepage search-ahead now lives in the Cockpit search component
+// with identical behaviour (same API, bounds, debounce, semantics).
+const primary = read("components/agent/CockpitSearch.tsx");
 const workspace = read("components/AgentWorkspace.tsx");
 const css = read("app/globals.css");
 const agentPage = read("components/agent/AgentPage.tsx");
@@ -25,10 +27,11 @@ for (const f of [
 }
 assert.ok(page.includes("lg:grid-cols-4"), "wide task grid (4 cols) missing");
 
-// ---- "What you'll get" reassurance ----
-assert.ok(page.includes("What you"), "'What you'll get' reassurance missing");
+// ---- "What you'll get" reassurance (OPS-1: lives in the Cockpit idle state) ----
+const cockpit = read("components/agent/AgentCockpit.tsx");
+assert.ok(cockpit.includes("What you"), "'What you'll get' reassurance missing");
 for (const item of ["Quick operational answer", "Guided questions when needed", "Original source available"]) {
-  assert.ok(page.includes(item), `reassurance item '${item}' missing`);
+  assert.ok(cockpit.includes(item), `reassurance item '${item}' missing`);
 }
 
 // ---- Common tasks: exactly the 8 approved, no Government deals, safe routing ----

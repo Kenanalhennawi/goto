@@ -1,7 +1,7 @@
 import { SiteHeader } from "@/components/SiteHeader";
 import { AgentPage } from "@/components/agent/AgentPage";
 import { AgentSection } from "@/components/agent/AgentSection";
-import { PrimarySearch } from "@/components/agent/PrimarySearch";
+import { AgentCockpit } from "@/components/agent/AgentCockpit";
 import { TaskShortcut } from "@/components/agent/TaskShortcut";
 import { AgentWorkspace } from "@/components/AgentWorkspace";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
@@ -77,18 +77,12 @@ export default async function Home() {
           <p className="mt-1.5 max-w-2xl text-sm leading-6 text-ink-muted sm:text-[15px]">
             Describe the passenger&rsquo;s request or problem in your own words.
           </p>
+          {/* Conversation-driven Agent Cockpit (OPS-1): scenario input, likely
+              matches, best answer, guided questions and outcome — all in place.
+              The quiet "what you'll get" reassurance renders inside the Cockpit
+              idle state only, so it never competes with an active answer. */}
           <div className="mt-5">
-            <PrimarySearch />
-          </div>
-
-          {/* Quiet reassurance — what a search returns, in plain language. */}
-          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-1.5 border-t border-border pt-4 text-xs text-ink-muted">
-            <span className="font-semibold uppercase tracking-wider text-ink-faint">What you&rsquo;ll get</span>
-            <span>Quick operational answer</span>
-            <span aria-hidden="true" className="text-ink-faint">·</span>
-            <span>Guided questions when needed</span>
-            <span aria-hidden="true" className="text-ink-faint">·</span>
-            <span>Original source available</span>
+            <AgentCockpit />
           </div>
         </section>
 
