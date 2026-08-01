@@ -67,9 +67,17 @@ export function pendingUploadPath(userId: string, fileName: string): string {
   return `pending/${userId}/${stamp}-${safe}.pdf`;
 }
 
-/** Canonical archive key once the worker knows the version and hash. */
+/**
+ * Canonical archive key once the worker knows the version and hash.
+ * The version is reduced to digits and single dots, with leading/trailing and
+ * repeated dots removed, so no input can produce a ".." path segment.
+ */
 export function archivedPdfPath(version: string, sha256: string): string {
-  const safeVersion = version.replace(/[^0-9a-z.]/gi, "") || "unknown";
+  const safeVersion =
+    (version ?? "")
+      .replace(/[^0-9.]/g, "")
+      .replace(/\.{2,}/g, ".")
+      .replace(/^\.+|\.+$/g, "") || "unknown";
   const safeHash = sha256.replace(/[^a-f0-9]/gi, "").slice(0, 64);
   return `v${safeVersion}/${safeHash}.pdf`;
 }

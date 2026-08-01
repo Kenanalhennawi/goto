@@ -245,8 +245,12 @@ assert.ok(exists("worker/README.md"), "worker contract documented");
 assert.ok(workerSrc.includes("claim_sync_run"), "worker must claim via the RPC");
 assert.ok(workerSrc.includes("mkdtemp"), "worker must use safe temp directories");
 assert.ok(/finally[\s\S]{0,120}rm\(workDir/.test(workerSrc), "temp dir must always be removed");
-assert.ok(workerSrc.includes("assertPdfMagic"), "worker must verify PDF magic bytes");
-assert.ok(!/procedure_cards/.test(workerSrc), "worker must not touch procedure cards");
+assert.ok(workerSrc.includes('"%PDF-"'), "worker must verify PDF magic bytes");
+// The worker READS procedure cards for the impact report; it must never mutate them.
+assert.ok(
+  !/from\("procedure_cards"\)[\s\S]{0,120}\.(update|insert|upsert|delete)\(/.test(workerSrc),
+  "worker must not mutate procedure cards"
+);
 assert.ok(!/exec\(|execSync\(/.test(workerSrc), "worker must not use shell string execution");
 const readme = read("worker/README.md");
 assert.ok(/Cloud Run/.test(readme), "reference platform documented");

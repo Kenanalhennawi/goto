@@ -1,0 +1,14 @@
+{
+  "name": "goto-sync-worker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "PDF Update Studio background extraction worker",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.1"
+  }
+}

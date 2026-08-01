@@ -16,15 +16,25 @@ interface StagedChange {
   old_keywords: string[] | null;
   new_keywords: string[] | null;
   approved: boolean;
+  // UPD-2.1 classification (null on runs staged before this phase).
+  change_class?: string | null;
+  identity_match_method?: string | null;
+  old_page_start?: number | null;
+  old_page_end?: number | null;
+  new_page_start?: number | null;
+  new_page_end?: number | null;
+  old_source_version?: string | null;
+  new_source_version?: string | null;
+  change_reasons?: string | null;
 }
 
 interface SyncRun {
   id: string;
-  source_filename: string;
-  source_version: string;
-  status: string;
-  chapters_changed: number;
-  chapters_added: number;
+  source_filename: string | null;
+  source_version: string | null;
+  status: string | null;
+  chapters_changed: number | null;
+  chapters_added: number | null;
 }
 
 export function SyncReviewClient({
@@ -78,16 +88,16 @@ export function SyncReviewClient({
     setApproved(new Set());
   }
 
-  function selectChangedOnly() {
-    setApproved(new Set(changes.filter((c) => !c.is_new_chapter).map((c) => c.id)));
+  // UPD-2.1: bulk approval is limited to the safe classes. content_changed,
+  // new, removed and renamed_moved must be reviewed one by one.
+  function selectByClass(target: string) {
+    setApproved(new Set(changes.filter((c) => c.change_class === target).map((c) => c.id)));
   }
 
-  function selectNewOnly() {
-    setApproved(new Set(changes.filter((c) => c.is_new_chapter).map((c) => c.id)));
-  }
-
-  const changedCount = changes.filter((c) => !c.is_new_chapter).length;
-  const newCount = changes.filter((c) => c.is_new_chapter).length;
+  const unchangedCount = changes.filter((c) => c.change_class === "unchanged").length;
+  const metadataOnlyCount = changes.filter((c) => c.change_class === "metadata_only").length;
+  const removedCount = changes.filter((c) => c.change_class === "removed").length;
+  const classified = changes.some((c) => Boolean(c.change_class));
 
   async function handlePublish() {
     if (approved.size === 0) {
@@ -188,19 +198,33 @@ export function SyncReviewClient({
           >
             <span aria-hidden="true">✕</span> Clear selection
           </ToolbarButton>
-          <ToolbarButton
-            onClick={selectChangedOnly}
-            ariaLabel={`Select changed chapters only (${changedCount})`}
-          >
-            <span aria-hidden="true">✓</span> Select changed only
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={selectNewOnly}
-            ariaLabel={`Select new chapters only (${newCount})`}
-          >
-            <span aria-hidden="true">✓</span> Select new chapters only
-          </ToolbarButton>
+          {/* UPD-2.1: bulk approval is offered ONLY for the safe classes.
+              content_changed / new / removed / renamed_moved are never bulk
+              approved — each must be reviewed individually. */}
+          {classified && (
+            <>
+              <ToolbarButton
+                onClick={() => selectByClass("unchanged")}
+                ariaLabel={`Approve unchanged chapters only (${unchangedCount})`}
+              >
+                <span aria-hidden="true">✓</span> Approve unchanged ({unchangedCount})
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => selectByClass("metadata_only")}
+                ariaLabel={`Approve metadata-only chapters (${metadataOnlyCount})`}
+              >
+                <span aria-hidden="true">✓</span> Approve metadata-only ({metadataOnlyCount})
+              </ToolbarButton>
+            </>
+          )}
         </div>
+      )}
+
+      {removedCount > 0 && (
+        <p className="mb-6 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {removedCount} chapter(s) are absent from the uploaded manual. They are never deleted
+          automatically and require explicit owner confirmation.
+        </p>
       )}
 
       {!alreadyPublished && !canPublish && (

@@ -1,30 +1,41 @@
-// PDF Update Studio — background extraction worker (UPD-2 skeleton).
+// PDF Update Studio — background extraction worker (UPD-2.1, complete pipeline).
 //
 // Provider-neutral: runs unchanged on Cloud Run (reference), Fly.io, Render or
 // Railway. Uses the service role key, which MUST exist only in the worker
 // environment — never in Vercel, NEXT_PUBLIC_*, the client bundle or the
 // browser.
 //
-// This skeleton implements the full job lifecycle, validation, safe temp-file
-// handling and state reporting. The extraction call-out (extract.py /
-// attach_pdf_links.py) is isolated in `runExtractor()` so the existing scripts
-// can be wired in without touching the lifecycle.
+// Flow: claim -> validate -> extract -> classify -> stage -> impact -> staged.
+// It NEVER publishes chapters, never approves or publishes procedure cards,
+// never edits decision trees, and never deletes a removed chapter.
 
 import { createClient } from "@supabase/supabase-js";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { promisify } from "node:util";
+
+import { validateExtractionContract, evaluateVersionGate } from "../lib/extraction-contract.ts";
+import { classifyExtraction, isAutoApprovable } from "../lib/sync-diff.ts";
+import { buildImpactReport } from "../lib/sync-impact.ts";
+import { archivedPdfPath } from "../lib/sync-upload.ts";
+
+const execFileAsync = promisify(execFile);
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const WORKER_ID = process.env.WORKER_ID ?? `worker-${process.pid}`;
 const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS ?? 15000);
 const EXTRACTOR_VERSION = process.env.EXTRACTOR_VERSION ?? "upd2-1";
+const PYTHON_BIN = process.env.PYTHON_BIN ?? "python3";
+const TOOLS_DIR = process.env.TOOLS_DIR ?? new URL("../tools/extraction/", import.meta.url).pathname;
 
 const BUCKET = "manual-sources";
 const MAX_BYTES = 40 * 1024 * 1024;
-const MAX_PAGES = 500;
+const EXTRACT_TIMEOUT_MS = Number(process.env.EXTRACT_TIMEOUT_MS ?? 15 * 60 * 1000);
+const MAX_OUTPUT_BYTES = 1024 * 1024; // bounded stdout/stderr
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   console.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
@@ -49,54 +60,91 @@ async function setState(runId, state, pct, message, extra = {}) {
   if (error) console.error(`[${runId}] state update failed:`, error.message);
 }
 
+/** Safe failure: a stable code plus a short message. Never a stack trace. */
 async function fail(runId, code, detail) {
-  // Safe error surface only: never a stack trace, never a secret.
-  console.error(`[${runId}] ${code}: ${detail}`);
+  console.error(`[${runId}] ${code}`);
   await setState(runId, "failed", 100, "Extraction failed", {
     error_code: code,
-    error_detail: String(detail).slice(0, 500),
+    error_detail: String(detail ?? "").slice(0, 300),
     completed_at: new Date().toISOString(),
   });
 }
 
-// ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
-function assertPdfMagic(buffer) {
-  const header = buffer.subarray(0, 5).toString("latin1");
-  if (header !== "%PDF-") throw new Error("File is not a PDF (missing %PDF- header)");
-}
-
-function parseManualVersion(firstPageText) {
-  // e.g. "Version 81.7 30-Jul-2026"
-  const match = firstPageText.match(/Version\s+(\d+\.\d+)\s+(\d{1,2}-[A-Za-z]{3}-\d{4})/);
-  if (!match) return { version: null, versionDate: null };
-  return { version: match[1], versionDate: match[2] };
-}
-
-function compareVersions(a, b) {
-  const pa = String(a ?? "").split(".").map(Number);
-  const pb = String(b ?? "").split(".").map(Number);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (d !== 0) return d < 0 ? -1 : 1;
+class WorkerError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.code = code;
   }
-  return 0;
 }
 
 // ---------------------------------------------------------------------------
-// Extraction call-out (wire the existing Python scripts here)
+// Extraction: argument arrays only, never shell interpolation
 // ---------------------------------------------------------------------------
 async function runExtractor(pdfPath, outDir) {
-  // Intentionally not implemented in the UPD-2 foundation. Wire in:
-  //   spawn("python", ["tools/extraction/extract.py", pdfPath, outDir])
-  //   spawn("python", ["tools/extraction/attach_pdf_links.py", pdfPath, outDir])
-  // Always pass arguments as an ARRAY (never a shell string) so a hostile
-  // filename cannot inject a command. pdfPath is a generated temp path, never
-  // the user-supplied name.
-  void pdfPath;
-  void outDir;
-  throw new Error("EXTRACTOR_NOT_WIRED");
+  const scripts = [
+    join(TOOLS_DIR, "extract.py"),
+    join(TOOLS_DIR, "attach_pdf_links.py"),
+  ];
+
+  for (const script of scripts) {
+    try {
+      // execFile (not exec): arguments are passed as an array, so a hostile
+      // filename can never be interpreted by a shell. pdfPath/outDir are
+      // generated temp paths, never the user-supplied name.
+      await execFileAsync(PYTHON_BIN, [script, pdfPath, outDir], {
+        timeout: EXTRACT_TIMEOUT_MS,
+        maxBuffer: MAX_OUTPUT_BYTES,
+        shell: false,
+        windowsHide: true,
+      });
+    } catch (error) {
+      if (error?.killed || error?.signal === "SIGTERM") {
+        throw new WorkerError("EXTRACTION_TIMEOUT", "Extraction exceeded the time limit.");
+      }
+      // The script emits {"error": CODE} on stderr; surface only that code.
+      let code = "EXTRACTION_FAILED";
+      try {
+        const parsed = JSON.parse(String(error?.stderr ?? "").trim().split("\n").pop() ?? "");
+        if (parsed?.error) code = String(parsed.error).slice(0, 40);
+      } catch {
+        /* keep the generic code */
+      }
+      throw new WorkerError(code, "The extractor could not process this PDF.");
+    }
+  }
+
+  const raw = await readFile(join(outDir, "chapters.json"), "utf8");
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new WorkerError("INVALID_EXTRACTOR_OUTPUT", "Extractor output was not valid JSON.");
+  }
+
+  const validation = validateExtractionContract(parsed);
+  if (!validation.ok) throw new WorkerError(validation.errorCode, validation.error);
+  return validation.value;
+}
+
+// ---------------------------------------------------------------------------
+// Canonical storage re-keying (idempotent)
+// ---------------------------------------------------------------------------
+async function rekeyPdf(runId, pendingPath, version, sha256) {
+  const canonical = archivedPdfPath(version ?? "unknown", sha256);
+  if (pendingPath === canonical) return canonical;
+
+  const { error: moveError } = await supabase.storage.from(BUCKET).move(pendingPath, canonical);
+  if (moveError) {
+    // Already re-keyed by a previous attempt? Treat an existing object as success.
+    const { data: existing } = await supabase.storage
+      .from(BUCKET)
+      .list(canonical.split("/")[0], { search: canonical.split("/")[1] });
+    if (!existing || existing.length === 0) {
+      throw new WorkerError("REKEY_FAILED", "Could not archive the uploaded PDF.");
+    }
+  }
+  await supabase.from("sync_runs").update({ pdf_path: canonical }).eq("id", runId);
+  return canonical;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,64 +157,199 @@ async function processRun(run) {
   try {
     workDir = await mkdtemp(join(tmpdir(), "goto-sync-"));
 
-    // 1. Download the stored PDF (service role, private bucket).
+    // ---- 1. Download (10%) ----
     await setState(runId, "validating", 10, "Downloading uploaded PDF");
-    const { data: blob, error: dlError } = await supabase.storage
-      .from(BUCKET)
-      .download(run.pdf_path);
-    if (dlError || !blob) throw new Error("Could not download the uploaded PDF");
-
+    const { data: blob, error: dlError } = await supabase.storage.from(BUCKET).download(run.pdf_path);
+    if (dlError || !blob) throw new WorkerError("DOWNLOAD_FAILED", "Could not download the uploaded PDF.");
     const buffer = Buffer.from(await blob.arrayBuffer());
 
-    // 2. Validate.
-    if (buffer.byteLength === 0) throw new Error("Uploaded file is empty");
-    if (buffer.byteLength > MAX_BYTES) throw new Error("Uploaded file exceeds 40 MB");
-    assertPdfMagic(buffer);
-
-    const sha256 = createHash("sha256").update(buffer).digest("hex");
-    if (run.pdf_sha256 && run.pdf_sha256 !== sha256) {
-      throw new Error("Uploaded file hash does not match the recorded hash");
+    // ---- 2. Authoritative validation (15%) ----
+    if (buffer.byteLength === 0) throw new WorkerError("EMPTY_FILE", "The uploaded file is empty.");
+    if (buffer.byteLength > MAX_BYTES) throw new WorkerError("FILE_TOO_LARGE", "The PDF exceeds 40 MB.");
+    if (buffer.subarray(0, 5).toString("latin1") !== "%PDF-") {
+      throw new WorkerError("INVALID_PDF", "The file is not a PDF.");
     }
-
+    // Never trust the browser-supplied hash: recompute it here.
+    const sha256 = createHash("sha256").update(buffer).digest("hex");
     const pdfPath = join(workDir, "manual.pdf");
     await writeFile(pdfPath, buffer);
+    await setState(runId, "validating", 15, "Validating manual", { pdf_sha256: sha256 });
 
-    await setState(runId, "validating", 25, "Validating manual version", {
-      pdf_sha256: sha256,
+    // ---- 3. Extract (25-70%) ----
+    await setState(runId, "extracting", 25, "Extracting chapters", {
+      started_at: run.started_at ?? new Date().toISOString(),
+      extractor_version: EXTRACTOR_VERSION,
+    });
+    const outDir = join(workDir, "output");
+    const contract = await runExtractor(pdfPath, outDir);
+
+    if (contract.source.sha256 !== sha256) {
+      throw new WorkerError("HASH_MISMATCH", "Extracted file hash does not match the stored PDF.");
+    }
+    await setState(runId, "extracting", 70, `Extracted ${contract.chapters.length} chapters`, {
+      pdf_page_count: contract.source.pageCount,
+      pdf_version: contract.source.version,
+      pdf_version_date: contract.source.versionDate,
     });
 
-    // 3. Duplicate / older-version policy (override must be explicit + audited).
-    const { data: current } = await supabase
+    // ---- 4. Version / duplicate gate ----
+    const { data: publishedRuns } = await supabase
       .from("sync_runs")
-      .select("pdf_version")
+      .select("pdf_version, pdf_sha256")
       .eq("state", "published")
       .order("completed_at", { ascending: false })
-      .limit(1);
-    const currentVersion = current?.[0]?.pdf_version ?? null;
+      .limit(50);
+    const currentVersion = publishedRuns?.[0]?.pdf_version ?? null;
+    const knownSha256 = (publishedRuns ?? []).map((r) => r.pdf_sha256).filter(Boolean);
 
-    // parseManualVersion() consumes text produced by the extractor; the
-    // skeleton stops before that point.
-    void parseManualVersion;
-    void compareVersions;
-    void currentVersion;
-    void MAX_PAGES;
+    const gate = evaluateVersionGate({
+      incomingVersion: contract.source.version,
+      incomingSha256: sha256,
+      currentVersion,
+      knownSha256,
+      overrideReason: run.override_reason ?? null,
+    });
+    if (!gate.allowed) throw new WorkerError(gate.errorCode, gate.error);
 
-    // 4. Extract.
-    await setState(runId, "extracting", 45, "Extracting chapters");
-    await runExtractor(pdfPath, join(workDir, "output"));
+    // ---- 5. Snapshot live chapters + classify (75%) ----
+    await setState(runId, "extracting", 75, "Comparing against live chapters");
+    const { data: liveChapters, error: liveError } = await supabase
+      .from("chapters")
+      .select("id, slug, title, chapter_number, body_text, search_keywords, page_start, page_end, source_version");
+    if (liveError) throw new WorkerError("SNAPSHOT_FAILED", "Could not read the live chapters.");
 
-    // 5..8 — classify (lib/sync-diff.ts), stage rows, build the impact report
-    // (lib/sync-impact.ts), re-key the object to v{version}/{sha256}.pdf, then:
-    // await setState(runId, "staged", 100, "Ready for review", {
-    //   extractor_version: EXTRACTOR_VERSION,
-    //   completed_at: new Date().toISOString(),
-    // });
-    void EXTRACTOR_VERSION;
+    const live = (liveChapters ?? []).map((c) => ({
+      id: c.id,
+      slug: c.slug,
+      title: c.title,
+      chapter_number: c.chapter_number,
+      body_text: c.body_text,
+      keywords: c.search_keywords,
+      page_start: c.page_start,
+      page_end: c.page_end,
+      source_version: c.source_version,
+    }));
+
+    const incoming = contract.chapters.map((c) => ({
+      title: c.title,
+      slug: c.slug,
+      chapter_number: Number(c.chapterNumber) || null,
+      body_text: c.body,
+      keywords: c.searchKeywords,
+      page_start: c.pageStart,
+      page_end: c.pageEnd,
+      source_version: contract.source.version,
+    }));
+
+    const diffs = classifyExtraction(incoming, live, contract.source.version);
+    const bySlug = new Map(contract.chapters.map((c) => [c.slug, c]));
+
+    // ---- 6. Stage rows (80-90%) — replace any prior incomplete attempt ----
+    await setState(runId, "extracting", 80, "Writing staged changes");
+    await supabase.from("sync_staged_changes").delete().eq("sync_run_id", runId);
+
+    const stagedRows = diffs.map((d) => {
+      const source = bySlug.get(d.slug);
+      const liveMatch = live.find((c) => c.id === d.existingId) ?? null;
+      const removed = d.changeClass === "removed";
+      return {
+        sync_run_id: runId,
+        chapter_number: d.chapterNumber ?? liveMatch?.chapter_number ?? 0,
+        title: d.title,
+        is_new_chapter: d.changeClass === "new",
+        existing_chapter_id: d.existingId,
+        old_body_text: liveMatch?.body_text ?? null,
+        new_body_text: removed ? null : (source?.body ?? null),
+        old_keywords: liveMatch?.keywords ?? null,
+        new_keywords: removed ? null : (source?.searchKeywords ?? null),
+        new_content_blocks: removed ? null : (source?.contentBlocks ?? []),
+        change_class: d.changeClass,
+        identity_match_method: d.identityMatchMethod,
+        old_page_start: d.oldPageStart,
+        old_page_end: d.oldPageEnd,
+        new_page_start: d.newPageStart,
+        new_page_end: d.newPageEnd,
+        old_source_version: d.oldSourceVersion,
+        new_source_version: d.newSourceVersion,
+        change_reasons: d.reasons.join(" "),
+        // Only unchanged/metadata-only may pre-approve. content_changed, new,
+        // removed and renamed_moved ALWAYS require a human.
+        approved: isAutoApprovable(d.changeClass),
+      };
+    });
+
+    for (let i = 0; i < stagedRows.length; i += 100) {
+      const { error } = await supabase.from("sync_staged_changes").insert(stagedRows.slice(i, i + 100));
+      if (error) throw new WorkerError("STAGING_FAILED", "Could not write the staged changes.");
+    }
+
+    // ---- 7. Impact report (90-98%) ----
+    await setState(runId, "extracting", 90, "Building impact report");
+    const { data: cardRows } = await supabase
+      .from("procedure_cards")
+      .select("slug, title, chapter_id, source_version, review_status, is_published");
+    const workflows = await loadWorkflows();
+
+    const impact = buildImpactReport({
+      diffs,
+      cards: cardRows ?? [],
+      workflows,
+      targetVersion: contract.source.version,
+    });
+
+    await supabase.from("sync_impact_report").delete().eq("run_id", runId);
+    const impactRows = impact.map((i) => ({
+      run_id: runId,
+      impact_type: i.impactType,
+      entity_slug: i.entitySlug,
+      entity_title: i.entityTitle,
+      current_version: i.currentVersion,
+      target_version: i.targetVersion,
+      status: i.status,
+      reason: i.reason,
+      requires_manual_review: i.requiresManualReview,
+    }));
+    for (let i = 0; i < impactRows.length; i += 100) {
+      await supabase.from("sync_impact_report").insert(impactRows.slice(i, i + 100));
+    }
+
+    // ---- 8. Archive the PDF and finish (100%) ----
+    await setState(runId, "extracting", 98, "Archiving source PDF");
+    await rekeyPdf(runId, run.pdf_path, contract.source.version, sha256);
+
+    const changed = diffs.filter((d) => d.changeClass !== "unchanged").length;
+    const added = diffs.filter((d) => d.changeClass === "new").length;
+    await setState(runId, "staged", 100, `Ready for review — ${changed} chapter(s) changed`, {
+      status: "review",
+      chapters_changed: changed,
+      chapters_added: added,
+      source_version: contract.source.version,
+      completed_at: new Date().toISOString(),
+      error_code: null,
+      error_detail: null,
+    });
+    console.log(`[${runId}] staged: ${diffs.length} rows, ${impactRows.length} impacts`);
   } catch (error) {
-    const code = String(error?.message) === "EXTRACTOR_NOT_WIRED" ? "EXTRACTOR_NOT_WIRED" : "EXTRACTION_FAILED";
-    await fail(runId, code, error?.message ?? "Unknown error");
+    const code = error instanceof WorkerError ? error.code : "EXTRACTION_FAILED";
+    const detail = error instanceof WorkerError ? error.message : "Unexpected worker error.";
+    await fail(runId, code, detail);
   } finally {
     if (workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/** Decision workflows, for impact analysis only. Never mutated. */
+async function loadWorkflows() {
+  try {
+    const mod = await import("../lib/decision-engine/definitions/index.ts");
+    return Object.values(mod.DECISION_DEFINITIONS).map((d) => ({
+      slug: d.procedureSlug,
+      title: d.procedureTitle,
+      sourceVersion: d.sourceVersion,
+      sourcePages: d.sourcePages ?? [],
+    }));
+  } catch {
+    return [];
   }
 }
 
