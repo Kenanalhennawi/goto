@@ -64,7 +64,10 @@ const CONCEPTS: Record<string, string[]> = {
   minor: ["unaccompanied", "age"],
   falcon: ["animal carriage"],
   pet: ["petc", "animal"],
-  dog: ["service animal", "petc"],
+  // OPS-2 conflict resolution: bare "dog" must never imply the service-animal
+  // procedure (the OI registry is the authoritative safety/routing source, and
+  // it classifies "dog" as broad). Expansion stays generic.
+  dog: ["animal"],
 };
 
 // Vocabulary for typo correction, built once.

@@ -63,6 +63,7 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
     phrases: [
       "government deal", "government deals", "government discount", "governmental booking",
       "government fare", "esaad", "al saada", "alsaada", "fazaa", "gdrfa",
+      "government ticket", "government booking",
     ],
   },
   {
@@ -90,6 +91,7 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
       "reduced mobility", "mobility assistance", "electric wheelchair", "battery wheelchair",
     ],
     abbreviations: ["wchr", "wchs", "wchc"],
+    synonyms: ["wheel chair assistance", "wheelchair assistance", "mobility aid", "mobility aids"],
     misspellings: ["wheelchiar", "wheelchari"],
   },
   {
@@ -101,6 +103,7 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
       "broken leg", "fractured leg", "leg fracture", "cast on leg", "plaster cast",
       "leg brace", "fresh cast", "plaster less than 48 hours", "leg in a cast", "leg in plaster",
     ],
+    synonyms: ["plaster", "cast", "broken arm", "fractured arm"],
   },
   {
     id: "oxygen",
@@ -111,6 +114,7 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
       "oxygen", "oxygen machine", "oxygen concentrator", "portable oxygen concentrator",
       "oxygen carry", "cpap",
     ],
+    synonyms: ["oxygen cylinder", "breathing apparatus"],
     abbreviations: ["poc", "o2", "oxyg"],
     misspellings: ["oxigen", "oxygyn"],
   },
@@ -124,6 +128,7 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
       "travelling while pregnant", "twins pregnancy", "expecting baby", "pregnancy certificate",
       "weeks pregnant",
     ],
+    synonyms: ["expecting", "expectant mother", "expectant", "with child"],
   },
   {
     id: "meda",
@@ -145,6 +150,7 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
       // Maps here for review only — the workflow states ESAs are NOT accepted.
       "emotional support animal", "emotional support dog",
     ],
+    synonyms: ["assistance animal", "seeing eye animal"],
     abbreviations: ["svan"],
   },
   {
@@ -156,6 +162,7 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
       "intellectual disability", "developmental disability", "passenger needs continuous companion",
       "hidden disability", "autism", "down syndrome", "dementia",
     ],
+    synonyms: ["needs continuous assistance", "non visible disability"],
     abbreviations: ["dpna"],
   },
   {
@@ -199,6 +206,7 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
       "worldtracer", "world tracer", "lost baggage", "lost bag", "delayed baggage",
       "delayed luggage", "damaged baggage", "damaged suitcase", "baggage claim", "missing bag",
     ],
+    synonyms: ["missing luggage", "baggage not arrived", "bag did not arrive"],
     abbreviations: ["wt", "pir"],
   },
   {
@@ -209,20 +217,57 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
     phrases: [
       "blue ribbon bags", "blue ribbon", "baggage protection", "baggage protection claim",
     ],
+    synonyms: ["baggage protection cover"],
     abbreviations: ["brb"],
   },
   {
+    // OPS-2: sporting equipment ONLY. Firearms/ammunition now have their own
+    // concept — v81.7 ch.29 is a separate chapter with a separate process.
     id: "sporting-equipment",
     targetSlugs: ["sporting-equipment"],
     category: "Special services",
     safety: "safe",
     phrases: [
-      "sporting equipment", "sports equipment", "sporting weapon", "weapon", "firearm",
-      "ammunition", "sports bag", "bicycle", "bike", "golf bag", "surfboard", "ski equipment",
+      "sporting equipment", "sports equipment", "sports bag", "bicycle", "bike",
+      "golf bag", "golf clubs", "golf equipment", "surfboard", "ski equipment", "skis",
+      "snowboard", "diving equipment", "fishing equipment",
     ],
+    synonyms: ["cycle", "push bike", "pushbike"],
     // SPEX retired effective 01-Aug-2026 (v81.7 ch.28 §22) — never route it as
     // live. "bike"/"bicycle" are already phrases of this concept (SSR BIKE).
     abbreviations: ["speq"],
+  },
+  {
+    // OPS-2 firearms / ammunition (GO TO v81.7 ch.29 "Firearms and Carry of
+    // Ammunition", pp.130-132). No dedicated procedure card exists, so this
+    // concept targets the reviewed sporting-equipment card, whose guided
+    // workflow carries the source-backed weapon rules (96h pre-booking, SSR
+    // WEAP AED 300 per passenger per sector, documents to Security@flydubai.com
+    // 4 working days ahead — v81.7 pp.127, 129). No new workflow is created.
+    id: "firearms-ammunition",
+    targetSlugs: ["sporting-equipment"],
+    category: "Special services",
+    chapterHint: "29. Firearms and Carry of Ammunition",
+    safety: "safe",
+    phrases: [
+      "firearm", "firearms", "ammunition", "firearm declaration", "carrying ammunition",
+      "travelling with firearm", "traveling with firearm", "travelling with a firearm",
+      "carrying a firearm", "weapon carriage", "hunting rifle",
+    ],
+    synonyms: ["ammo", "rifle", "pistol", "travelling with gun", "carrying a gun"],
+    abbreviations: ["weap"],
+  },
+  {
+    // Deliberately ambiguous: a "sporting weapon" sits across the Sporting
+    // Equipment process (ch.28) and the Firearms process (ch.29). Both are
+    // documented on the same reviewed card, so the agent is never forced to
+    // guess which process applies.
+    id: "sporting-weapon",
+    targetSlugs: ["sporting-equipment"],
+    category: "Special services",
+    chapterHint: "28. Sporting Equipment / 29. Firearms and Carry of Ammunition",
+    safety: "ambiguous",
+    phrases: ["sporting weapon", "sporting weapons", "weapon"],
   },
 
   // ---------------- Travel documents ----------------
@@ -268,6 +313,7 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
       "online check in", "online check-in", "online checkin", "cannot check in online",
       "airport check in", "check in problem", "boarding pass", "check in", "checked in",
     ],
+    synonyms: ["web check in", "mobile check in", "cannot check in", "unable to check in"],
     abbreviations: ["olci"],
   },
   {
@@ -283,6 +329,7 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
     category: "Check-in & airport",
     safety: "safe",
     phrases: ["meet and assist", "meet & assist", "airport meet service"],
+    synonyms: ["airport assistance service", "vip meet service"],
     abbreviations: ["masd", "maas"],
   },
 
@@ -296,6 +343,7 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
       "connection time", "minimum connection time", "minimum connection", "transfer time",
       "connecting flight", "tight connection",
     ],
+    synonyms: ["connection time between flights", "transfer window"],
     abbreviations: ["mct"],
   },
 
@@ -342,16 +390,52 @@ export const OPERATIONAL_CONCEPTS: OperationalConcept[] = [
     targetSlugs: [],
     category: "Baggage",
     safety: "broad",
-    phrases: [
-      "baggage", "bag", "bags", "extra baggage", "add bag", "luggage",
-      // v81.7: checked-baggage out-of-gauge + TV carriage vocabulary (reference/search only).
-      "out of gauge", "oversized baggage", "oversize bag", "television", "tv charge",
-    ],
+    // OPS-2: out-of-gauge and television vocabulary moved to their own
+    // reference concepts so the same phrase is never owned by two concepts.
+    phrases: ["baggage", "bag", "bags", "extra baggage", "add bag", "luggage", "heavy baggage"],
   },
   { id: "broad-airport", targetSlugs: [], category: "Check-in & airport", safety: "broad", phrases: ["airport", "lounge", "airport lounge", "lounge access"] },
   // v81.7 new reference topics (chapter/manual guidance only — no workflow).
   { id: "al-majlis", targetSlugs: [], category: "Check-in & airport", safety: "broad", phrases: ["al majlis", "al majlis vip", "majlis vip service", "lmaj"] },
   { id: "champagne", targetSlugs: [], category: "Special services", safety: "broad", phrases: ["champagne", "champagne on board"] },
+
+  // ---------------- OPS-2 reference concepts (no reviewed card exists) -------
+  // Television carriage lives inside the Baggage chapter (v81.7 p.107); there
+  // is no TV procedure card, so this stays reference/search-only.
+  {
+    id: "television-carriage",
+    targetSlugs: [],
+    category: "Baggage",
+    chapterHint: "26. Baggage — TV Charge at the Airport",
+    safety: "broad",
+    phrases: ["television", "television baggage", "tv baggage", "carrying a television", "tv charge", "tvch"],
+    synonyms: ["lcd tv", "led tv", "flat screen", "flat screen tv", "plasma tv"],
+  },
+  // Out-of-gauge / oversized checked baggage (v81.7 p.103): airport-handled,
+  // reference-only — no Contact Centre decision tree.
+  {
+    id: "out-of-gauge-baggage",
+    targetSlugs: [],
+    category: "Baggage",
+    chapterHint: "26. Baggage — Out of Gauge / Oversize",
+    safety: "broad",
+    phrases: [
+      "out of gauge", "out of gauge baggage", "oversize bag", "oversized baggage",
+      "oversized checked baggage", "oversize baggage",
+    ],
+    abbreviations: ["oogs", "oogl", "obag", "hbag"],
+  },
+
+  // ---------------- OPS-2 conservative generics (never auto-route) ----------
+  // These exist so the layer RECOGNISES the vocabulary (category hints, search
+  // expansion, multi-topic visibility) while guaranteeing that a bare generic
+  // word can never select an operational workflow.
+  { id: "broad-animal", targetSlugs: [], category: "Special services", safety: "broad", phrases: ["dog", "dogs", "pet", "pets", "animal", "cat"] },
+  { id: "broad-boarding", targetSlugs: [], category: "Check-in & airport", safety: "broad", phrases: ["gate", "boarding", "boarding gate", "gate closed"] },
+  { id: "broad-travel-document", targetSlugs: [], category: "Travel documents", safety: "broad", phrases: ["passport", "travel document", "travel documents", "emirates id card"] },
+  { id: "broad-connection", targetSlugs: [], category: "Check-in & airport", safety: "broad", phrases: ["connection", "connecting", "transit", "transfer", "stopover", "layover"] },
+  { id: "broad-interline", targetSlugs: [], category: "Booking changes", safety: "broad", phrases: ["interline", "codeshare", "other airline", "oal"] },
+  { id: "broad-ssr", targetSlugs: [], category: "Special services", safety: "broad", phrases: ["ssr", "special request", "special service request"] },
   // v81.4 Accessibility seating guidelines: relevant to both wheelchair and DPNA.
   {
     id: "accessibility-seating",
@@ -395,7 +479,13 @@ export function conceptsForRouter(): { intent: string; slugs: string[]; phrases:
   ).map((c) => ({
     intent: c.id,
     slugs: c.targetSlugs,
-    phrases: [...c.phrases, ...(c.abbreviations ?? []), ...(c.misspellings ?? [])],
+    phrases: [
+      ...c.phrases,
+      ...(c.aliases ?? []),
+      ...(c.synonyms ?? []),
+      ...(c.abbreviations ?? []),
+      ...(c.misspellings ?? []),
+    ],
   }));
 }
 

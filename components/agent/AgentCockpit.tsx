@@ -71,13 +71,17 @@ function classify(payload: CockpitSearchPayload): CockpitState {
   }
 
   if (intel.ambiguity && intel.candidateSlugs.length > 1) {
-    // Prefer the OI candidate ordering when those cards were returned.
+    // OPS-2: use the resolver's explicit topic structure. Several DISTINCT
+    // operational topics => multi-topic; one topic pointing at several
+    // workflows => ambiguous. Outcomes are never merged and no workflow is
+    // chosen automatically.
     const bySlug = new Map(results.map((r) => [r.slug, r]));
+    const routableTopics = intel.topics.filter((t) => t.candidateSlugs.length > 0);
     const candidates = intel.candidateSlugs
       .map((slug) => bySlug.get(slug))
       .filter((r): r is CockpitSearchResult => Boolean(r));
     const items = candidates.length > 0 ? candidates : results.slice(0, 3);
-    const kind = intel.matchedConceptIds.length > 1 ? "multi-topic" : "ambiguous";
+    const kind = routableTopics.length > 1 ? "multi-topic" : "ambiguous";
     if (items.length > 1) {
       return { stage: "suggestions", query, results, variant: { kind, items } };
     }

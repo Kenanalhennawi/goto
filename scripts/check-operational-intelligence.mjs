@@ -59,7 +59,9 @@ const SAFE = [
   ["baggage protection", "blue-ribbon-bags"],
   ["brb", "blue-ribbon-bags"],
   ["bicycle", "sporting-equipment"],
-  ["sporting weapon", "sporting-equipment"],
+  // NOTE (OPS-2): "sporting weapon" is now DELIBERATELY ambiguous between the
+  // Sporting Equipment process (v81.7 ch.28) and the Firearms process (ch.29).
+  // It is asserted below instead of here.
   ["emirates id", "travel-requirements"],
   ["visa change", "visa-change"],
   ["ok to board", "ok-to-board"],
@@ -103,6 +105,15 @@ for (const [q, slugs] of AMBIG) {
   assert.ok(res.candidateSlugs.length > 1, `"${q}" must have multiple candidates`);
   for (const s of slugs) assert.ok(res.candidateSlugs.includes(s), `"${q}" should include ${s}`);
 }
+
+// OPS-2: firearms/ammunition is a separate concept from sporting equipment;
+// "sporting weapon" spans both processes, which are documented on the same
+// reviewed card, so it is ambiguous with a single candidate slug.
+const sportingWeapon = r("sporting weapon");
+assert.equal(sportingWeapon.safety, "ambiguous", "'sporting weapon' spans ch.28 and ch.29");
+assert.deepEqual(sportingWeapon.candidateSlugs, ["sporting-equipment"]);
+assert.ok(onlySlug("firearm", "sporting-equipment"), "'firearm' resolves to the reviewed weapon guidance");
+assert.ok(onlySlug("ammunition", "sporting-equipment"), "'ammunition' resolves to the reviewed weapon guidance");
 
 // ---------------------------------------------------------------------------
 // 4. Unsafe — never route, carries a safe message
