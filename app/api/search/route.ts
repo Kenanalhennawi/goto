@@ -7,7 +7,15 @@ import {
   scoreOperationalCard,
 } from "@/lib/search";
 import type { OperationalCardSearchResult, SearchResult } from "@/lib/types";
+import { requireUser } from "@/lib/auth/guards";
 import { NextResponse } from "next/server";
+
+// SEC-1: internal search results are never cacheable by shared caches.
+const NO_STORE = { "Cache-Control": "private, no-store" };
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: NO_STORE });
+}
 
 type ProcedureSearchRow = Parameters<typeof scoreOperationalCard>[0] & {
   id: string;
@@ -40,34 +48,38 @@ function chapterSlugOf(rel: ProcedureSearchRow["chapters"]): string | null {
 }
 
 export async function GET(request: Request) {
+  // SEC-1: internal search requires an authenticated session.
+  const session = await requireUser();
+  if (!session.ok) return session.response;
+
   const { searchParams } = new URL(request.url);
   const query = (searchParams.get("q") ?? "").trim();
 
   if (query.length < MIN_SEARCH_QUERY_LENGTH) {
-    return NextResponse.json({ results: [] });
+    return json({ results: [] });
   }
 
   const terms = buildSearchTerms(query);
 
   if (!terms) {
-    return NextResponse.json({ results: [] });
+    return json({ results: [] });
   }
 
-  const supabase = await createServerSupabaseClient();
+  const supabase = session.supabase;
   const cardResults = await searchOperationalCards(supabase, query);
   const { data, error } = await supabase.rpc("search_chapters", {
     query: terms,
   });
 
   if (error) {
-    return NextResponse.json({ results: cardResults, error: "Chapter search failed." });
+    return json({ results: cardResults, error: "Chapter search failed." });
   }
 
   const results = (data ?? []) as SearchResult[];
   const ids = results.map((result) => result.id).filter(Boolean);
 
   if (ids.length === 0) {
-    return NextResponse.json({ results: cardResults });
+    return json({ results: cardResults });
   }
 
   const { data: chapters } = await supabase
@@ -97,7 +109,7 @@ export async function GET(request: Request) {
     return sanitized;
   });
 
-  return NextResponse.json({ results: [...cardResults, ...rankedChapters].slice(0, 14) });
+  return json({ results: [...cardResults, ...rankedChapters].slice(0, 14) });
 }
 
 async function searchOperationalCards(

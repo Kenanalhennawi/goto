@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { requireUser } from "@/lib/auth/guards";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -7,10 +7,10 @@ const MAX_MESSAGE_LENGTH = 2000;
 const MAX_SECTION_ID_LENGTH = 160;
 
 export async function POST(request: Request) {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // SEC-1: issue reports are internal — a session is now required.
+  const session = await requireUser();
+  if (!session.ok) return session.response;
+  const { supabase, user } = session;
   const body = await request.json().catch(() => null);
   if (!isRecord(body)) {
     return NextResponse.json({ error: "Invalid issue report." }, { status: 400 });
@@ -62,8 +62,8 @@ export async function POST(request: Request) {
     chapter_slug: chapter.slug,
     section_id: sectionId || null,
     message,
-    reported_by: user?.id ?? null,
-    reporter_email: user?.email ?? null,
+    reported_by: user.id,
+    reporter_email: user.email ?? null,
   });
 
   if (error) {

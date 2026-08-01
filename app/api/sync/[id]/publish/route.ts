@@ -1,6 +1,5 @@
-import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
-import { canManageUsers } from "@/lib/permissions";
+import { requireAdmin } from "@/lib/auth/guards";
 import { buildPublishPlan, type ExistingChapterContent } from "@/lib/sync-identity";
 
 export async function POST(
@@ -8,25 +7,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createServerSupabaseClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-
-  const { data: role } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!canManageUsers(role?.role)) {
-    return NextResponse.json(
-      { error: "Only admins can publish live content." },
-      { status: 403 }
-    );
-  }
+  // SEC-1 guard: admin/owner only may publish live content (unchanged rule).
+  const session = await requireAdmin();
+  if (!session.ok) return session.response;
+  const { supabase, user } = session;
 
   const { data: syncRun } = await supabase
     .from("sync_runs")
@@ -179,7 +163,7 @@ export async function POST(
 }
 
 async function markRunPublished(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  supabase: Extract<Awaited<ReturnType<typeof requireAdmin>>, { ok: true }>["supabase"],
   id: string
 ) {
   return supabase

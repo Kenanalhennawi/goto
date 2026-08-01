@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { canAccessAdmin, canManageUsers } from "@/lib/permissions";
+import { requireAdmin, requireReviewer } from "@/lib/auth/guards";
 
 const STATUSES = new Set(["open", "reviewing", "resolved", "dismissed"]);
 
@@ -9,24 +8,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-
-  const { data: role } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!canAccessAdmin(role?.role)) {
-    return NextResponse.json({ error: "No access." }, { status: 403 });
-  }
+  // SEC-1 guard: quality/admin/owner may update issue status (unchanged rule).
+  const session = await requireReviewer();
+  if (!session.ok) return session.response;
+  const { supabase, user } = session;
 
   const body = (await request.json().catch(() => ({}))) as { status?: string };
   const status = body.status?.trim() ?? "";
@@ -55,24 +40,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-
-  const { data: role } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!canManageUsers(role?.role)) {
-    return NextResponse.json({ error: "Only admins can delete issues." }, { status: 403 });
-  }
+  // SEC-1 guard: admin/owner may delete issues (unchanged rule).
+  const session = await requireAdmin();
+  if (!session.ok) return session.response;
+  const { supabase } = session;
 
   const { error } = await supabase.from("content_issues").delete().eq("id", id);
 

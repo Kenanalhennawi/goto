@@ -1,8 +1,7 @@
-import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 import { normalizeExternalUrl } from "@/lib/links";
 import type { ContentBlock } from "@/lib/types";
-import { canEditProcedures } from "@/lib/permissions";
+import { requireReviewer } from "@/lib/auth/guards";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_BODY_TEXT_LENGTH = 250_000;
@@ -23,25 +22,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid chapter reference." }, { status: 400 });
   }
 
-  const supabase = await createServerSupabaseClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-
-  const { data: role } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!canEditProcedures(role?.role)) {
-    return NextResponse.json(
-      { error: "Your account doesn't have edit access." },
-      { status: 403 }
-    );
-  }
+  // SEC-1 guard: quality/admin/owner may edit chapters (unchanged rule —
+  // canEditProcedures maps to the same reviewer role set).
+  const session = await requireReviewer();
+  if (!session.ok) return session.response;
+  const { supabase, user } = session;
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {

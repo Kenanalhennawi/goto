@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
+import { safeRelativePath } from "@/lib/auth/safe-redirect";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -26,7 +27,11 @@ export function LoginForm() {
       return;
     }
 
-    router.push("/account");
+    // SEC-1: honor ?next=<path> from the middleware redirect, but only ever a
+    // safe same-origin relative path (open-redirect protection). Read at
+    // submit time (no useSearchParams, so the page prerenders unchanged).
+    const params = new URLSearchParams(window.location.search);
+    router.push(safeRelativePath(params.get("next"), "/account"));
     router.refresh();
   }
 

@@ -1,6 +1,6 @@
-import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
-import { canManageUsers, isOwner, normalizeRole } from "@/lib/permissions";
+import { requireAdmin } from "@/lib/auth/guards";
+import { isOwner, normalizeRole } from "@/lib/permissions";
 
 const ROLES = new Set(["no_special_access", "quality", "admin", "owner"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -14,28 +14,13 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid user reference." }, { status: 400 });
   }
 
-  const supabase = await createServerSupabaseClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
+  // SEC-1 guard: admin/owner only (unchanged rule; owner-specific checks below).
+  const session = await requireAdmin();
+  if (!session.ok) return session.response;
+  const { supabase, user } = session;
 
   if (user.id === userId) {
     return NextResponse.json({ error: "You cannot change your own role here." }, { status: 400 });
-  }
-
-  const { data: currentRole } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!canManageUsers(currentRole?.role)) {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null);
@@ -55,7 +40,7 @@ export async function PATCH(
     .eq("user_id", userId)
     .maybeSingle();
 
-  const currentIsOwner = isOwner(currentRole?.role);
+  const currentIsOwner = isOwner(session.role);
   const targetNormalizedRole = normalizeRole(targetRole?.role);
 
   if (targetNormalizedRole === "owner" && !currentIsOwner) {
