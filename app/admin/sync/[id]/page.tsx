@@ -36,7 +36,7 @@ export default async function SyncReviewPage({
   const { data: syncRun } = await supabase
     .from("sync_runs")
     .select(
-      "id, source_filename, original_filename, source_version, status, state, progress_pct, progress_message, chapters_changed, chapters_added, pdf_version, pdf_version_date, pdf_page_count, pdf_sha256, extractor_version, error_code, error_detail, retry_of_run_id, created_at, completed_at"
+      "id, source_filename, original_filename, source_version, status, state, progress_pct, progress_message, chapters_changed, chapters_added, pdf_version, pdf_version_date, pdf_page_count, pdf_sha256, extractor_version, error_code, error_detail, retry_of_run_id, created_at, completed_at, new_ratio, removed_ratio, ambiguous_count, reclass_override_reason"
     )
     .eq("id", id)
     .single();
@@ -64,7 +64,16 @@ export default async function SyncReviewPage({
     return acc;
   }, {});
 
-  const canPublish = canManageUsers(role?.role);
+  // UPD-2.7: block publishing when identity matching produced a mass
+  // reclassification, unless an owner recorded an audited override.
+  const RECLASS_LIMIT = 0.2;
+  const newRatio = Number(syncRun.new_ratio ?? 0);
+  const removedRatio = Number(syncRun.removed_ratio ?? 0);
+  const overridden = Boolean((syncRun.reclass_override_reason ?? "").trim());
+  const reclassBlocked =
+    !overridden && (newRatio > RECLASS_LIMIT || removedRatio > RECLASS_LIMIT);
+
+  const canPublish = canManageUsers(role?.role) && !reclassBlocked;
 
   return (
     <div className="flex flex-col flex-1">
@@ -81,7 +90,15 @@ export default async function SyncReviewPage({
           run={syncRun}
           counts={counts}
           impact={impact ?? []}
-          canRetry={canPublish}
+          canRetry={canManageUsers(role?.role)}
+          reclass={{
+            newRatio,
+            removedRatio,
+            ambiguousCount: Number(syncRun.ambiguous_count ?? 0),
+            blocked: reclassBlocked,
+            overridden,
+            limit: RECLASS_LIMIT,
+          }}
         />
 
         <div className="mt-6">

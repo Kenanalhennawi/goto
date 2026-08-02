@@ -10,7 +10,7 @@
 // Comparison uses normalized hashes; human-readable text is retained by the
 // caller (sync_staged_changes keeps old_body_text / new_body_text).
 
-import { normalizeTitle, slugifyChapter } from "./sync-identity.ts";
+import { normalizeTitle, slugifyChapter, stripChapterNumberPrefix } from "./sync-identity.ts";
 
 export type ChangeClass =
   | "unchanged"
@@ -60,6 +60,8 @@ export type ChapterDiff = {
   newSourceVersion: string | null;
   /** Human-readable reasons; safe to show in the Admin UI. */
   reasons: string[];
+  /** True when several live chapters matched a tier and none was auto-chosen. */
+  ambiguous?: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -120,30 +122,75 @@ export function chapterContentHash(
 // Identity resolution (same order as lib/sync-identity.ts)
 // ---------------------------------------------------------------------------
 
+/** Exactly one match => use it; several => ambiguous, never auto-matched. */
+function uniqueMatch(
+  live: LiveChapter[],
+  predicate: (c: LiveChapter) => boolean
+): { match: LiveChapter | null; ambiguous: boolean } {
+  const hits = live.filter(predicate);
+  if (hits.length === 1) return { match: hits[0], ambiguous: false };
+  return { match: null, ambiguous: hits.length > 1 };
+}
+
+/**
+ * UPD-2.7 deterministic identity resolution. No fuzzy or AI matching, and an
+ * ambiguous tier is never auto-resolved — it falls through to `none` so a
+ * human reviews it rather than two chapters being silently merged.
+ *
+ * Order: stable slug -> prefix-stripped slug -> prefix-stripped normalized
+ * title -> titleCore -> chapter number (content-hash gated) -> unmatched.
+ */
 function resolveIdentity(
   incoming: ExtractedChapter,
   live: LiveChapter[]
-): { match: LiveChapter | null; method: IdentityMatchMethod } {
+): { match: LiveChapter | null; method: IdentityMatchMethod; ambiguous: boolean } {
+  // (a) exact stable slug as provided by the extractor
   const slug = (incoming.slug ?? "").trim() || slugifyChapter(incoming.title);
-  const bySlug = live.find((c) => c.slug === slug);
-  if (bySlug) return { match: bySlug, method: "slug" };
+  const bySlug = uniqueMatch(live, (c) => c.slug === slug);
+  if (bySlug.match) return { match: bySlug.match, method: "slug", ambiguous: false };
+  if (bySlug.ambiguous) return { match: null, method: "none", ambiguous: true };
 
-  const target = normalizeTitle(incoming.title);
-  if (target) {
-    const byTitle = live.find((c) => normalizeTitle(c.title) === target);
-    if (byTitle) return { match: byTitle, method: "title" };
+  // (b) slug regenerated from the title WITHOUT its leading chapter number
+  const strippedSlug = slugifyChapter(stripChapterNumberPrefix(incoming.title));
+  if (strippedSlug && strippedSlug !== slug) {
+    const byStripped = uniqueMatch(live, (c) => c.slug === strippedSlug);
+    if (byStripped.match) return { match: byStripped.match, method: "slug", ambiguous: false };
+    if (byStripped.ambiguous) return { match: null, method: "none", ambiguous: true };
   }
 
+  // (c) normalized title without the leading chapter number
+  const strippedTitle = normalizeTitle(stripChapterNumberPrefix(incoming.title));
+  if (strippedTitle) {
+    const byStrippedTitle = uniqueMatch(
+      live,
+      (c) => normalizeTitle(stripChapterNumberPrefix(c.title)) === strippedTitle
+    );
+    if (byStrippedTitle.match) return { match: byStrippedTitle.match, method: "title", ambiguous: false };
+    if (byStrippedTitle.ambiguous) return { match: null, method: "none", ambiguous: true };
+  }
+
+  // (d) titleCore (punctuation-insensitive topic comparison)
+  const core = titleCore(incoming.title);
+  if (core) {
+    const byCore = uniqueMatch(live, (c) => titleCore(c.title) === core);
+    if (byCore.match) return { match: byCore.match, method: "title", ambiguous: false };
+    if (byCore.ambiguous) return { match: null, method: "none", ambiguous: true };
+  }
+
+  // (e) chapter number, ONLY when the content hashes agree — otherwise a
+  // renumber would masquerade as a content change.
   if (incoming.chapter_number !== null && incoming.chapter_number !== undefined) {
-    const byNumber = live.find((c) => c.chapter_number === incoming.chapter_number);
-    // A number-only match is trusted ONLY when the content is identical;
-    // otherwise renumbering would masquerade as a content change.
-    if (byNumber && chapterContentHash(byNumber) === chapterContentHash(incoming)) {
-      return { match: byNumber, method: "number" };
+    const byNumber = uniqueMatch(live, (c) => c.chapter_number === incoming.chapter_number);
+    if (
+      byNumber.match &&
+      chapterContentHash(byNumber.match) === chapterContentHash(incoming)
+    ) {
+      return { match: byNumber.match, method: "number", ambiguous: false };
     }
   }
 
-  return { match: null, method: "none" };
+  // (f) unmatched
+  return { match: null, method: "none", ambiguous: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +265,7 @@ export function classifyExtraction(
   const matchedIds = new Set<string>();
 
   for (const chapter of incoming) {
-    const { match, method } = resolveIdentity(chapter, live);
+    const { match, method, ambiguous } = resolveIdentity(chapter, live);
     const slug = (chapter.slug ?? "").trim() || slugifyChapter(chapter.title);
 
     if (!match) {
@@ -235,7 +282,10 @@ export function classifyExtraction(
         newPageEnd: chapter.page_end ?? null,
         oldSourceVersion: null,
         newSourceVersion: chapter.source_version ?? targetSourceVersion,
-        reasons: ["No matching chapter in the live manual."],
+        reasons: ambiguous
+          ? ["Several live chapters matched; resolve manually rather than merging."]
+          : ["No matching chapter in the live manual."],
+        ambiguous,
       });
       continue;
     }
@@ -288,6 +338,57 @@ export const AUTO_APPROVABLE_CLASSES: ChangeClass[] = ["unchanged", "metadata_on
 
 export function isAutoApprovable(changeClass: ChangeClass): boolean {
   return AUTO_APPROVABLE_CLASSES.includes(changeClass);
+}
+
+// ---------------------------------------------------------------------------
+// UPD-2.7: mass-reclassification guard
+// ---------------------------------------------------------------------------
+
+/** A run may not become review-ready when either ratio exceeds this. */
+export const MASS_RECLASSIFICATION_THRESHOLD = 0.2;
+
+export const MASS_RECLASSIFICATION_MESSAGE =
+  "Chapter identity matching produced an unusually large number of new or removed chapters. " +
+  "Review the extraction and matching configuration before continuing.";
+
+export type ReclassificationGuard = {
+  incomingCount: number;
+  existingCount: number;
+  newIncoming: number;
+  removedExisting: number;
+  newRatio: number;
+  removedRatio: number;
+  ambiguousCount: number;
+  blocked: boolean;
+};
+
+/**
+ * A correct manual update touches a minority of chapters. Mass new/removed
+ * means identity matching failed (as in the v81.7 run: 78 new / 79 removed),
+ * so the run must be blocked before review rather than published.
+ */
+export function evaluateReclassificationGuard(
+  diffs: ChapterDiff[],
+  incomingCount: number,
+  existingCount: number
+): ReclassificationGuard {
+  const newIncoming = diffs.filter((d) => d.changeClass === "new").length;
+  const removedExisting = diffs.filter((d) => d.changeClass === "removed").length;
+  const ambiguousCount = diffs.filter((d) => d.ambiguous === true).length;
+  const newRatio = incomingCount > 0 ? newIncoming / incomingCount : 0;
+  const removedRatio = existingCount > 0 ? removedExisting / existingCount : 0;
+  return {
+    incomingCount,
+    existingCount,
+    newIncoming,
+    removedExisting,
+    newRatio,
+    removedRatio,
+    ambiguousCount,
+    blocked:
+      newRatio > MASS_RECLASSIFICATION_THRESHOLD ||
+      removedRatio > MASS_RECLASSIFICATION_THRESHOLD,
+  };
 }
 
 export function summarizeDiffs(diffs: ChapterDiff[]): Record<ChangeClass, number> {

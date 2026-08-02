@@ -54,16 +54,27 @@ const IMPACT_LABEL: Record<string, string> = {
   orphaned_source: "New source topic",
 };
 
+type Reclass = {
+  newRatio: number;
+  removedRatio: number;
+  ambiguousCount: number;
+  blocked: boolean;
+  overridden: boolean;
+  limit: number;
+};
+
 export function SyncRunSummary({
   run,
   counts,
   impact,
   canRetry,
+  reclass,
 }: {
   run: Run;
   counts: Record<string, number>;
   impact: ImpactRow[];
   canRetry: boolean;
+  reclass?: Reclass;
 }) {
   const router = useRouter();
   const [retrying, setRetrying] = useState(false);
@@ -156,6 +167,33 @@ export function SyncRunSummary({
           </div>
         ) : null}
       </section>
+
+      {/* ---- UPD-2.7 mass-reclassification gate ---- */}
+      {reclass ? (
+        <section
+          className={`content-card p-5 ${reclass.blocked ? "border-red-300 bg-red-50" : ""}`}
+        >
+          <h2 className="font-display text-base font-semibold text-ink">Identity matching</h2>
+          <p className="mt-2 text-sm text-ink-muted">
+            New {(reclass.newRatio * 100).toFixed(1)}% · Removed{" "}
+            {(reclass.removedRatio * 100).toFixed(1)}% · limit{" "}
+            {(reclass.limit * 100).toFixed(0)}%
+            {reclass.ambiguousCount > 0 ? ` · ${reclass.ambiguousCount} ambiguous` : ""}
+          </p>
+          {reclass.blocked ? (
+            <p className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700">
+              Chapter identity matching produced an unusually large number of new or removed
+              chapters. Review the extraction and matching configuration before continuing.
+              Publishing is disabled until an owner records an audited override.
+            </p>
+          ) : null}
+          {reclass.overridden ? (
+            <p className="mt-3 text-xs font-semibold text-warn">
+              An owner override is recorded for this run.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* ---- Classification counts ---- */}
       <section className="content-card p-5">

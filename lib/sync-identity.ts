@@ -53,6 +53,32 @@ export type ChapterIdentity =
  * Slugify a chapter title. Kept identical to the historical publish-route
  * slugify so slugs match chapters created by earlier syncs.
  */
+/**
+ * UPD-2.7: remove ONLY a leading chapter-number prefix.
+ *
+ *   "28. Sporting Equipment"  -> "Sporting Equipment"
+ *   "48.1 Visa Change"        -> "Visa Change"
+ *   "35 - Wheelchair"         -> "Wheelchair"
+ *
+ * Internal numbers and all other punctuation are preserved byte-for-byte, so
+ * slugifyChapter() still produces production-compatible slugs such as
+ * "ssr---special-requests". Never routes the value through a
+ * punctuation-normalizing helper.
+ */
+export function stripChapterNumberPrefix(value: string | null | undefined): string {
+  const text = (value ?? "").trim();
+  // Strip <digits>[.<digits>...] ONLY when it is followed by a real separator
+  // (. ) - – —) or by whitespace preceding a capitalised word. This keeps
+  // ordinary leading numbers intact, e.g. "7 days notice policy".
+  // An optional range ("26.6-26.9 WorldTracer") is part of the prefix.
+  const stripped = text.replace(
+    /^\d+(?:\.\d+)*(?:\s*[-–—]\s*\d+(?:\.\d+)*)?(?:\s*[.)\-–—]\s*|\s+(?=[A-Z(]))/,
+    ""
+  );
+  // Never strip the entire title (e.g. a chapter literally titled "2026").
+  return stripped.trim().length > 0 ? stripped.trim() : text;
+}
+
 export function slugifyChapter(text: string): string {
   return text
     .toLowerCase()

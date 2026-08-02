@@ -151,12 +151,36 @@ def parse_version(first_pages: list[str]) -> tuple[str | None, str | None, str |
     return title, version, iso_date
 
 
+def strip_chapter_number_prefix(text: str) -> str:
+    """Mirror of stripChapterNumberPrefix() in lib/sync-identity.ts.
+
+    Removes ONLY a leading chapter number ("28. ", "48.1 ", "35 - ",
+    "26.6-26.9 "). Internal numbers and all other punctuation are preserved, so
+    the resulting slug stays byte-compatible with production
+    (e.g. "SSR - Special Requests" -> "ssr---special-requests").
+    """
+    value = text.strip()
+    stripped = re.sub(
+        r"^\d+(?:\.\d+)*(?:\s*[-–—]\s*\d+(?:\.\d+)*)?(?:\s*[.)\-–—]\s*|\s+(?=[A-Z(]))",
+        "",
+        value,
+    )
+    stripped = stripped.strip()
+    return stripped if stripped else value
+
+
 def slugify(text: str) -> str:
-    """Must match slugifyChapter() in lib/sync-identity.ts."""
+    """Byte-compatible mirror of slugifyChapter() in lib/sync-identity.ts.
+
+    Must NOT collapse existing hyphens and must NOT trim leading/trailing
+    dashes, so production semantics are preserved exactly:
+        "SSR - Special Requests" -> "ssr---special-requests"
+    re.ASCII keeps \\w equivalent to JavaScript's [A-Za-z0-9_].
+    """
     value = text.lower().strip()
-    value = re.sub(r"[^\w\s-]", "", value)
-    value = re.sub(r"[\s_-]+", "-", value)
-    return re.sub(r"^-+|-+$", "", value)[:80]
+    value = re.sub(r"[^\w\s-]", "", value, flags=re.ASCII)
+    value = re.sub(r"[\s_]+", "-", value)
+    return value[:60]
 
 
 def clean_body(raw: str) -> str:
@@ -210,8 +234,11 @@ def extract_chapters(pages: list[str]) -> list[dict[str, Any]]:
         chapters.append(
             {
                 "chapterNumber": number,
+                # The numbered title is kept for display; the SLUG is derived
+                # from the title WITHOUT the leading chapter number so it stays
+                # stable across renumbering and matches production identity.
                 "title": full_title,
-                "slug": slugify(full_title),
+                "slug": slugify(strip_chapter_number_prefix(full_title)),
                 "pageStart": page_index + 1,
                 "pageEnd": end_index + 1,
                 "body": clean_body(raw),

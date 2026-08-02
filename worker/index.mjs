@@ -21,7 +21,12 @@ import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 
 import { validateExtractionContract, evaluateVersionGate } from "../lib/extraction-contract.ts";
-import { classifyExtraction, isAutoApprovable } from "../lib/sync-diff.ts";
+import {
+  classifyExtraction,
+  isAutoApprovable,
+  evaluateReclassificationGuard,
+  MASS_RECLASSIFICATION_MESSAGE,
+} from "../lib/sync-diff.ts";
 import { buildImpactReport } from "../lib/sync-impact.ts";
 import { archivedPdfPath } from "../lib/sync-upload.ts";
 
@@ -381,6 +386,26 @@ async function processRun(run) {
     }));
 
     const diffs = classifyExtraction(incoming, live, contract.source.version);
+
+    // UPD-2.7: a correct manual update touches a minority of chapters. Mass
+    // new/removed means identity matching failed, so the run is blocked before
+    // it can become review-ready. Only an OWNER may bypass, via an audited
+    // reclassification override stored on the run.
+    const guard = evaluateReclassificationGuard(diffs, incoming.length, live.length);
+    const overrideReason = (run.reclass_override_reason ?? "").trim();
+    if (guard.blocked && overrideReason.length === 0) {
+      console.error(
+        `[${runId}] mass reclassification`,
+        JSON.stringify({
+          newRatio: Number(guard.newRatio.toFixed(3)),
+          removedRatio: Number(guard.removedRatio.toFixed(3)),
+          newIncoming: guard.newIncoming,
+          removedExisting: guard.removedExisting,
+          ambiguous: guard.ambiguousCount,
+        })
+      );
+      throw new WorkerError("MASS_RECLASSIFICATION", MASS_RECLASSIFICATION_MESSAGE);
+    }
     const bySlug = new Map(contract.chapters.map((c) => [c.slug, c]));
 
     // ---- 6. Stage rows (80-90%) — replace any prior incomplete attempt ----
@@ -479,6 +504,9 @@ async function processRun(run) {
     const added = diffs.filter((d) => d.changeClass === "new").length;
     await setStage(runId, STAGE.READY, {
       progress_message: `Ready for review — ${changed} chapter(s) changed`,
+      new_ratio: Number(guard.newRatio.toFixed(4)),
+      removed_ratio: Number(guard.removedRatio.toFixed(4)),
+      ambiguous_count: guard.ambiguousCount,
       status: "review",
       chapters_changed: changed,
       chapters_added: added,
