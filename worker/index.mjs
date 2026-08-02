@@ -1,8 +1,8 @@
-﻿// PDF Update Studio â€” background extraction worker (UPD-2.2, self-healing).
+// PDF Update Studio — background extraction worker (UPD-2.2, self-healing).
 //
 // Provider-neutral: runs unchanged on Cloud Run (reference), Fly.io, Render or
 // Railway. Uses the service role key, which MUST exist only in the worker
-// environment â€” never in Vercel, NEXT_PUBLIC_*, the client bundle or the
+// environment — never in Vercel, NEXT_PUBLIC_*, the client bundle or the
 // browser.
 //
 // Flow: claim -> Downloading -> Validating -> Extracting -> Parsing ->
@@ -216,7 +216,7 @@ async function runExtractor(pdfPath, outDir) {
     try {
       await access(script);
     } catch {
-      // Log the basename only â€” never the absolute path or any secret.
+      // Log the basename only — never the absolute path or any secret.
       console.error(`extractor script missing: ${basename(script)}`);
       throw new WorkerError(
         "EXTRACTOR_SCRIPT_MISSING",
@@ -408,7 +408,7 @@ async function processRun(run) {
     }
     const bySlug = new Map(contract.chapters.map((c) => [c.slug, c]));
 
-    // ---- 6. Stage rows (80-90%) â€” replace any prior incomplete attempt ----
+    // ---- 6. Stage rows (80-90%) — replace any prior incomplete attempt ----
     await setStage(runId, STAGE.COMPARING, { progress_message: "Comparing" });
     await supabase.from("sync_staged_changes").delete().eq("sync_run_id", runId);
 
@@ -503,7 +503,7 @@ async function processRun(run) {
     const changed = diffs.filter((d) => d.changeClass !== "unchanged").length;
     const added = diffs.filter((d) => d.changeClass === "new").length;
     await setStage(runId, STAGE.READY, {
-      progress_message: `Ready for review â€” ${changed} chapter(s) changed`,
+      progress_message: `Ready for review — ${changed} chapter(s) changed`,
       new_ratio: Number(guard.newRatio.toFixed(4)),
       removed_ratio: Number(guard.removedRatio.toFixed(4)),
       ambiguous_count: guard.ambiguousCount,
@@ -542,7 +542,7 @@ async function loadWorkflows() {
 }
 
 // ---------------------------------------------------------------------------
-// Poll loop â€” concurrency-safe claim
+// Poll loop — concurrency-safe claim
 // ---------------------------------------------------------------------------
 async function tick() {
   const { data, error } = await supabase.rpc("claim_sync_run", {
@@ -569,4 +569,3 @@ async function main() {
 }
 
 main();
-
