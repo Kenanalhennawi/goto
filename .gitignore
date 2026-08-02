@@ -43,3 +43,29 @@ next-env.d.ts
 # Python bytecode from tools/extraction
 __pycache__/
 *.pyc
+
+# HYG-1: worker runtime logs. These record run ids, file names and database
+# error text from real operational syncs and must never enter version control.
+worker-*.log
+*.worker.log
+
+# HYG-1: extraction artifacts. Regenerated from the source PDF on demand by
+# tools/extraction/extract.py; they are large, machine-generated and must not
+# be committed or treated as a source of truth.
+/chapters.json
+/existing-chapters.json
+/extraction-out/
+
+# HYG-1: the authoritative manual PDF is never copied into the repository.
+The_GO_TO_document.pdf
+*.pdf
+
+# HYG-1: this project uses npm. package-lock.json is the tracked, canonical
+# lockfile. A stray pnpm-lock.yaml appeared alongside it, and pnpm-workspace.yaml
+# still contains unconfigured placeholders ("set this to true or false"), which
+# would fail a pnpm install. Two lockfiles also make the deployment platform's
+# package-manager detection ambiguous and installs non-reproducible.
+# If the project ever deliberately moves to pnpm: delete package-lock.json,
+# commit pnpm-lock.yaml, and remove these two lines.
+pnpm-lock.yaml
+pnpm-workspace.yaml
