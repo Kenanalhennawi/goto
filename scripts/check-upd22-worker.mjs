@@ -268,6 +268,116 @@ assert.ok(/NO_TEXT_LAYER/.test(extractPy), "empty text layer must raise a proper
 }
 
 // ===========================================================================
+// 9d. UPD-2.5: safe impact-insert diagnostics + local row validation
+// ===========================================================================
+{
+  // (a) Local row validation runs BEFORE the insert, with its own stable code.
+  assert.ok(/function validateImpactRow\(row\)/.test(worker), "impact rows must be validated locally");
+  assert.ok(/"INVALID_IMPACT_ROW"/.test(worker), "local validation needs a distinct code");
+  const impactBlock = worker.slice(
+    worker.indexOf("const impactRows = impact.map"),
+    worker.indexOf("await setStage(runId, STAGE.READY")
+  );
+  assert.ok(impactBlock.length > 0, "impact section must exist");
+  assert.ok(
+    impactBlock.indexOf("INVALID_IMPACT_ROW") < impactBlock.indexOf('.from("sync_impact_report").insert('),
+    "row validation must precede the insert"
+  );
+
+  // (b) All required field checks are present.
+  for (const check of ["run_id", "impact_type", "status", "entity_slug", "requires_manual_review"]) {
+    assert.ok(new RegExp(`row\\.${check}`).test(worker), `validator must check ${check}`);
+  }
+  assert.ok(/UUID_RE/.test(worker), "run_id must be UUID-checked");
+  assert.ok(/IMPACT_TYPES = new Set\(\[/.test(worker), "impact_type must use an allow-list");
+  assert.ok(/IMPACT_STATUSES = new Set\(\["ok", "review", "blocked"\]\)/.test(worker), "status allow-list must be ok/review/blocked");
+
+  // (c) Supabase diagnostics: exactly the six safe fields, nothing more.
+  assert.ok(/function logImpactInsertFailure\(/.test(worker), "a dedicated safe logger is required");
+  const logger = worker.slice(
+    worker.indexOf("function logImpactInsertFailure("),
+    worker.indexOf("}", worker.indexOf("JSON.stringify({", worker.indexOf("function logImpactInsertFailure(")))
+  );
+  for (const field of ["error?.code", "error?.message", "error?.details", "error?.hint", "batchStart", "batchCount"]) {
+    assert.ok(logger.includes(field), `diagnostics must include ${field}`);
+  }
+  // (d) Forbidden values must never be logged. Note batchStart/batchCount are
+  // required, so the row array `batch` is matched on a word boundary.
+  for (const banned of [
+    /\bbatch\b/,
+    /\bimpactRows\b/,
+    /row\.reason/,
+    /error\.stack|\?\.stack/,
+    /\bheaders\b/i,
+    /Authorization/i,
+    /SERVICE_ROLE/i,
+  ]) {
+    assert.ok(!banned.test(logger), `diagnostics must not log ${banned}`);
+  }
+  // Row CONTENTS must never be logged. A count (impactRows.length) is fine.
+  assert.ok(!/JSON\.stringify\(batch\b/.test(worker), "raw batch rows must never be serialised to the log");
+  assert.ok(!/JSON\.stringify\(impactRows\b/.test(worker), "impact rows must never be serialised to the log");
+  assert.ok(!/console\.(error|log)\([^)]*\$\{impactRows\}/.test(worker), "the impact row array must never be interpolated");
+  assert.ok(!/console\.(error|log)\([^)]*\$\{batch\}/.test(worker), "the batch array must never be interpolated");
+
+  // (e) The persisted, user-facing failure is unchanged.
+  assert.ok(
+    /new WorkerError\("IMPACT_FAILED", "Could not write the impact report\."\)/.test(worker),
+    "persisted IMPACT_FAILED message must be preserved"
+  );
+  assert.ok(
+    /new WorkerError\("INVALID_IMPACT_ROW", "Could not write the impact report\."\)/.test(worker),
+    "local validation must keep the same user-facing message"
+  );
+
+  // (f) A local structural fault must not consume automatic retries.
+  const transient = worker.slice(
+    worker.indexOf("const TRANSIENT_ERROR_CODES"),
+    worker.indexOf("]);", worker.indexOf("const TRANSIENT_ERROR_CODES"))
+  );
+  assert.ok(!transient.includes("INVALID_IMPACT_ROW"), "INVALID_IMPACT_ROW must not auto-retry");
+  assert.ok(transient.includes("IMPACT_FAILED"), "IMPACT_FAILED remains transient");
+
+  // (g) Runtime behaviour of the validator (mirrors the worker implementation).
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const TYPES = new Set(["chapter", "procedure_card", "workflow", "search_term", "orphaned_source"]);
+  const STATUSES = new Set(["ok", "review", "blocked"]);
+  const validate = (row) => {
+    if (!row || typeof row !== "object") return "row is not an object";
+    if (typeof row.run_id !== "string" || !UUID_RE.test(row.run_id)) return "run_id is not a UUID";
+    if (!TYPES.has(row.impact_type)) return "impact_type not allowed";
+    if (!STATUSES.has(row.status)) return "status not allowed";
+    if (typeof row.entity_slug !== "string" || row.entity_slug.trim().length === 0) return "entity_slug is empty";
+    if (typeof row.requires_manual_review !== "boolean") return "requires_manual_review is not a boolean";
+    return null;
+  };
+  const good = {
+    run_id: "3f8a1c2e-5b6d-4e7f-9a8b-1c2d3e4f5a6b",
+    impact_type: "workflow",
+    entity_slug: "wheelchair",
+    status: "review",
+    requires_manual_review: true,
+  };
+  assert.equal(validate(good), null, "a well-formed row must pass");
+  assert.ok(validate({ ...good, run_id: "nope" }), "bad UUID rejected");
+  assert.ok(validate({ ...good, impact_type: "chapters" }), "bad impact_type rejected");
+  assert.ok(validate({ ...good, status: "pending" }), "bad status rejected");
+  assert.ok(validate({ ...good, entity_slug: "   " }), "empty slug rejected");
+  assert.ok(validate({ ...good, requires_manual_review: "yes" }), "non-boolean rejected");
+
+  // (h) The safe log payload cannot carry a secret even if Supabase attaches one.
+  const payload = JSON.stringify({
+    code: "42P01",
+    message: 'relation "public.sync_impact_report" does not exist',
+    details: null,
+    hint: "Apply the pending migration.",
+    batchStart: 0,
+    batchCount: 82,
+  });
+  assert.ok(!/eyJ|Authorization|Bearer|service_role/i.test(payload), "diagnostic payload must be secret-free");
+}
+
+// ===========================================================================
 // 10. Verification harness
 // ===========================================================================
 assert.ok(existsSync(new URL("../scripts/verify-extraction-pipeline.mjs", import.meta.url)), "verifier must exist");

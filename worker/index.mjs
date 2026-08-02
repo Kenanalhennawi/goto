@@ -146,6 +146,55 @@ class WorkerError extends Error {
 }
 
 // ---------------------------------------------------------------------------
+// UPD-2.5: impact-report row validation + safe insert diagnostics
+// ---------------------------------------------------------------------------
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const IMPACT_TYPES = new Set([
+  "chapter",
+  "procedure_card",
+  "workflow",
+  "search_term",
+  "orphaned_source",
+]);
+const IMPACT_STATUSES = new Set(["ok", "review", "blocked"]);
+
+/**
+ * Validate one impact row locally, BEFORE it reaches Postgres. A local
+ * structural problem gets its own stable code so it is never confused with a
+ * database/permission failure. Returns a short reason, or null when valid.
+ * The row's free-text content is never included in the reason.
+ */
+function validateImpactRow(row) {
+  if (!row || typeof row !== "object") return "row is not an object";
+  if (typeof row.run_id !== "string" || !UUID_RE.test(row.run_id)) return "run_id is not a UUID";
+  if (!IMPACT_TYPES.has(row.impact_type)) return `impact_type "${String(row.impact_type).slice(0, 32)}" is not allowed`;
+  if (!IMPACT_STATUSES.has(row.status)) return `status "${String(row.status).slice(0, 32)}" is not allowed`;
+  if (typeof row.entity_slug !== "string" || row.entity_slug.trim().length === 0) {
+    return "entity_slug is empty";
+  }
+  if (typeof row.requires_manual_review !== "boolean") return "requires_manual_review is not a boolean";
+  return null;
+}
+
+/**
+ * Log ONLY the structured diagnostic fields Supabase returns. Never the rows,
+ * the service-role key, authorization headers, PDF content or a stack trace.
+ */
+function logImpactInsertFailure(runId, error, batchStart, batchCount) {
+  console.error(
+    `[${runId}] sync_impact_report insert failed`,
+    JSON.stringify({
+      code: error?.code ?? null,
+      message: error?.message ?? null,
+      details: error?.details ?? null,
+      hint: error?.hint ?? null,
+      batchStart,
+      batchCount,
+    })
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Extraction: argument arrays only, never shell interpolation
 // ---------------------------------------------------------------------------
 async function runExtractor(pdfPath, outDir) {
@@ -399,9 +448,28 @@ async function processRun(run) {
       reason: i.reason,
       requires_manual_review: i.requiresManualReview,
     }));
+    // Validate locally first so a structural problem is reported distinctly
+    // from a database/permission failure.
+    for (const [index, row] of impactRows.entries()) {
+      const problem = validateImpactRow(row);
+      if (problem) {
+        console.error(
+          `[${runId}] invalid impact row`,
+          JSON.stringify({ rowIndex: index, problem })
+        );
+        throw new WorkerError("INVALID_IMPACT_ROW", "Could not write the impact report.");
+      }
+    }
+
     for (let i = 0; i < impactRows.length; i += 100) {
-      const { error } = await supabase.from("sync_impact_report").insert(impactRows.slice(i, i + 100));
-      if (error) throw new WorkerError("IMPACT_FAILED", "Could not write the impact report.");
+      const batch = impactRows.slice(i, i + 100);
+      const { error } = await supabase.from("sync_impact_report").insert(batch);
+      if (error) {
+        // Surface the real Supabase diagnostics in the worker log only; the
+        // persisted, user-facing failure stays generic.
+        logImpactInsertFailure(runId, error, i, batch.length);
+        throw new WorkerError("IMPACT_FAILED", "Could not write the impact report.");
+      }
     }
 
     // ---- 8. Archive the PDF and finish (100%) ----
