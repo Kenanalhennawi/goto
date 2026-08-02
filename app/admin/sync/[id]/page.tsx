@@ -4,8 +4,10 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { SyncReviewClient } from "@/components/SyncReviewClient";
 import { SyncRunSummary } from "@/components/admin/SyncRunSummary";
+import { SyncLiveStatus } from "@/components/admin/SyncLiveStatus";
 import { canAccessAdmin, canManageUsers } from "@/lib/permissions";
 import type { ChangeClass } from "@/lib/sync-diff";
+import { evaluatePublishGate } from "@/lib/sync-publish-gate";
 
 // UPD-2.1: the staged-run review screen now surfaces validation metadata, the
 // diff classification counts, removed-chapter warnings and the impact report.
@@ -64,16 +66,15 @@ export default async function SyncReviewPage({
     return acc;
   }, {});
 
-  // UPD-2.7: block publishing when identity matching produced a mass
-  // reclassification, unless an owner recorded an audited override.
-  const RECLASS_LIMIT = 0.2;
-  const newRatio = Number(syncRun.new_ratio ?? 0);
-  const removedRatio = Number(syncRun.removed_ratio ?? 0);
-  const overridden = Boolean((syncRun.reclass_override_reason ?? "").trim());
-  const reclassBlocked =
-    !overridden && (newRatio > RECLASS_LIMIT || removedRatio > RECLASS_LIMIT);
+  // UPD-2.7 / PUB-1: the publish preconditions come from the SAME evaluator the
+  // publish API enforces, so the button state can never disagree with what the
+  // server will actually allow. This screen previously re-implemented the rule
+  // with its own 0.2 literal, and the API enforced nothing at all.
+  const gate = evaluatePublishGate(syncRun);
+  const { newRatio, removedRatio, overridden, reclassBlocked } = gate;
 
-  const canPublish = canManageUsers(role?.role) && !reclassBlocked;
+  // Role is the separate authorisation axis; the gate covers run lifecycle.
+  const canPublish = canManageUsers(role?.role) && gate.ok;
 
   return (
     <div className="flex flex-col flex-1">
@@ -86,6 +87,16 @@ export default async function SyncReviewPage({
           &larr; Back to sync runs
         </Link>
 
+        <SyncLiveStatus
+          runId={syncRun.id}
+          state={syncRun.state ?? syncRun.status ?? "uploaded"}
+          progressPct={syncRun.progress_pct}
+          progressMessage={syncRun.progress_message}
+          canManage={canManageUsers(role?.role)}
+        />
+
+        <div className="mt-6" />
+
         <SyncRunSummary
           run={syncRun}
           counts={counts}
@@ -97,7 +108,7 @@ export default async function SyncReviewPage({
             ambiguousCount: Number(syncRun.ambiguous_count ?? 0),
             blocked: reclassBlocked,
             overridden,
-            limit: RECLASS_LIMIT,
+            limit: gate.limit,
           }}
         />
 
