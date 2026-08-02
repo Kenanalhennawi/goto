@@ -1,0 +1,125 @@
+name: Deploy
+
+# ============================================================
+# Migrations run HERE, not in the worker.
+#
+# WHY THIS REPLACED THE WORKER-APPLIES-MIGRATIONS DESIGN
+#   The first design had the worker apply migrations on boot through a generic
+#   exec_sql(text) SECURITY DEFINER function. That was wrong:
+#     * a permanent arbitrary-SQL RPC is a standing remote-code-execution
+#       primitive — one grant mistake away from being callable by the browser;
+#     * it required a one-time manual SQL bootstrap, which is exactly the kind
+#       of step this project is trying to eliminate;
+#     * two workers scaling up could apply migrations concurrently.
+#   The Supabase CLI applies migrations over a direct authenticated Postgres
+#   connection, records them in supabase_migrations.schema_migrations, and takes
+#   a session advisory lock, so concurrent deploys serialise. No arbitrary-SQL
+#   function is created and none remains exposed.
+#
+#   Ordering is enforced by job dependencies: nothing deploys unless the
+#   migration job succeeded.
+# ============================================================
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # A second push cannot start a second migration while one is running.
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm }
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Regression suites
+        run: |
+          set -e
+          for f in scripts/check-*.mjs scripts/validate-trees.mjs; do
+            echo "--- $f"
+            node "$f"
+          done
+      - name: Build
+        run: npm run build
+
+  migrate:
+    name: Apply database migrations
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production      # protected: requires the reviewer configured in GitHub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+
+      # Record the pre-migration shape so a rollback has something to compare to.
+      - name: Snapshot current schema
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          supabase db dump --db-url "$SUPABASE_DB_URL" --schema public -f schema-before.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" --schema public --data-only=false -f full-before.sql || true
+
+      - name: Upload schema snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-before-${{ github.sha }}
+          path: schema-before.sql
+          retention-days: 90
+
+      # Applies only unapplied files, in order, inside a transaction each, with
+      # an advisory lock held for the duration.
+      - name: Apply migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --include-all
+
+      # Idempotency proof: a second push must be a no-op, not an error.
+      - name: Prove idempotency
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --include-all
+
+      - name: Assert no arbitrary-SQL function is exposed
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          # Fail the deploy if a generic SQL-executing RPC exists at all.
+          COUNT=$(psql "$SUPABASE_DB_URL" -tAc \
+            "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+              where n.nspname='public' and p.proname in ('exec_sql','execute_sql','run_sql');")
+          if [ "$COUNT" != "0" ]; then
+            echo "::error::A generic SQL-execution function is exposed. Refusing to deploy."
+            exit 1
+          fi
+
+  deploy-worker:
+    name: Deploy worker
+    needs: migrate           # the worker starts only after migrations succeed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: curl -fsSL -X POST "$RENDER_DEPLOY_HOOK"
+
+  deploy-web:
+    name: Deploy web
+    needs: migrate           # the app never runs ahead of the database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel deploy
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: curl -fsSL -X POST "$VERCEL_DEPLOY_HOOK"

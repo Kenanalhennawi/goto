@@ -28,6 +28,10 @@ const EXPECTED = [
   ["api/issues/[id]", "requireReviewer"], // PATCH; DELETE uses requireAdmin too
   ["api/issues", "requireUser"],
   ["api/chapters", "requireReviewer"],
+  // Read-only worker status for the admin screens. Reviewer-level on purpose:
+  // quality reviewers must be able to see that processing is running, and it
+  // exposes no run content — only online/offline, queue depth and timestamps.
+  ["api/sync/health", "requireReviewer"],
   ["api/sync-runs/cleanup", "requireAdmin"],
   ["api/sync-runs", "requireAdmin"],
   ["api/sync", "requireAdmin"],
@@ -44,7 +48,22 @@ for (const file of routes) {
   // No route may keep a hand-rolled session check (consistency requirement).
   assert.ok(!src.includes("supabase.auth.getUser()"), `${rel} must use the shared guards, not inline auth`);
   // Never leak raw Supabase/postgres errors.
-  assert.ok(!src.includes("error.message") && !src.includes("String(error)"), `${rel} must not return raw error messages`);
+  // PUB-1.1: the bare-substring form of this check was passing by luck — a route
+  // that named its variable `rpcError` slipped through while `error` did not.
+  // What actually matters is whether a database message reaches the CLIENT, so
+  // check the response bodies, not the whole file. Routes may still read
+  // `<x>Error.message` server-side to classify a failure or write a server log.
+  assert.ok(!src.includes("String(error)"), `${rel} must not stringify raw errors`);
+  for (const [, body] of src.matchAll(/NextResponse\.json\(\s*(\{[\s\S]*?\})\s*(?:,|\))/g)) {
+    assert.ok(
+      !/\b\w*[eE]rror\.(message|details|hint)\b/.test(body),
+      `${rel} must not put a raw database message in a response body`
+    );
+    assert.ok(
+      !/\bString\(\s*\w*[eE]rror\s*\)/.test(body),
+      `${rel} must not stringify an error into a response body`
+    );
+  }
 }
 
 // The issues [id] route keeps both levels (reviewer PATCH, admin DELETE).

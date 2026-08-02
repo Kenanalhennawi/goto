@@ -91,6 +91,22 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 async function setState(runId, state, pct, message, extra = {}) {
   const patch = {
     state,
+    // PUB-1: `status` is the legacy lifecycle column that several screens still
+    // read (`state ?? status`, `status === 'published'`). It is kept equal to
+    // `state` by the sync_runs_mirror_status trigger, which is the only place
+    // that observes every writer — the claim/reclaim/requeue RPCs set `state`
+    // in SQL and never pass through this function.
+    //
+    // Sending it here too is belt-and-braces and makes the intent explicit at
+    // the call site; the trigger is what actually guarantees it.
+    //
+    // REQUIRES 20260808000000_sync_platform_consolidation.sql, which widens
+    // sync_runs_status_check to accept the `state` vocabulary. A staged run
+    // previously wrote status='review', which the legacy constraint rejected,
+    // aborting the final write of an otherwise successful extraction. The
+    // deploy pipeline applies migrations before this service starts, and the
+    // readiness gate in main() refuses to run if they are missing.
+    status: state,
     progress_pct: Math.max(0, Math.min(100, Math.round(pct))),
     progress_message: message,
     ...extra,
@@ -507,7 +523,7 @@ async function processRun(run) {
       new_ratio: Number(guard.newRatio.toFixed(4)),
       removed_ratio: Number(guard.removedRatio.toFixed(4)),
       ambiguous_count: guard.ambiguousCount,
-      status: "pending",
+      // status is mirrored from state ('staged') by setState — no literal here.
       chapters_changed: changed,
       chapters_added: added,
       source_version: contract.source.version,
@@ -544,6 +560,17 @@ async function loadWorkflows() {
 // ---------------------------------------------------------------------------
 // Poll loop — concurrency-safe claim
 // ---------------------------------------------------------------------------
+/**
+ * Claim and process at most ONE run.
+ *
+ * Returns "claimed" when a run was taken (caller may look for more), "empty"
+ * when the queue had nothing, and "error" when the claim itself failed.
+ *
+ * claim_sync_run uses FOR UPDATE SKIP LOCKED, so this is the single authority
+ * on exclusivity. Two GitHub Actions jobs racing here cannot take the same run:
+ * the loser's SELECT skips the locked row and it sees an empty queue. Workflow
+ * concurrency groups reduce wasted compute; they are NOT what makes this safe.
+ */
 async function tick() {
   const { data, error } = await supabase.rpc("claim_sync_run", {
     p_worker_id: WORKER_ID,
@@ -551,21 +578,156 @@ async function tick() {
   });
   if (error) {
     console.error("claim_sync_run failed:", error.message);
-    return;
+    return "error";
   }
-  if (!data) return; // queue empty
+  if (!data) return "empty"; // queue empty
   const run = Array.isArray(data) ? data[0] : data;
-  if (!run?.id) return;
+  if (!run?.id) return "empty";
   console.log(`[${run.id}] claimed by ${WORKER_ID}`);
-  await processRun(run);
+  currentRunId = run.id;
+  try {
+    await processRun(run);
+  } finally {
+    currentRunId = null;
+  }
+  return "claimed";
 }
 
+/**
+ * Service-level heartbeat, independent of any run.
+ *
+ * The per-run heartbeat only exists while a job is in flight, so an idle worker
+ * was indistinguishable from a dead one — which is exactly how uploads sat in
+ * "Queued" with no explanation. This proves the worker is alive even when the
+ * queue is empty, and the admin UI reads it.
+ */
+function startServiceHeartbeat() {
+  const beat = (runId = null) =>
+    supabase
+      .rpc("record_worker_heartbeat", {
+        p_worker_id: WORKER_ID,
+        p_run_id: runId,
+        p_version: EXTRACTOR_VERSION,
+      })
+      .then(() => {}, () => {});
+  beat();
+  const timer = setInterval(() => beat(currentRunId), 30_000);
+  if (typeof timer.unref === "function") timer.unref();
+  return beat;
+}
+
+let currentRunId = null;
+
+// ---------------------------------------------------------------------------
+// Execution modes
+//
+// This worker used to be a permanent Render service that polled forever. Render
+// charges for background workers ($7/mo minimum — free compute covers only web
+// services, Key Value and Postgres), so the permanent process was replaced by
+// GitHub Actions, which is free. Actions jobs are finite, so the worker must be
+// able to start, drain the queue and exit.
+//
+//   --once        claim one run, process it, exit. Deterministic; used when a
+//                 single upload is dispatched.
+//   --drain       keep claiming until the queue is empty or the time budget is
+//                 spent, then exit 0. Default in CI.
+//   --continuous  the old forever-loop. LOCAL ENGINEERING ONLY. Never used by
+//                 Actions; kept so a developer can run a live worker.
+//
+// Exit codes: 0 = work done or nothing to do (both are success — an empty queue
+// is not a failure). 1 = infrastructure failure (bad schema, unusable claim
+// RPC), which must fail the workflow loudly.
+// ---------------------------------------------------------------------------
+const ARGV = new Set(process.argv.slice(2));
+const MODE = ARGV.has("--continuous") ? "continuous"
+           : ARGV.has("--once")       ? "once"
+           : "drain";
+// Well inside the GitHub Actions 6-hour job ceiling, and small enough that a
+// wedged extraction cannot silently burn a private repo's minute allowance.
+const DRAIN_BUDGET_MS = Number(process.env.DRAIN_BUDGET_MS ?? 45 * 60 * 1000);
+// A single 356-page extraction is minutes, not seconds. Stop claiming NEW work
+// once less than this remains, so we never start a job we cannot finish.
+const DRAIN_RESERVE_MS = Number(process.env.DRAIN_RESERVE_MS ?? 20 * 60 * 1000);
+
 async function main() {
-  console.log(`PDF Update Studio worker ${WORKER_ID} started (poll ${POLL_INTERVAL_MS}ms)`);
-  for (;;) {
-    await tick().catch((e) => console.error("tick failed:", e?.message));
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  console.log(`PDF Update Studio worker ${WORKER_ID} starting (mode=${MODE})`);
+
+  // 1. Refuse to run against a schema this build does not understand.
+  //    Migrations are applied by the deploy pipeline (Supabase CLI) BEFORE this
+  //    service starts. The worker holds no DDL privilege and executes no
+  //    arbitrary SQL — an earlier design did both and was removed.
+  try {
+    const { checkMigrationReadiness } = await import("./migrate.mjs");
+    const readiness = await checkMigrationReadiness(supabase);
+    if (!readiness.ready) {
+      console.error("STARTUP BLOCKED:", readiness.message);
+      process.exit(1);
+    }
+    console.log(readiness.message);
+  } catch (error) {
+    console.error("STARTUP BLOCKED: readiness check failed:", error?.message ?? "unknown");
+    process.exit(1);
   }
+
+  const beat = startServiceHeartbeat();
+
+  if (MODE === "continuous") {
+    console.warn("continuous mode is for LOCAL ENGINEERING ONLY; CI uses --once/--drain");
+    console.log(`worker ${WORKER_ID} ready (poll ${POLL_INTERVAL_MS}ms)`);
+    for (;;) {
+      await tick().catch((e) => console.error("tick failed:", e?.message));
+      await beat(currentRunId);
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    }
+  }
+
+  const startedAt = Date.now();
+  let processed = 0;
+  let claimErrors = 0;
+
+  for (;;) {
+    let outcome;
+    try {
+      outcome = await tick();
+    } catch (e) {
+      // A failure INSIDE processRun is already recorded against the run (state
+      // 'failed' with an error code, or requeued within max_attempts). It is a
+      // data problem, not an infrastructure problem, so it must not fail the
+      // workflow — otherwise one bad PDF turns every future scheduled run red.
+      console.error("tick failed:", e?.message ?? "unknown");
+      outcome = "handled";
+    }
+    await beat(currentRunId);
+
+    if (outcome === "claimed" || outcome === "handled") {
+      processed += 1;
+      if (MODE === "once") break;
+    } else if (outcome === "empty") {
+      break;                                  // nothing left to do
+    } else if (outcome === "error") {
+      // The claim RPC itself is unusable (missing function, bad grant, DB down).
+      // Retry a couple of times, then fail the workflow loudly.
+      claimErrors += 1;
+      if (claimErrors >= 3) {
+        console.error("claim_sync_run unusable after 3 attempts - infrastructure failure");
+        process.exit(1);
+      }
+      await new Promise((r) => setTimeout(r, 5000));
+      continue;
+    }
+
+    const elapsed = Date.now() - startedAt;
+    if (elapsed + DRAIN_RESERVE_MS >= DRAIN_BUDGET_MS) {
+      console.log(
+        `time budget reached after ${processed} run(s); exiting cleanly. ` +
+        `Anything still queued is picked up by the scheduled recovery workflow.`
+      );
+      break;
+    }
+  }
+
+  console.log(`worker ${WORKER_ID} finished: ${processed} run(s) processed`);
+  process.exit(0);
 }
 
 main();

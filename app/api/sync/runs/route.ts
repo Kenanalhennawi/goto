@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth/guards";
 import { EXTRACTOR_VERSION, MANUAL_SOURCES_BUCKET } from "@/lib/sync-upload";
+import { dispatchPdfSync, dispatchMessage } from "@/lib/github-dispatch";
 
 // UPD-2: create a sync run AFTER the PDF has been uploaded to private storage.
 // The run is queued for the background worker; this route performs no PDF
@@ -89,8 +90,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Could not create the sync run.", errorCode: "RUN_CREATE_FAILED" }, { status: 500 });
   }
 
+  // ---------------------------------------------------------------------
+  // Ask GitHub Actions to process the queue.
+  //
+  // There is no permanent worker: nothing will happen until something asks.
+  // This is deliberately AFTER the run row is committed, so the ordering is
+  // always "durable first, best-effort second". If dispatch fails, the PDF is
+  // in storage and the run is 'queued' — the scheduled recovery workflow will
+  // collect it. So a dispatch failure is a WARNING on a 201, never a 5xx:
+  // failing the upload would tell the administrator to re-upload a file that
+  // was in fact saved, and duplicate uploads are then rejected by the
+  // sync_runs_active_hash_idx unique index, which is a confusing dead end.
+  // ---------------------------------------------------------------------
+  const dispatch = await dispatchPdfSync(data.id);
+  const attemptedAt = new Date().toISOString();
+
+  // Telemetry only: timestamps and a short code from a closed set. No token,
+  // no GitHub response body. Failure to record telemetry must not affect the
+  // upload result, so the error is swallowed after logging.
+  const { error: telemetryError } = await supabase
+    .from("sync_runs")
+    .update({
+      dispatch_attempted_at: attemptedAt,
+      dispatch_succeeded_at: dispatch.ok ? attemptedAt : null,
+      dispatch_error_code: dispatch.ok ? null : dispatch.code,
+    })
+    .eq("id", data.id);
+  if (telemetryError) console.error("Dispatch telemetry write failed", telemetryError.message);
+
+  if (!dispatch.ok) console.error("PDF sync dispatch failed", dispatch.code);
+
   return NextResponse.json(
-    { runId: data.id, state: data.state, bucket: MANUAL_SOURCES_BUCKET },
+    {
+      runId: data.id,
+      state: data.state,
+      bucket: MANUAL_SOURCES_BUCKET,
+      dispatched: dispatch.ok,
+      ...(dispatch.ok ? {} : { warning: dispatchMessage(dispatch.code), warningCode: dispatch.code }),
+    },
     { status: 201, headers: { "Cache-Control": "private, no-store" } }
   );
 }

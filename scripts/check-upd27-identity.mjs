@@ -233,15 +233,55 @@ assert.ok(!transient.includes("MASS_RECLASSIFICATION"), "a blocked run must not 
 assert.ok(overrideRoute.includes("requireAdmin"), "override must require a session");
 assert.ok(overrideRoute.includes("isOwner(role)"), "override must be OWNER-only");
 assert.ok(/reason\.length < 10/.test(overrideRoute), "an override reason is mandatory");
-assert.ok(overrideRoute.includes("reclass_override_by"), "override must record the actor");
-assert.ok(overrideRoute.includes("reclass_override_at"), "override must record the timestamp");
+// PUB-1.1: the route no longer writes these columns — a direct UPDATE was not a
+// real boundary, because five permissive policies OR together and let quality,
+// admin and owner all write them (and forge reclass_override_by). The columns
+// are now written ONLY by the owner-only SECURITY DEFINER RPC, with the actor
+// derived from auth.uid(). Assert that, and assert the route no longer sends an
+// actor id at all.
+{
+  const overrideMigration = readFileSync(
+    new URL("../supabase/migrations/20260808000000_sync_platform_consolidation.sql", import.meta.url),
+    "utf8"
+  );
+  assert.ok(
+    /reclass_override_by\s*=\s*v_uid/.test(overrideMigration),
+    "the RPC must record the actor from auth.uid()"
+  );
+  assert.ok(
+    /reclass_override_at\s*=\s*now\(\)/.test(overrideMigration),
+    "the RPC must record the timestamp"
+  );
+  assert.ok(
+    /rpc\("record_sync_reclass_override"/.test(overrideRoute),
+    "the route must record the override through the owner-only RPC"
+  );
+  assert.ok(
+    !/reclass_override_by:/.test(overrideRoute),
+    "the route must never send a client-supplied actor id"
+  );
+}
 assert.ok(!/is_published|review_status|publish_sync_chapters/.test(overrideRoute), "override must not publish anything");
 
 // ===========================================================================
 // 8. UI gate
 // ===========================================================================
 assert.ok(reviewPage.includes("reclassBlocked"), "review page must compute the block");
-assert.ok(/canPublish = canManageUsers\(role\?\.role\) && !reclassBlocked/.test(reviewPage), "publish must be disabled when blocked");
+// PUB-1: the block is now derived from the shared evaluatePublishGate, which
+// the publish API enforces too. `gate.ok` is strictly stronger than the old
+// `!reclassBlocked` — it also covers already-published and not-yet-staged runs.
+// Asserted here as behaviour rather than as a literal expression; the gate's
+// own rules are proven in scripts/check-pub1-publish-gate.mjs.
+assert.ok(
+  /canPublish = canManageUsers\(role\?\.role\) && gate\.ok/.test(reviewPage),
+  "publish must require both the role and the shared publish gate"
+);
+{
+  const { evaluatePublishGate } = await import("../lib/sync-publish-gate.ts");
+  const blocked = evaluatePublishGate({ state: "staged", new_ratio: 0.97, removed_ratio: 1 });
+  assert.equal(blocked.ok, false, "a mass-reclassified run must fail the gate");
+  assert.equal(blocked.reclassBlocked, true, "and must report it as a reclassification block");
+}
 assert.ok(reviewPage.includes("new_ratio") && reviewPage.includes("removed_ratio"), "ratios must be loaded");
 assert.ok(summaryUi.includes("Identity matching"), "ratios must be shown");
 assert.ok(summaryUi.includes("Chapter identity matching produced an unusually large"), "critical warning text required");

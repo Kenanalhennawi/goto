@@ -169,27 +169,15 @@ export default async function NewSyncPage() {
             )}
           </section>
 
-          {/* Emergency fallback only. Paths are repository-relative — no machine
-              specific paths. The web upload above is the supported route. */}
-          <details className="content-card p-5">
-            <summary className="cursor-pointer text-sm font-semibold text-ink">
-              Advanced: local sync (emergency fallback)
-            </summary>
-            <p className="mt-3 text-sm leading-6 text-ink-muted">
-              Run from the repository root with the service-role key in the local environment. Use
-              only if the background worker is unavailable.
-            </p>
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-slate-50 p-3 text-xs text-ink">
-              <code>{`# 1. Extract chapters and attach PDF page links
-python ./tools/extraction/extract.py "<path-to-manual.pdf>" ./tmp/extraction-output
-python ./tools/extraction/attach_pdf_links.py "<path-to-manual.pdf>" ./tmp/extraction-output
+          {/* PHASE 8: the engineering fallback runbook was removed from the admin
+              UI. It told a non-technical administrator to run Python, set a
+              service-role key in a shell and start a worker by hand — and it
+              pointed at a script that did not exist. The worker is now a
+              deployed service that applies migrations and drains the queue on
+              its own. Engineering fallback instructions live in
+              worker/README.md and docs/RUNBOOK.md, not in front of the
+              administrator. */}
 
-# 2. Stage the run (requires SUPABASE_SERVICE_ROLE_KEY in the local shell)
-node ./tools/sync/sync.mjs ./tmp/extraction-output/chapters.json
-
-# 3. Open the printed /admin/sync/<run-id> link to review and publish`}</code>
-            </pre>
-          </details>
         </div>
       </main>
     </div>

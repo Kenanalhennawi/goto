@@ -1,0 +1,90 @@
+# ============================================================
+# PDF sync — RECOVERY (safety net)
+#
+# WHY THIS EXISTS
+#   repository_dispatch is best-effort. The dispatch call can fail because the
+#   token expired, GitHub had an incident, or the Vercel function timed out
+#   after the run row was already created. Without a safety net that upload sits
+#   in "Queued" forever and somebody has to write SQL — the exact failure this
+#   whole project exists to remove.
+#
+#   It also reclaims runs abandoned mid-flight. A GitHub Actions job can be
+#   evicted at any moment; the run it claimed would otherwise stay in
+#   'extracting' with no worker. claim_sync_run() reclaims any run whose
+#   heartbeat is older than the stale cutoff, provided attempt_count is still
+#   under max_attempts. Permanently broken input is left 'failed' on purpose —
+#   retrying a corrupt PDF forever would just burn the free allowance.
+#
+# CADENCE
+#   `*/5` is the tightest cron GitHub accepts, but scheduled workflows are
+#   best-effort and are routinely delayed under load — 5 to 15 minutes is
+#   realistic. That is fine: this is the fallback, not the primary path. The
+#   primary path is repository_dispatch, which starts in seconds. Do not
+#   describe this schedule to administrators as the expected processing time.
+#
+#   GitHub disables scheduled workflows in repositories with no activity for
+#   60 days. If the repo goes quiet, re-enable it from the Actions tab.
+# ============================================================
+name: PDF sync - scheduled recovery
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Shares a group with the process workflow so a scheduled sweep can never run
+# alongside a dispatch-triggered drain and duplicate the compute. Correctness
+# still comes from claim_sync_run(), not from this.
+concurrency:
+  group: pdf-sync-processing
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poppler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+
+      - name: Install worker dependencies
+        working-directory: worker
+        run: npm install --omit=dev --no-audit --no-fund
+
+      # Exits 0 immediately when the queue is empty, which is the normal case.
+      # An empty queue is success, not a failure — otherwise this workflow would
+      # be red almost all the time and nobody would notice a real fault.
+      - name: Recover and drain
+        env:
+          SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          WORKER_ID: gha-recovery-${{ github.run_id }}
+          EXTRACTOR_VERSION: upd2-1
+          STALE_AFTER_SECONDS: "900"
+          PYTHON_BIN: python3
+          NODE_OPTIONS: --experimental-strip-types --max-old-space-size=4096
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Supabase credentials are not configured for this environment."
+            exit 1
+          fi
+          node worker/index.mjs --drain

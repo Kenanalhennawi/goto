@@ -1,0 +1,50 @@
+# ============================================================
+# HYG-1: line-ending and encoding normalisation.
+#
+# WHY THIS FILE EXISTS
+#   Without it, a Windows editor rewrote 18 tracked files from LF to CRLF,
+#   producing an 8,600-line phantom diff in which only ~113 lines were real
+#   change. That is not cosmetic:
+#     * code review becomes impossible — real edits hide inside the noise;
+#     * commit 9339835 ("Use pending status for staged sync runs", 15 real
+#       lines) silently carried a full-file re-encode that turned every em dash
+#       in worker/index.mjs into mojibake, which then needed commit 1081ae4 to
+#       undo;
+#     * every concurrent branch conflicts on every line of every file.
+#
+# `text=auto eol=lf` stores text as LF in the repository regardless of the
+# platform that wrote it, so this class of diff cannot recur.
+# ============================================================
+
+* text=auto eol=lf
+
+# ---- Explicit text types (belt and braces) ---------------------------------
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.md    text eol=lf
+*.sql   text eol=lf
+*.py    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.txt   text eol=lf
+Dockerfile text eol=lf
+
+# ---- Binary: never diffed, never line-ending converted ---------------------
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.pyc   binary
+
+# ---- Generated: collapse in reviews, still tracked where relevant ----------
+package-lock.json linguist-generated=true -diff
+pnpm-lock.yaml    linguist-generated=true -diff
