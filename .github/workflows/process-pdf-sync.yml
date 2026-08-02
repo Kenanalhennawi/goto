@@ -1,0 +1,109 @@
+# ============================================================
+# PDF sync — PROCESS
+#
+# This workflow IS the worker. There is no permanent server.
+#
+# WHY NOT A PERMANENT WORKER
+#   The previous design ran a Render Background Worker. Render's free compute
+#   covers web services, Key Value and Postgres only — background workers start
+#   at $7/month. A free Render *web* service spins down after inactivity and
+#   would stall a queue that receives no inbound HTTP. GitHub Actions runs the
+#   same Node + Python + Poppler stack for free, so the worker became a job.
+#
+# HOW A PDF GETS PROCESSED
+#   The admin uploads a PDF -> the API creates a run in state 'queued' -> the
+#   API sends a repository_dispatch of type `pdf_sync_queued` -> this workflow
+#   starts within roughly 15-30 seconds and drains the queue.
+#
+# WHAT MAKES IT CORRECT
+#   claim_sync_run() uses FOR UPDATE SKIP LOCKED and is the ONLY authority on
+#   exclusivity. If two jobs ever overlap, the second cannot claim a row the
+#   first holds. The concurrency group below exists to avoid burning duplicate
+#   compute, NOT to provide safety — never weaken the database claim on the
+#   assumption that this group is enough.
+# ============================================================
+name: PDF sync - process
+
+on:
+  repository_dispatch:
+    types: [pdf_sync_queued]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Worker mode (engineering recovery only)"
+        required: false
+        default: drain
+        type: choice
+        options: [drain, once]
+
+# Least privilege: this job reads code and talks to Supabase. It never writes to
+# the repository, never publishes packages, never touches releases.
+permissions:
+  contents: read
+
+# One processing job at a time. `cancel-in-progress: false` is deliberate:
+# cancelling mid-extraction would abandon a claimed run, which then has to wait
+# for the stale-reclaim cutoff instead of finishing.
+concurrency:
+  group: pdf-sync-processing
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    # A 356-page/20 MB extraction is minutes. This ceiling is a backstop against
+    # a wedged job silently consuming the free Actions allowance.
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The extractor shells out to pdftotext / pdfinfo. Without poppler-utils
+      # every run fails at the extraction stage with a confusing ENOENT.
+      - name: Install Poppler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+          pdftotext -v
+          pdfinfo -v
+
+      # The extractor is Python standard library only; nothing to pip install.
+      - name: Install worker dependencies
+        working-directory: worker
+        run: npm install --omit=dev --no-audit --no-fund
+
+      - name: Drain the sync queue
+        env:
+          SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          WORKER_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
+          EXTRACTOR_VERSION: upd2-1
+          STALE_AFTER_SECONDS: "900"
+          PYTHON_BIN: python3
+          NODE_OPTIONS: --experimental-strip-types --max-old-space-size=4096
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Supabase credentials are not configured for this environment."
+            exit 1
+          fi
+          node worker/index.mjs --${{ github.event.inputs.mode || 'drain' }}
+
+      # Secret-safe: reports queue state only, never credentials or payloads.
+      - name: Summary
+        if: always()
+        run: |
+          echo "### PDF sync processing" >> "$GITHUB_STEP_SUMMARY"
+          echo "- trigger: \`${{ github.event_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- worker id: \`gha-${{ github.run_id }}-${{ github.run_attempt }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- result: \`${{ job.status }}\`" >> "$GITHUB_STEP_SUMMARY"
