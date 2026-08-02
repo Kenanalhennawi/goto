@@ -35,21 +35,60 @@ const REQUIRED_RPCS = [
 ];
 
 /**
- * Probe each required RPC. PostgREST answers PGRST202 ("Could not find the
- * function") when it is absent, which is exactly the signal we need — and the
- * probe is a normal authenticated call, requiring no special privilege.
+ * Ask the database directly.
+ *
+ * THE BUG THIS REPLACES. The previous check called each required RPC with NO
+ * arguments and treated PGRST202 as proof of absence, on the stated assumption
+ * that "a wrong-arguments error still proves the function EXISTS". That
+ * assumption is false. PostgREST resolves a function by name AND argument list,
+ * so a function with REQUIRED parameters can never be matched by a no-argument
+ * call — it answers PGRST202, identically to a function that does not exist.
+ *
+ * The result: claim_sync_run(text, integer), requeue_sync_run(uuid, text) and
+ * record_worker_heartbeat(text, uuid, text) ALWAYS reported as missing, and the
+ * worker refused to start against a perfectly correct database. Only
+ * sync_system_health(), which happens to take no arguments, ever passed. This
+ * was observed on a live staging run before it was diagnosed.
+ *
+ * Probing by execution is the wrong instrument anyway: calling claim_sync_run
+ * to find out whether it exists would actually claim a job.
+ *
+ * sync_schema_ready() asks pg_proc instead — no side effects, no argument
+ * guessing — and additionally reports overload counts, so a resurrected
+ * superseded signature is caught here rather than at publish time.
  */
 export async function checkMigrationReadiness(supabase) {
-  const missing = [];
+  const probe = await supabase.rpc("sync_schema_ready", {});
+  if (!probe.error) {
+    const r = probe.data ?? {};
+    const missing = Array.isArray(r.missing) ? [...r.missing] : [];
+    if (r.settingsTable === false) missing.push("sync_settings");
+    // Exactly one signature of each must survive the consolidation migration.
+    if (Number(r.publishOverloads) > 1) missing.push("publish_sync_run:DUPLICATE_OVERLOAD");
+    if (Number(r.claimOverloads) > 1) missing.push("claim_sync_run:DUPLICATE_OVERLOAD");
+    return {
+      ready: r.ready === true && missing.length === 0,
+      missing,
+      message:
+        r.ready === true && missing.length === 0
+          ? "Database schema matches this worker build."
+          : `Database is not migrated for this build. Missing: ${missing.join(", ")}. ` +
+            "Apply supabase/migrations before starting the worker.",
+    };
+  }
 
+  // Fallback for a database that predates sync_schema_ready(). Argument-aware:
+  // PostgREST supplies a `hint` naming the real signature when the function
+  // exists but the argument list did not match, which distinguishes
+  // "wrong arguments" from "genuinely absent".
+  const missing = [];
   for (const rpc of REQUIRED_RPCS) {
-    // Deliberately called with no arguments: a wrong-arguments error still
-    // proves the function EXISTS, which is all this check cares about.
     const { error } = await supabase.rpc(rpc, {});
     if (!error) continue;
     const notFound =
       error.code === "PGRST202" || /Could not find the function/i.test(error.message ?? "");
-    if (notFound) missing.push(rpc);
+    const hintNamesIt = new RegExp(`\\b${rpc}\\b`).test(error.hint ?? "");
+    if (notFound && !hintNamesIt) missing.push(rpc);
   }
 
   // sync_settings backs the single-source threshold; its absence means the
