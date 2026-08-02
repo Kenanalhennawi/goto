@@ -233,8 +233,14 @@ assert.ok(syncPage.includes("canManageUsers"), "upload restricted to admin/owner
 // Obsolete machine paths are gone; the fallback is repository-relative.
 assert.ok(!syncPage.includes("goto-manual-project"), "obsolete hard-coded path removed");
 assert.ok(!/C:\\\\/.test(syncPage), "no Windows machine paths");
-assert.ok(syncPage.includes("Advanced: local sync"), "collapsed fallback retained");
-assert.ok(syncPage.includes("./tools/extraction/extract.py"), "fallback must be repository-relative");
+// PHASE 8: the admin UI must NOT contain an engineering runbook. It previously
+// told a non-technical administrator to run Python, export a service-role key
+// in a shell and start a worker by hand — and pointed at a script that did not
+// exist. The worker is a deployed service now; fallback docs live in the repo.
+assert.ok(!syncPage.includes("Advanced: local sync"), "the local-sync runbook must be gone");
+assert.ok(!/SUPABASE_SERVICE_ROLE_KEY/.test(syncPage), "no service-role key in the admin UI");
+assert.ok(!/npm start|python |cd worker/.test(syncPage), "no terminal commands in the admin UI");
+assert.ok(!/tools\/sync\/sync\.mjs/.test(syncPage), "no reference to the non-existent script");
 assert.ok(uploadPanel.includes("uploadToSignedUrl"), "browser uploads directly to storage");
 assert.ok(uploadPanel.includes("40 MB"), "size limit surfaced to the admin");
 

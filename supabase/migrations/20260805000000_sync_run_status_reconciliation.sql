@@ -1,0 +1,11 @@
+-- SUPERSEDED — intentionally empty.
+--
+-- This file was one of three incremental patch migrations that were never
+-- applied to production. They have been consolidated into a single forward
+-- migration:
+--
+--     20260808000000_sync_platform_consolidation.sql
+--
+-- Kept as an empty no-op only because the file could not be deleted from this
+-- environment. Safe to delete from the repository.
+select 1;

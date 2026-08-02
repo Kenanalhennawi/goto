@@ -1,0 +1,72 @@
+-- ============================================================
+-- PUB-1.2 — TRUE concurrency proof. Requires psql and TWO real sessions.
+--
+-- A single session cannot prove this: the whole point is that two transactions
+-- overlap in time. The Supabase SQL editor runs one statement stream, so it can
+-- only show the state predicate refusing a second attempt sequentially.
+--
+-- WHAT THIS MUST PROVE
+--   1. Exactly one publish transaction commits.
+--   2. The second cannot apply the staged rows.
+--   3. No recovery/release path can reopen a run whose chapters already applied.
+--
+-- HOW TO RUN
+--   Terminal 1:  psql "$DATABASE_URL" -f scripts/verify-publish-concurrency.psql -v side=A
+--   Terminal 2:  psql "$DATABASE_URL" -f scripts/verify-publish-concurrency.psql -v side=B
+--   Start A first, then B within ~10 seconds while A still holds its lock.
+--
+-- Set RUN_ID below to a real staged run. This script COMMITS on side A, so use
+-- a disposable/staging environment, never production.
+-- ============================================================
+
+\set RUN_ID '00000000-0000-0000-0000-000000000000'
+\set EDITOR '00000000-0000-0000-0000-000000000000'
+
+\echo '=== side' :side '=== run' :RUN_ID
+
+begin;
+
+-- Authenticate as an admin/owner for this session.
+select set_config('request.jwt.claims', json_build_object('sub', :'EDITOR')::text, true);
+set local role authenticated;
+
+\echo '--- attempting publish_sync_run (this blocks if the other side holds the lock)'
+
+-- Side A commits; side B is expected to fail with PUBLISH_REFUSED: ALREADY_PUBLISHED
+-- once A commits and B's lock wait resolves.
+select public.publish_sync_run(
+  :'RUN_ID'::uuid,
+  '[]'::jsonb,             -- supply the real plan operations to exercise chapter writes
+  array[]::uuid[],
+  :'EDITOR'::uuid,
+  null,
+  null
+) as result;
+
+\echo '--- holding the lock for 10s so the other session overlaps'
+select pg_sleep(10);
+
+commit;
+
+reset role;
+
+-- ---- Post-conditions: run these in either session AFTER both finish --------
+-- Exactly one publish must have taken effect.
+select state, published_at, progress_message
+  from public.sync_runs where id = :'RUN_ID'::uuid;
+
+-- Chapters must reflect ONE application, not two.
+select count(*) as chapter_rows, count(distinct slug) as distinct_slugs
+  from public.chapters;
+
+-- Requirement 3: no reopen path. These must both be absent, so a run whose
+-- chapters already applied cannot be moved back to 'staged' by any caller.
+select proname
+  from pg_proc
+ where proname in ('release_sync_run_publish_claim', 'claim_sync_run_for_publish');
+-- Expect zero rows.
+
+-- A direct attempt to reopen a published run must also fail the publish gate:
+--   select public.publish_sync_run(:'RUN_ID'::uuid, '[]'::jsonb, array[]::uuid[],
+--                                  :'EDITOR'::uuid, null, null);
+--   -- Expect: PUBLISH_REFUSED: ALREADY_PUBLISHED
