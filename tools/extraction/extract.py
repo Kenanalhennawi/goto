@@ -37,7 +37,19 @@ for _stream in (sys.stdout, sys.stderr):
 
 # Chapter headings look like:  "        29. Firearms and Carry of Ammunition"
 # Sub-chapters ("29.1 ...") are body content, not separate chapters.
-CHAPTER_RE = re.compile(r"^[ \t]*(\d{1,3})\.\s+([A-Z][^\n]{2,120})$")
+#
+# UPD-2.8: the title may begin with a LOWERCASE brand word ("flydubai
+# MobileApp", "eShop by flydubai"), so the first character must not be
+# constrained to [A-Z] — that anchor silently dropped chapters 60, 68 and 81.
+# Table-of-contents rows are still rejected by the dotted-leader guard below.
+CHAPTER_RE = re.compile(r"^[ \t]*(\d{1,3})\.\s+(\S[^\n]{2,200})$")
+
+# UPD-2.8: a heading line may carry the search-keyword block inline, e.g.
+#   "58. Upgrade to Business Class (SK: UG,, Upgrade,, Bid,,)"
+# Cut the title at the SK marker ONLY. This is deliberately marker-specific:
+# arbitrary parentheses are preserved, so a legitimate title such as
+# "eShop by flydubai (Suspended until further notice)." keeps its brackets.
+SK_INLINE_RE = re.compile(r"\s*\(?\s*SK:\s.*$", re.I | re.S)
 # Search-keyword line emitted under a heading: "(SK: Firearm,, Firearms,,)"
 SK_RE = re.compile(r"\(SK:\s*(.*?)\)", re.S)
 # Title page: "Version 81.7 30-Jul-2026"
@@ -211,7 +223,13 @@ def extract_chapters(pages: list[str]) -> list[dict[str, Any]]:
                 continue
             number, title = match.group(1), match.group(2).strip()
             # Ignore table-of-contents rows ("29. Firearms .......... 130").
+            # Checked BEFORE the SK cut so a TOC row whose leader follows an
+            # inline SK block is still rejected.
             if re.search(r"\.{4,}\s*\d+\s*$", title):
+                continue
+            # Drop an inline search-keyword block from the TITLE only.
+            title = SK_INLINE_RE.sub("", title).strip()
+            if not title:
                 continue
             starts.append((index, number, title))
 
@@ -250,6 +268,51 @@ def extract_chapters(pages: list[str]) -> list[dict[str, Any]]:
     return chapters
 
 
+def chapter_continuity(chapters: list[dict[str, Any]], pages: list[str]) -> dict[str, Any]:
+    """UPD-2.8 diagnostics: expose the detected chapter-number sequence.
+
+    A missing number is REPORTED, never treated as an automatic failure — a
+    manual may legitimately retire a chapter number. Decimal ("48.1") and range
+    ("26.6-26.9") headings are counted separately: they are sub-sections and are
+    intentionally not emitted as top-level chapters.
+    """
+    numbers: list[int] = []
+    duplicates: list[int] = []
+    for chapter in chapters:
+        try:
+            value = int(chapter["chapterNumber"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if value in numbers:
+            duplicates.append(value)
+        else:
+            numbers.append(value)
+
+    ordered = sorted(numbers)
+    missing: list[int] = []
+    if ordered:
+        missing = [n for n in range(ordered[0], ordered[-1] + 1) if n not in set(ordered)]
+
+    decimal_headings: list[str] = []
+    for page in pages:
+        for line in page.splitlines():
+            found = re.match(r"^[ \t]*(\d{1,3}(?:\.\d+)+(?:\s*[-–—]\s*\d+(?:\.\d+)*)?)\s+\S", line)
+            if found and found.group(1) not in decimal_headings:
+                decimal_headings.append(found.group(1))
+
+    return {
+        "detected": ordered,
+        "detectedCount": len(ordered),
+        "missing": missing,
+        "duplicates": sorted(set(duplicates)),
+        "decimalOrRangeHeadings": decimal_headings[:60],
+        "pageOrderMonotonic": all(
+            chapters[i]["pageStart"] <= chapters[i + 1]["pageStart"]
+            for i in range(len(chapters) - 1)
+        ),
+    }
+
+
 def main() -> None:
     if len(sys.argv) != 3:
         fail("USAGE", "usage: extract.py <input.pdf> <output-dir>")
@@ -272,8 +335,11 @@ def main() -> None:
     if not chapters:
         fail("NO_CHAPTERS", "No chapters were detected in the PDF")
 
+    continuity = chapter_continuity(chapters, pages)
+
     payload = {
         "extractorVersion": EXTRACTOR_VERSION,
+        "continuity": continuity,
         "source": {
             "title": title,
             "version": version,
@@ -288,7 +354,22 @@ def main() -> None:
     with open(out_path, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
 
-    print(json.dumps({"ok": True, "chapters": len(chapters), "output": out_path}))
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "chapters": len(chapters),
+                "output": out_path,
+                "continuity": {
+                    "detectedCount": continuity["detectedCount"],
+                    "missing": continuity["missing"],
+                    "duplicates": continuity["duplicates"],
+                    "decimalOrRangeHeadings": len(continuity["decimalOrRangeHeadings"]),
+                    "pageOrderMonotonic": continuity["pageOrderMonotonic"],
+                },
+            }
+        )
+    )
 
 
 if __name__ == "__main__":
